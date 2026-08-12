@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.livetranslate.app"
+    namespace = "com.xzm.realtimetranslate"
     compileSdk {
         version = release(37) {
             minorApiLevel = 0
@@ -15,7 +15,7 @@ android {
     buildToolsVersion = "37.0.0"
 
     defaultConfig {
-        applicationId = "com.livetranslate.app"
+        applicationId = "com.xzm.realtimetranslate"
         minSdk = 29
         targetSdk = 35
         // CI can override: -PVERSION_CODE=2 -PVERSION_NAME=0.1.1
@@ -56,6 +56,26 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    // Bundled ASR models (assets/models): store the 239MB ONNX uncompressed so
+    // aapt2 doesn't waste CPU/memory on a near-incompressible binary and the
+    // first-use unpack is a plain copy.
+    androidResources {
+        noCompress += listOf("onnx")
+    }
+}
+
+// Guard: a release build without the bundled models would silently ship an APK
+// that falls back to downloading. Fail fast instead.
+tasks.configureEach {
+    if (name == "preReleaseBuild") {
+        doFirst {
+            val base = file("src/main/assets/models")
+            require(base.resolve("sensevoice/model.int8.onnx").isFile) {
+                "内置模型缺失：请先运行 scripts/fetch-models.sh 再构建 release。"
+            }
+        }
+    }
 }
 
 kotlin {
@@ -94,6 +114,9 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
+
+    // Local ASR: sherpa-onnx (SenseVoice + Silero VAD). Verify latest at https://jitpack.io/#k2-fsa/sherpa-onnx
+    implementation("com.github.k2-fsa:sherpa-onnx:1.13.4")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
