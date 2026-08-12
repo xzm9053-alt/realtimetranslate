@@ -41,3 +41,11 @@ nul
 
 # Bundled ASR models (fetched by scripts/fetch-models.sh; model.int8.onnx > GitHub 100MB limit)
 app/src/main/assets/models/
+
+# Local toolchain (not part of the project)
+jdk/
+android-sdk/
+tools/
+
+# Build logs
+build_log*.txt
