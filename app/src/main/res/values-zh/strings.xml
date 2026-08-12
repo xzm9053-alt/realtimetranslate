@@ -10,7 +10,7 @@
     <string name="tab_settings">设置</string>
 
     <string name="subtitle_title">实时字幕</string>
-    <string name="subtitle_subtitle">捕获系统内放音频 · Gemini Live Translate</string>
+    <string name="subtitle_subtitle">捕获系统内放音频 · 本地识别 + 翻译</string>
     <string name="subtitle_hero_title">同传字幕</string>
     <string name="subtitle_hero_running">悬浮窗运行中</string>
     <string name="subtitle_hero_idle">一键启动系统内录翻译</string>
@@ -40,21 +40,31 @@
     <string name="status_stopped">已停止</string>
 
     <string name="settings_title">设置</string>
-    <string name="settings_subtitle">API、字幕外观与译音</string>
-    <string name="settings_api">API 连接</string>
-    <string name="settings_api_desc">默认对接 Google AI Studio Live Translate。可自定义兼容端点。</string>
-    <string name="settings_endpoint">API 端点</string>
-    <string name="settings_api_key">API Key</string>
-    <string name="settings_api_key_n">API Key %1$d</string>
-    <string name="settings_api_keys_hint">最多 10 个 Key，启动会话时按顺序轮询使用。</string>
-    <string name="settings_model_id">模型 ID</string>
+    <string name="settings_subtitle">翻译引擎、字幕外观与译音</string>
+    <string name="settings_engine">翻译引擎</string>
+    <string name="settings_engine_desc">选择用哪个服务来翻译识别出的语音。</string>
+    <string name="engine_deepseek">DeepSeek</string>
+    <string name="engine_deepseek_summary">流式高质量 · 需要 API Key</string>
+    <string name="engine_microsoft">微软（免费）</string>
+    <string name="engine_microsoft_summary">无需 Key · 按句出译文</string>
+    <string name="settings_deepseek_key">DeepSeek API Key</string>
+    <string name="settings_deepseek_model">模型（默认 deepseek-v4-flash）</string>
+    <string name="settings_deepseek_base_url">API 地址（高级）</string>
+    <string name="settings_microsoft_desc">使用微软免费翻译端点，无需 Key。偶有限流，失灵时请切换到 DeepSeek。</string>
     <string name="settings_show">显示</string>
     <string name="settings_hide">隐藏</string>
-    <string name="settings_save_and_test">保存并测试连接</string>
-    <string name="settings_save_key_only">保存 API Key</string>
-    <string name="settings_add_key">添加</string>
-    <string name="settings_remove_key">删除</string>
+    <string name="settings_test_engine">保存并测试连接</string>
+    <string name="settings_save_key_only">仅保存 API Key</string>
     <string name="settings_testing">测试中…</string>
+
+    <string name="settings_model">语音识别模型</string>
+    <string name="settings_model_desc">模型已内置，首次使用自动解压（SenseVoice，约 230MB，完全离线）。仅当模型损坏时才需用下方按钮重新下载修复。</string>
+    <string name="settings_model_unknown">状态未知</string>
+    <string name="settings_model_mirror">下载镜像（默认 hf-mirror.com）</string>
+    <string name="settings_model_hf_token">Hugging Face Token（可选，官方站用）</string>
+    <string name="settings_model_download">重新下载 / 修复模型</string>
+    <string name="settings_model_downloading">下载中…点击刷新状态</string>
+
     <string name="settings_appearance">字幕外观</string>
     <string name="settings_font_size">字体大小 %1$d sp · 系统默认字体</string>
     <string name="settings_bg_alpha">背景透明度 %1$d%%</string>
@@ -64,7 +74,7 @@
     <string name="settings_reset_appearance">重置字幕外观</string>
     <string name="settings_voice">译音</string>
     <string name="settings_play_voice">播放译音</string>
-    <string name="settings_play_voice_summary">云端返回的翻译语音；默认关。开启后与原声并行，不暂停视频。</string>
+    <string name="settings_play_voice_summary">默认关闭（暂未接入 TTS 引擎）。</string>
     <string name="settings_voice_volume">译音音量 %1$d%%</string>
     <string name="settings_voice_volume_boost">（增强，可能轻微失真）</string>
     <string name="settings_voice_volume_hint">可拉过 100%，让译音压过原片外文声。过高可能削波。</string>
@@ -100,11 +110,10 @@
     <string name="lang_nl">荷兰语</string>
     <string name="lang_uk">乌克兰语</string>
 
-    <string name="msg_need_api_key">请先在设置中填写 API Key</string>
+    <string name="msg_need_deepseek_key">请先在设置中填写 DeepSeek API Key</string>
     <string name="msg_need_permissions">需要麦克风/通知权限</string>
     <string name="msg_projection_cancelled">用户取消了录屏授权</string>
     <string name="msg_service_start_failed">启动服务失败：%1$s</string>
     <string name="msg_start_failed">启动失败：%1$s</string>
     <string name="msg_requesting_projection">请求录屏权限…</string>
-    <string name="msg_key_saved">API Key 已保存</string>
 </resources>

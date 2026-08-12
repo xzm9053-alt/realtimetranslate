@@ -10,7 +10,7 @@
     <string name="tab_settings">Settings</string>
 
     <string name="subtitle_title">Live subtitles</string>
-    <string name="subtitle_subtitle">Capture system playback · Gemini Live Translate</string>
+    <string name="subtitle_subtitle">Capture system audio · on-device ASR + translate</string>
     <string name="subtitle_hero_title">Live captions</string>
     <string name="subtitle_hero_running">Overlay is running</string>
     <string name="subtitle_hero_idle">One-tap system audio translation</string>
@@ -40,21 +40,31 @@
     <string name="status_stopped">Stopped</string>
 
     <string name="settings_title">Settings</string>
-    <string name="settings_subtitle">API, subtitle look, and voice</string>
-    <string name="settings_api">API connection</string>
-    <string name="settings_api_desc">Default is Google AI Studio Live Translate. Compatible endpoints are supported.</string>
-    <string name="settings_endpoint">API endpoint</string>
-    <string name="settings_api_key">API Key</string>
-    <string name="settings_api_key_n">API Key %1$d</string>
-    <string name="settings_api_keys_hint">Add up to 10 keys. Sessions rotate keys in order.</string>
-    <string name="settings_model_id">Model ID</string>
+    <string name="settings_subtitle">Engine, subtitle look, and voice</string>
+    <string name="settings_engine">Translation engine</string>
+    <string name="settings_engine_desc">Choose which service translates the recognized speech.</string>
+    <string name="engine_deepseek">DeepSeek</string>
+    <string name="engine_deepseek_summary">Streaming, high quality · needs an API key</string>
+    <string name="engine_microsoft">Microsoft (free)</string>
+    <string name="engine_microsoft_summary">No key needed · subtitle appears per sentence</string>
+    <string name="settings_deepseek_key">DeepSeek API Key</string>
+    <string name="settings_deepseek_model">Model (default deepseek-v4-flash)</string>
+    <string name="settings_deepseek_base_url">API base URL (advanced)</string>
+    <string name="settings_microsoft_desc">Uses the free Microsoft Translator endpoint, no key required. It may occasionally be rate-limited; switch to DeepSeek if it stops responding.</string>
     <string name="settings_show">Show</string>
     <string name="settings_hide">Hide</string>
-    <string name="settings_save_and_test">Save and test connection</string>
-    <string name="settings_save_key_only">Save API keys</string>
-    <string name="settings_add_key">Add</string>
-    <string name="settings_remove_key">Remove</string>
+    <string name="settings_test_engine">Save and test connection</string>
+    <string name="settings_save_key_only">Save API Key only</string>
     <string name="settings_testing">Testing…</string>
+
+    <string name="settings_model">Speech recognition model</string>
+    <string name="settings_model_desc">Model is bundled in the APK and unpacked automatically on first use (SenseVoice, ~230 MB, fully offline). The button below is only for repairing a corrupted model.</string>
+    <string name="settings_model_unknown">Status unknown</string>
+    <string name="settings_model_mirror">Download mirror (default hf-mirror.com)</string>
+    <string name="settings_model_hf_token">Hugging Face token (optional, for the official hub)</string>
+    <string name="settings_model_download">Re-download / repair model</string>
+    <string name="settings_model_downloading">Downloading… tap to refresh status</string>
+
     <string name="settings_appearance">Subtitle appearance</string>
     <string name="settings_font_size">Font size %1$d sp · system default font</string>
     <string name="settings_bg_alpha">Background opacity %1$d%%</string>
@@ -64,7 +74,7 @@
     <string name="settings_reset_appearance">Reset subtitle appearance</string>
     <string name="settings_voice">Translated voice</string>
     <string name="settings_play_voice">Play translated voice</string>
-    <string name="settings_play_voice_summary">Cloud-returned speech; off by default. Plays in parallel without pausing the video.</string>
+    <string name="settings_play_voice_summary">Off by default (no TTS engine configured yet).</string>
     <string name="settings_voice_volume">Voice volume %1$d%%</string>
     <string name="settings_voice_volume_boost"> (boosted, may distort slightly)</string>
     <string name="settings_voice_volume_hint">Can go past 100%% so translation sits above the original. Too high may clip.</string>
@@ -101,11 +111,10 @@
     <string name="lang_nl">Dutch</string>
     <string name="lang_uk">Ukrainian</string>
 
-    <string name="msg_need_api_key">Please enter an API Key in Settings first</string>
+    <string name="msg_need_deepseek_key">Please enter your DeepSeek API Key in Settings first</string>
     <string name="msg_need_permissions">Microphone/notification permission required</string>
     <string name="msg_projection_cancelled">Screen capture permission cancelled</string>
     <string name="msg_service_start_failed">Failed to start service: %1$s</string>
     <string name="msg_start_failed">Start failed: %1$s</string>
     <string name="msg_requesting_projection">Requesting screen capture…</string>
-    <string name="msg_key_saved">API Key saved</string>
 </resources>
