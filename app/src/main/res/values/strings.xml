@@ -107,7 +107,7 @@
     <string name="settings_github">GitHub</string>
     <string name="settings_github_pending">Repository URL not configured</string>
     <string name="settings_github_open">Open project repository</string>
-    <string name="github_url" translatable="false">https://github.com/luoxiaoxin123/live-translate</string>
+    <string name="github_url" translatable="false">https://github.com/xzm9053-alt/realtimetranslate</string>
 
     <string name="lang_auto">Auto-detect</string>
     <string name="lang_zh_hans">Chinese (Simplified)</string>
