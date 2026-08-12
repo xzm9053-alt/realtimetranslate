@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.xzm.realtimetranslate.BuildConfig
 import com.xzm.realtimetranslate.R
+import com.xzm.realtimetranslate.data.HistoryMode
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.ui.components.PageTitle
 import com.xzm.realtimetranslate.ui.components.SectionCard
@@ -114,13 +115,13 @@ fun SettingsScreen(
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
-                EngineRow(
+                OptionRow(
                     label = stringResource(R.string.engine_deepseek),
                     summary = stringResource(R.string.engine_deepseek_summary),
                     selected = isDeepSeek,
                     onClick = { viewModel.setEngine(TranslationEngineType.DEEPSEEK) },
                 )
-                EngineRow(
+                OptionRow(
                     label = stringResource(R.string.engine_microsoft),
                     summary = stringResource(R.string.engine_microsoft_summary),
                     selected = !isDeepSeek,
@@ -406,6 +407,35 @@ fun SettingsScreen(
         }
 
         SmallTitle(
+            text = stringResource(R.string.settings_history),
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
+        SectionCard {
+            Column(
+                modifier = Modifier.padding(vertical = 6.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_history_desc),
+                    fontSize = 13.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+                OptionRow(
+                    label = stringResource(R.string.history_mode_auto_clear),
+                    summary = stringResource(R.string.history_mode_auto_clear_summary),
+                    selected = settings.historyMode == HistoryMode.AUTO_CLEAR,
+                    onClick = { viewModel.setHistoryMode(HistoryMode.AUTO_CLEAR) },
+                )
+                OptionRow(
+                    label = stringResource(R.string.history_mode_save_all),
+                    summary = stringResource(R.string.history_mode_save_all_summary),
+                    selected = settings.historyMode == HistoryMode.SAVE_ALL,
+                    onClick = { viewModel.setHistoryMode(HistoryMode.SAVE_ALL) },
+                )
+            }
+        }
+
+        SmallTitle(
             text = stringResource(R.string.settings_permissions),
             modifier = Modifier.padding(horizontal = 24.dp),
         )
@@ -479,7 +509,7 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun EngineRow(
+private fun OptionRow(
     label: String,
     summary: String,
     selected: Boolean,

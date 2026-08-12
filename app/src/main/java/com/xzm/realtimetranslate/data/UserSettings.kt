@@ -27,6 +27,7 @@ data class UserSettings(
     val deepseekBaseUrl: String = Defaults.DEEPSEEK_BASE_URL,
     val modelMirrorUrl: String = Defaults.MODEL_MIRROR_URL,
     val huggingfaceToken: String = Defaults.HF_TOKEN,
+    val historyMode: HistoryMode = Defaults.HISTORY_MODE,
 ) {
     object Defaults {
         // Kept for schema compatibility; the engine now reads DeepSeek settings directly.
@@ -50,6 +51,7 @@ data class UserSettings(
         const val OVERLAY_WIDTH_DP = 360
         const val OVERLAY_HEIGHT_DP = 120
         val AUDIO_SOURCE: AudioSourceMode = AudioSourceMode.MEDIA
+        val HISTORY_MODE: HistoryMode = HistoryMode.SAVE_ALL
     }
 }
 

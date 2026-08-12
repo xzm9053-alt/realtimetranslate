@@ -52,9 +52,9 @@ class SubtitleViewModel(
             return
         }
         val now = LocalDateTime.now()
-        val name = ExportTranslator.fileName(now)
-        val md = ExportTranslator.buildMarkdown(s.lastInputFull, s.lastOutputFull, now)
-        val result = ExportTranslator.saveToDownloads(getApplication(), name, md)
+        val name = ExportTranslator.fileName(now, "txt")
+        val text = ExportTranslator.buildText(s.lastInputFull, s.lastOutputFull, now)
+        val result = ExportTranslator.saveToDownloads(getApplication(), name, text, "text/plain")
         _exportMessage.value = result.fold(
             onSuccess = { path ->
                 getApplication<Application>().getString(R.string.subtitle_export_ok, path)

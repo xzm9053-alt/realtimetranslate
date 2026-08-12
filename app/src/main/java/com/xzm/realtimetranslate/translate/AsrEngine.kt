@@ -26,6 +26,8 @@ class AsrEngine(
     sileroVadPath: String,
     private val onSegment: (String) -> Unit,
     numThreads: Int = 2,
+    /** SenseVoice language tag ("auto"/"zh"/"en"/"ja"/"ko"/"yue"); empty behaves as auto. */
+    language: String = "auto",
 ) {
 
     // VAD runs synchronously on the caller thread (cheap); recognition is queued.
@@ -53,8 +55,8 @@ class AsrEngine(
             modelConfig = OfflineModelConfig(
                 senseVoice = OfflineSenseVoiceModelConfig(
                     model = File(modelDir, "model.int8.onnx").absolutePath,
-                    // empty language = auto-detect among zh/en/ja/ko/yue
-                    language = "",
+                    // "auto" = auto-detect among zh/en/ja/ko/yue; explicit tag pins the language
+                    language = language,
                 ),
                 tokens = File(modelDir, "tokens.txt").absolutePath,
                 numThreads = numThreads,
@@ -121,5 +123,19 @@ class AsrEngine(
 
     companion object {
         private const val TAG = "AsrEngine"
+
+        /**
+         * Map a UserSettings.sourceLanguageCode to the SenseVoice language tag.
+         * SenseVoice supports auto/zh/en/ja/ko/yue only; unsupported codes (and
+         * "auto") fall back to auto-detect so the recognizer never breaks.
+         */
+        fun senseVoiceLanguageFor(code: String): String = when (code) {
+            "zh-Hans", "zh-Hant" -> "zh"
+            "en" -> "en"
+            "ja" -> "ja"
+            "ko" -> "ko"
+            "yue" -> "yue"
+            else -> "auto"
+        }
     }
 }

@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.xzm.realtimetranslate.LiveTranslateApp
 import com.xzm.realtimetranslate.data.ApiKeyStore
+import com.xzm.realtimetranslate.data.HistoryMode
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
 import com.xzm.realtimetranslate.data.UserSettingsRepository
@@ -113,6 +114,10 @@ class SettingsViewModel(
 
     fun setEngine(type: TranslationEngineType) {
         update { it.copy(translationEngine = type) }
+    }
+
+    fun setHistoryMode(mode: HistoryMode) {
+        update { it.copy(historyMode = mode) }
     }
 
     fun saveDeepSeekKey() {

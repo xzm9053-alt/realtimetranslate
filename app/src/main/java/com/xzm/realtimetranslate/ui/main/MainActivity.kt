@@ -22,6 +22,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Subtitles
 import androidx.compose.runtime.getValue
@@ -41,6 +42,9 @@ import com.xzm.realtimetranslate.data.AudioSourceMode
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.service.SessionBus
 import com.xzm.realtimetranslate.service.SubtitleSessionService
+import com.xzm.realtimetranslate.ui.history.HistoryScreen
+import com.xzm.realtimetranslate.ui.history.HistoryViewModel
+import com.xzm.realtimetranslate.ui.history.HistoryViewModelFactory
 import com.xzm.realtimetranslate.ui.settings.SettingsScreen
 import com.xzm.realtimetranslate.ui.settings.SettingsViewModel
 import com.xzm.realtimetranslate.ui.settings.SettingsViewModelFactory
@@ -76,6 +80,9 @@ class MainActivity : ComponentActivity() {
                 )
                 val settingsVm: SettingsViewModel = viewModel(
                     factory = SettingsViewModelFactory(app, app.settingsRepository, app.apiKeyStore),
+                )
+                val historyVm: HistoryViewModel = viewModel(
+                    factory = HistoryViewModelFactory(app, app.historyRepository),
                 )
 
                 val session by SessionBus.state.collectAsStateWithLifecycle()
@@ -203,6 +210,12 @@ class MainActivity : ComponentActivity() {
                                 icon = Icons.Outlined.Settings,
                                 label = stringResource(R.string.tab_settings),
                             )
+                            NavigationBarItem(
+                                selected = tab == 2,
+                                onClick = { tab = 2 },
+                                icon = Icons.Outlined.History,
+                                label = stringResource(R.string.tab_history),
+                            )
                         }
                     },
                 ) { padding ->
@@ -251,7 +264,7 @@ class MainActivity : ComponentActivity() {
                                 onExport = { subtitleVm.exportLastSession() },
                                 canDrawOverlays = PermissionUtils.canDrawOverlays(this@MainActivity),
                             )
-                            else -> SettingsScreen(
+                            1 -> SettingsScreen(
                                 modifier = Modifier.fillMaxSize(),
                                 viewModel = settingsVm,
                                 onOpenOverlayPermission = {
@@ -259,6 +272,10 @@ class MainActivity : ComponentActivity() {
                                         PermissionUtils.overlaySettingsIntent(this@MainActivity),
                                     )
                                 },
+                            )
+                            else -> HistoryScreen(
+                                modifier = Modifier.fillMaxSize(),
+                                viewModel = historyVm,
                             )
                         }
                     }

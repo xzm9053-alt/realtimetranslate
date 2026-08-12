@@ -268,7 +268,7 @@ fun SubtitleScreen(
                         colors = ButtonDefaults.buttonColorsPrimary(),
                     ) {
                         Text(
-                            text = stringResource(R.string.subtitle_export_md),
+                            text = stringResource(R.string.subtitle_export_txt),
                             fontWeight = FontWeight.SemiBold,
                         )
                     }

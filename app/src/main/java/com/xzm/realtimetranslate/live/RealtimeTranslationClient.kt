@@ -44,8 +44,11 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val translateMutex = Mutex()
 
-    // Silero VAD 偶发把同一段语音重复识别 → 记录最近处理过的原文段，重复文本直接跳过。
-    private val recentInputs = ArrayDeque<String>()
+    // Silero VAD 偶发把同一段语音重复识别（含微差变体）→ 记录最近处理过的原文段，
+    // 完全相等、或在 8 秒内去标点小写化后相等者视为重复，直接跳过。
+    private val recentInputs = ArrayDeque<Pair<String, Long>>() // (text, timestamp)
+    private val dedupTimeWindowMs = 8_000L
+    private val dedupWindowSize = 6
 
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Idle)
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
@@ -83,6 +86,8 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
         data class Error(val message: String) : LiveEvent()
         data object SetupComplete : LiveEvent()
         data class Debug(val message: String) : LiveEvent()
+        /** Marks the start of a new translated sentence: the subtitle UI clears its current output line. */
+        data object OutputReset : LiveEvent()
     }
 
     private val intentionalClose = AtomicBoolean(false)
@@ -123,6 +128,7 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
                 val engine = AsrEngine(
                     modelDir = models.paths.senseVoiceModel.parentFile!!,
                     sileroVadPath = models.paths.sileroVad.absolutePath,
+                    language = AsrEngine.senseVoiceLanguageFor(settings.sourceLanguageCode),
                     onSegment = { text -> onSegment(text, config) },
                 )
                 asrEngine = engine
@@ -192,12 +198,12 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
         if (intentionalClose.get()) return
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return
-        // VAD 重复识别防护：最近 3 段内出现相同文本 → 直接跳过（不发原文、不翻译、不上屏）。
-        // 微软整句返回时重复句会堆进滚动字幕，这里在源头掐掉。
+        // VAD 重复识别防护：与最近若干段完全相等、或在 8 秒内去标点小写化后相等
+        // （VAD 同段重复回调的微差变体）→ 直接跳过，不发原文、不翻译、不上屏。
         synchronized(recentInputs) {
-            if (recentInputs.contains(trimmed)) return
-            recentInputs.addLast(trimmed)
-            if (recentInputs.size > 3) recentInputs.removeFirst()
+            if (isDuplicate(trimmed)) return
+            recentInputs.addLast(trimmed to System.currentTimeMillis())
+            if (recentInputs.size > dedupWindowSize) recentInputs.removeFirst()
         }
         scope.launch {
             if (intentionalClose.get()) return@launch
@@ -210,6 +216,8 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
             // 翻译结果仍串行，保证输出顺序不交错。
             translateMutex.withLock {
                 if (intentionalClose.get()) return@withLock
+                // 新句开始：先清空字幕当前输出行，避免本句流式增量被逐段追加成上一句的重复堆叠。
+                _events.emit(LiveEvent.OutputReset)
                 val settings = app.settingsRepository.settings.first()
                 val target = config.targetLanguageCode.ifBlank { "zh-Hans" }
                 try {
@@ -228,6 +236,20 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
             }
         }
     }
+
+    /** True if [candidate] is a VAD repeat of a recently processed segment. */
+    private fun isDuplicate(candidate: String): Boolean {
+        val now = System.currentTimeMillis()
+        val cand = dedupNormalize(candidate)
+        for ((prevText, ts) in recentInputs) {
+            if (prevText == candidate) return true
+            if (now - ts < dedupTimeWindowMs && cand.isNotEmpty() && cand == dedupNormalize(prevText)) return true
+        }
+        return false
+    }
+
+    /** Lowercased alphanumerics only — 忽略空白/标点差异，抓 VAD 同段重复的微差变体。 */
+    private fun dedupNormalize(s: String): String = s.filter { it.isLetterOrDigit() }.lowercase()
 
     private fun closeInternal(intentional: Boolean, notify: Boolean) {
         intentionalClose.set(intentional)

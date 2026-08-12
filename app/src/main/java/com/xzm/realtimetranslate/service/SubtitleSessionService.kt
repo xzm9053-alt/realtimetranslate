@@ -20,6 +20,8 @@ import com.xzm.realtimetranslate.audio.PcmMixer
 import com.xzm.realtimetranslate.audio.SystemAudioCapturer
 import com.xzm.realtimetranslate.audio.TranslatedAudioPlayer
 import com.xzm.realtimetranslate.data.AudioSourceMode
+import com.xzm.realtimetranslate.data.HistoryEntry
+import com.xzm.realtimetranslate.data.HistoryMode
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
 import com.xzm.realtimetranslate.live.RealtimeTranslationClient
@@ -202,6 +204,13 @@ class SubtitleSessionService : Service() {
                             overlay?.updateTranscripts(input = null, output = text)
                             SessionBus.setPreview(output = text)
                         }
+                        // 新句开始：清空当前输出行，避免流式翻译的增量被逐段追加成上一句的重复堆叠。
+                        // fullOutput 保持累积，导出会话仍保留完整历史。
+                        is RealtimeTranslationClient.LiveEvent.OutputReset -> {
+                            accumulatedOutput.clear()
+                            overlay?.updateTranscripts(input = null, output = "")
+                            SessionBus.setPreview(output = "")
+                        }
                         is RealtimeTranslationClient.LiveEvent.AudioChunk -> {
                             if (currentSettings.playTranslatedAudio) {
                                 player.playPcm(event.pcm, event.mimeType)
@@ -368,6 +377,13 @@ class SubtitleSessionService : Service() {
         val outFull = fullOutput.toString()
         if (inFull.isNotBlank() || outFull.isNotBlank()) {
             SessionBus.markSessionFinished(inFull, outFull, message)
+            if (currentSettings.historyMode == HistoryMode.SAVE_ALL) {
+                // Fire-and-forget via the repository's process-scoped IO scope:
+                // this service's ioScope is cancelled in onDestroy right after.
+                (application as LiveTranslateApp).historyRepository.append(
+                    HistoryEntry(System.currentTimeMillis(), inFull, outFull),
+                )
+            }
         } else {
             SessionBus.setStatus(SessionBus.Status.Stopped, message)
         }

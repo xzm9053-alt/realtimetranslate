@@ -8,6 +8,7 @@
 
     <string name="tab_subtitle">字幕</string>
     <string name="tab_settings">设置</string>
+    <string name="tab_history">历史</string>
 
     <string name="subtitle_title">实时字幕</string>
     <string name="subtitle_subtitle">捕获系统内放音频 · 本地识别 + 翻译</string>
@@ -28,10 +29,24 @@
     <string name="audio_source_media">媒体音</string>
     <string name="audio_source_mic">麦克风音</string>
     <string name="audio_source_both">媒体音 + 麦克风音</string>
-    <string name="subtitle_export_md">导出本次翻译为 Markdown</string>
+    <string name="subtitle_export_txt">保存本次翻译为 txt</string>
     <string name="subtitle_export_ok">已保存到下载：%1$s</string>
     <string name="subtitle_export_fail">导出失败：%1$s</string>
     <string name="subtitle_export_empty">没有可导出的内容</string>
+
+    <string name="history_title">历史记录</string>
+    <string name="history_subtitle">已保存的翻译会话</string>
+    <string name="history_empty">暂无历史——结束一次会话后，这里会显示（“全部保存”模式下）</string>
+    <string name="history_count">%1$d 条会话</string>
+    <string name="history_clear_all">全部清理</string>
+    <string name="history_cleared">已清空全部历史</string>
+    <string name="history_original">原文</string>
+    <string name="history_translation">译文</string>
+    <string name="history_entry_meta">%1$d 字原文 · %2$d 字译文</string>
+    <string name="history_expand">展开</string>
+    <string name="history_collapse">收起</string>
+    <string name="history_copied">已复制到剪贴板</string>
+    <string name="history_save_txt">保存为 txt</string>
 
     <string name="status_idle">空闲</string>
     <string name="status_starting">启动中</string>
@@ -78,6 +93,12 @@
     <string name="settings_voice_volume">译音音量 %1$d%%</string>
     <string name="settings_voice_volume_boost">（增强，可能轻微失真）</string>
     <string name="settings_voice_volume_hint">可拉过 100%，让译音压过原片外文声。过高可能削波。</string>
+    <string name="settings_history">历史记录</string>
+    <string name="settings_history_desc">对已结束会话的原文/译文做何处理。</string>
+    <string name="history_mode_auto_clear">自动清理</string>
+    <string name="history_mode_auto_clear_summary">不把会话写入历史；当前会话仍可在字幕页手动导出。</string>
+    <string name="history_mode_save_all">全部保存</string>
+    <string name="history_mode_save_all_summary">每次会话结束都保存，可在“历史”页查看（最多 20 条，超出自动淘汰最旧）。</string>
     <string name="settings_permissions">权限</string>
     <string name="settings_open_overlay">打开悬浮窗权限设置</string>
     <string name="settings_permissions_hint">启动字幕时会请求系统录屏授权，用于捕获其它 App 的播放声音。</string>

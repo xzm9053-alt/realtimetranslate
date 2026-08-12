@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
 import com.xzm.realtimetranslate.data.ApiKeyStore
+import com.xzm.realtimetranslate.data.HistoryRepository
 import com.xzm.realtimetranslate.data.UserSettingsRepository
 import com.xzm.realtimetranslate.util.ModelDownloader
 import kotlinx.coroutines.CoroutineScope
@@ -19,6 +20,8 @@ class LiveTranslateApp : Application() {
         private set
     lateinit var modelManager: ModelDownloader
         private set
+    lateinit var historyRepository: HistoryRepository
+        private set
 
     // Application-scoped IO scope: lives as long as the process, so it can't leak.
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -28,6 +31,7 @@ class LiveTranslateApp : Application() {
         settingsRepository = UserSettingsRepository(this)
         apiKeyStore = ApiKeyStore(this)
         modelManager = ModelDownloader(this)
+        historyRepository = HistoryRepository(this)
         // Fast path: unpack the bundled models in the background so they are
         // ready by the time the user starts a session. connect() also blocks on
         // the same idempotent seed as a fallback.

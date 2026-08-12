@@ -34,6 +34,10 @@ class DeepSeekTranslationEngine(
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
+    // 会话内翻译历史（原文→译文），供上下文感知翻译。引擎按会话创建，天然随会话重置。
+    private val history = ArrayDeque<Pair<String, String>>()
+    private val historyWindow = 4
+
     override fun translate(text: String, sourceLang: String, targetLang: String): Flow<String> = flow {
         val target = targetLabel(targetLang.ifBlank { "zh-Hans" })
         val messages = JSONArray()
@@ -47,11 +51,16 @@ class DeepSeekTranslationEngine(
                             "no quotation marks, no code fences.",
                     ),
             )
-            .put(
-                JSONObject()
-                    .put("role", "user")
-                    .put("content", text),
-            )
+        // 上下文：把最近几轮（原文→译文）作为对话历史带入，翻译时参考前文（人称、指代、省略等）。
+        for ((src, dst) in history) {
+            messages.put(JSONObject().put("role", "user").put("content", src))
+            messages.put(JSONObject().put("role", "assistant").put("content", dst))
+        }
+        messages.put(
+            JSONObject()
+                .put("role", "user")
+                .put("content", text),
+        )
         val body = JSONObject()
             .put("model", model)
             .put("stream", true)
@@ -98,6 +107,9 @@ class DeepSeekTranslationEngine(
             if (builder.isEmpty()) {
                 throw IOException("DeepSeek 未返回任何内容（请检查模型名与 Key 权限）")
             }
+            // 本句翻译完成，写入历史供下一句参考；超窗移除最旧。失败路径不会走到这里。
+            history.addLast(text to builder.toString())
+            if (history.size > historyWindow) history.removeFirst()
         }
     }.flowOn(Dispatchers.IO)
 

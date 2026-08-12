@@ -8,6 +8,7 @@
 
     <string name="tab_subtitle">Subtitles</string>
     <string name="tab_settings">Settings</string>
+    <string name="tab_history">History</string>
 
     <string name="subtitle_title">Live subtitles</string>
     <string name="subtitle_subtitle">Capture system audio · on-device ASR + translate</string>
@@ -28,10 +29,24 @@
     <string name="audio_source_media">Media</string>
     <string name="audio_source_mic">Microphone</string>
     <string name="audio_source_both">Media + Microphone</string>
-    <string name="subtitle_export_md">Export this session as Markdown</string>
+    <string name="subtitle_export_txt">Save this session as .txt</string>
     <string name="subtitle_export_ok">Saved to Downloads: %1$s</string>
     <string name="subtitle_export_fail">Export failed: %1$s</string>
     <string name="subtitle_export_empty">Nothing to export</string>
+
+    <string name="history_title">History</string>
+    <string name="history_subtitle">Your saved translation sessions</string>
+    <string name="history_empty">No history yet — finish a session and it appears here (in “Save all” mode).</string>
+    <string name="history_count">%1$d session(s)</string>
+    <string name="history_clear_all">Clear all</string>
+    <string name="history_cleared">All history cleared</string>
+    <string name="history_original">Source</string>
+    <string name="history_translation">Translation</string>
+    <string name="history_entry_meta">%1$d source · %2$d translation chars</string>
+    <string name="history_expand">Expand</string>
+    <string name="history_collapse">Collapse</string>
+    <string name="history_copied">Copied to clipboard</string>
+    <string name="history_save_txt">Save as .txt</string>
 
     <string name="status_idle">Idle</string>
     <string name="status_starting">Starting</string>
@@ -78,6 +93,12 @@
     <string name="settings_voice_volume">Voice volume %1$d%%</string>
     <string name="settings_voice_volume_boost"> (boosted, may distort slightly)</string>
     <string name="settings_voice_volume_hint">Can go past 100%% so translation sits above the original. Too high may clip.</string>
+    <string name="settings_history">History</string>
+    <string name="settings_history_desc">What to do with a finished session\'s transcripts.</string>
+    <string name="history_mode_auto_clear">Auto-clean</string>
+    <string name="history_mode_auto_clear_summary">Sessions aren\'t written to history (the current one can still be exported manually).</string>
+    <string name="history_mode_save_all">Save all</string>
+    <string name="history_mode_save_all_summary">Every finished session is saved and viewable on the History tab (max 20, oldest dropped).</string>
     <string name="settings_permissions">Permissions</string>
     <string name="settings_open_overlay">Open overlay permission settings</string>
     <string name="settings_permissions_hint">Starting subtitles will request screen-capture permission to record other apps\' audio.</string>

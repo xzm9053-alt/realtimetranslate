@@ -35,6 +35,7 @@ class UserSettingsRepository(private val context: Context) {
         val deepseekBaseUrl = stringPreferencesKey("deepseek_base_url")
         val modelMirrorUrl = stringPreferencesKey("model_mirror_url")
         val huggingfaceToken = stringPreferencesKey("huggingface_token")
+        val historyMode = stringPreferencesKey("history_mode")
     }
 
     val settings: Flow<UserSettings> = context.dataStore.data.map { prefs ->
@@ -63,6 +64,7 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.deepseekBaseUrl] = next.deepseekBaseUrl
             prefs[Keys.modelMirrorUrl] = next.modelMirrorUrl
             prefs[Keys.huggingfaceToken] = next.huggingfaceToken
+            prefs[Keys.historyMode] = next.historyMode.name
         }
     }
 
@@ -97,5 +99,6 @@ class UserSettingsRepository(private val context: Context) {
         deepseekBaseUrl = this[Keys.deepseekBaseUrl] ?: UserSettings.Defaults.DEEPSEEK_BASE_URL,
         modelMirrorUrl = this[Keys.modelMirrorUrl] ?: UserSettings.Defaults.MODEL_MIRROR_URL,
         huggingfaceToken = this[Keys.huggingfaceToken] ?: UserSettings.Defaults.HF_TOKEN,
+        historyMode = HistoryMode.fromStorage(this[Keys.historyMode]),
     )
 }
