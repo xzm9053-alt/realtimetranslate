@@ -458,10 +458,11 @@ class SubtitleOverlayController(
 
             val previous = if (isInput) lastInputLineCount else lastOutputLineCount
 
-            // Text shrank (reset / mode switch) — snap baseline, no flashy scroll
+            // Text shrank (history trimmed from the front / mode switch) — stay pinned
+            // to the newest line rather than jumping to the top.
             if (lineCount < previous) {
                 if (isInput) lastInputLineCount = lineCount else lastOutputLineCount = lineCount
-                scrollView.scrollTo(0, 0)
+                scrollToShowLastLine(textView, scrollView)
                 return@post
             }
 

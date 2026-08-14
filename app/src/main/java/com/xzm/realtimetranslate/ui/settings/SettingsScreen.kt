@@ -39,6 +39,7 @@ import com.xzm.realtimetranslate.BuildConfig
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.HistoryMode
 import com.xzm.realtimetranslate.data.TranslationEngineType
+import com.xzm.realtimetranslate.data.UserSettings
 import com.xzm.realtimetranslate.ui.components.PageTitle
 import com.xzm.realtimetranslate.ui.components.SectionCard
 import com.xzm.realtimetranslate.ui.components.SettingSwitchRow
@@ -432,6 +433,27 @@ fun SettingsScreen(
                     selected = settings.historyMode == HistoryMode.SAVE_ALL,
                     onClick = { viewModel.setHistoryMode(HistoryMode.SAVE_ALL) },
                 )
+                if (settings.historyMode == HistoryMode.AUTO_CLEAR) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = stringResource(
+                                R.string.history_max_entries,
+                                settings.historyLimit,
+                            ),
+                            fontSize = 13.sp,
+                        )
+                        Slider(
+                            value = settings.historyLimit.toFloat(),
+                            onValueChange = { v -> viewModel.setHistoryLimit(v.toInt()) },
+                            valueRange = UserSettings.Defaults.HISTORY_LIMIT_MIN.toFloat()..
+                                UserSettings.Defaults.HISTORY_LIMIT_MAX.toFloat(),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
             }
         }
 

@@ -36,6 +36,7 @@ class UserSettingsRepository(private val context: Context) {
         val modelMirrorUrl = stringPreferencesKey("model_mirror_url")
         val huggingfaceToken = stringPreferencesKey("huggingface_token")
         val historyMode = stringPreferencesKey("history_mode")
+        val historyLimit = intPreferencesKey("history_limit")
     }
 
     val settings: Flow<UserSettings> = context.dataStore.data.map { prefs ->
@@ -65,6 +66,7 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.modelMirrorUrl] = next.modelMirrorUrl
             prefs[Keys.huggingfaceToken] = next.huggingfaceToken
             prefs[Keys.historyMode] = next.historyMode.name
+            prefs[Keys.historyLimit] = next.historyLimit
         }
     }
 
@@ -100,5 +102,6 @@ class UserSettingsRepository(private val context: Context) {
         modelMirrorUrl = this[Keys.modelMirrorUrl] ?: UserSettings.Defaults.MODEL_MIRROR_URL,
         huggingfaceToken = this[Keys.huggingfaceToken] ?: UserSettings.Defaults.HF_TOKEN,
         historyMode = HistoryMode.fromStorage(this[Keys.historyMode]),
+        historyLimit = this[Keys.historyLimit] ?: UserSettings.Defaults.HISTORY_LIMIT,
     )
 }

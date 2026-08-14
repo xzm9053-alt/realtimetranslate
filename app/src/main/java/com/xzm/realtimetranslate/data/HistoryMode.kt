@@ -4,11 +4,11 @@ package com.xzm.realtimetranslate.data
  * What to do with a finished session's transcripts.
  */
 enum class HistoryMode {
-    /** Don't write the session into the history file (only the last-session
-     *  preview/export on the subtitle screen stays available in-memory). */
+    /** Persist every finished session, but keep at most [com.xzm.realtimetranslate.data.UserSettings.historyLimit]
+     *  entries — the oldest are auto-dropped when the cap is exceeded. */
     AUTO_CLEAR,
 
-    /** Append every finished session to the persistent history. */
+    /** Persist every finished session forever; history is never auto-deleted. */
     SAVE_ALL,
     ;
 

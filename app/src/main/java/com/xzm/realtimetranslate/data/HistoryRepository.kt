@@ -40,17 +40,33 @@ class HistoryRepository(private val context: Context) {
         scope.launch { _entries.value = load() }
     }
 
-    /** Fire-and-forget: newest first, capped at [MAX_ENTRIES]. */
-    fun append(entry: HistoryEntry) {
+    /** Fire-and-forget: newest first, capped at [maxEntries] (null = never trim).
+     *  Excess entries beyond the cap are dropped, oldest first. */
+    fun append(entry: HistoryEntry, maxEntries: Int? = DEFAULT_MAX_ENTRIES) {
         scope.launch {
             mutex.withLock {
-                _entries.value = (_entries.value + entry)
-                    .sortedByDescending { it.stoppedAtEpochMs }
-                    .take(MAX_ENTRIES)
+                _entries.value = capped(
+                    (_entries.value + entry).sortedByDescending { it.stoppedAtEpochMs },
+                    maxEntries,
+                )
                 persist(_entries.value)
             }
         }
     }
+
+    /** Trim existing history down to [maxEntries] (null = no-op). Called when the
+     *  mode/limit setting changes so surplus entries drop immediately. */
+    suspend fun trim(maxEntries: Int?) {
+        withContext(Dispatchers.IO) {
+            mutex.withLock {
+                _entries.value = capped(_entries.value, maxEntries)
+                persist(_entries.value)
+            }
+        }
+    }
+
+    private fun capped(entries: List<HistoryEntry>, maxEntries: Int?): List<HistoryEntry> =
+        if (maxEntries == null) entries else entries.take(maxEntries)
 
     suspend fun clearAll() {
         withContext(Dispatchers.IO) {
@@ -82,6 +98,6 @@ class HistoryRepository(private val context: Context) {
     }
 
     companion object {
-        const val MAX_ENTRIES = 20
+        const val DEFAULT_MAX_ENTRIES = 20
     }
 }

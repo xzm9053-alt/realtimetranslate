@@ -117,7 +117,25 @@ class SettingsViewModel(
     }
 
     fun setHistoryMode(mode: HistoryMode) {
-        update { it.copy(historyMode = mode) }
+        // Trim after persisting so surplus entries drop immediately (cap computed
+        // from the state we're switching to, since `settings` refreshes async).
+        val cap = if (mode == HistoryMode.SAVE_ALL) null else settings.value.historyLimit
+        viewModelScope.launch {
+            settingsRepository.update { it.copy(historyMode = mode) }
+            app.historyRepository.trim(cap)
+        }
+    }
+
+    fun setHistoryLimit(limit: Int) {
+        val capped = limit.coerceIn(
+            UserSettings.Defaults.HISTORY_LIMIT_MIN,
+            UserSettings.Defaults.HISTORY_LIMIT_MAX,
+        )
+        val cap = if (settings.value.historyMode == HistoryMode.SAVE_ALL) null else capped
+        viewModelScope.launch {
+            settingsRepository.update { it.copy(historyLimit = capped) }
+            app.historyRepository.trim(cap)
+        }
     }
 
     fun saveDeepSeekKey() {

@@ -59,7 +59,9 @@ class SubtitleSessionService : Service() {
     private var captureStarted = false
 
     private var accumulatedInput = StringBuilder()
-    private var accumulatedOutput = StringBuilder()
+    // 显示滚动历史（已定格句子）+ 当前流式翻译句。新句开始时上一句定格进历史，而非被清屏。
+    private var outputHistory = StringBuilder()
+    private var outputCurrent = StringBuilder()
     private var fullInput = StringBuilder()
     private var fullOutput = StringBuilder()
 
@@ -111,7 +113,8 @@ class SubtitleSessionService : Service() {
         SessionBus.setStatus(SessionBus.Status.Starting, "正在启动…")
         SessionBus.clearExport()
         accumulatedInput.clear()
-        accumulatedOutput.clear()
+        outputHistory.clear()
+        outputCurrent.clear()
         fullInput.clear()
         fullOutput.clear()
         captureStarted = false
@@ -198,18 +201,19 @@ class SubtitleSessionService : Service() {
                             SessionBus.setPreview(input = text)
                         }
                         is RealtimeTranslationClient.LiveEvent.OutputTranscript -> {
-                            appendTranscript(accumulatedOutput, event.text)
+                            appendOutputCurrent(event.text)
                             appendFull(fullOutput, event.text)
-                            val text = accumulatedOutput.toString()
+                            val text = buildString {
+                                append(outputHistory)
+                                append(outputCurrent)
+                            }
                             overlay?.updateTranscripts(input = null, output = text)
                             SessionBus.setPreview(output = text)
                         }
-                        // 新句开始：清空当前输出行，避免流式翻译的增量被逐段追加成上一句的重复堆叠。
-                        // fullOutput 保持累积，导出会话仍保留完整历史。
+                        // 新句开始：当前句定格进滚动历史（不清屏）。流式重写只改当前行、
+                        // 不会逐段追加成上一句的重复堆叠。fullOutput 仍保持累积供导出。
                         is RealtimeTranslationClient.LiveEvent.OutputReset -> {
-                            accumulatedOutput.clear()
-                            overlay?.updateTranscripts(input = null, output = "")
-                            SessionBus.setPreview(output = "")
+                            finalizeOutputCurrent()
                         }
                         is RealtimeTranslationClient.LiveEvent.AudioChunk -> {
                             if (currentSettings.playTranslatedAudio) {
@@ -308,6 +312,40 @@ class SubtitleSessionService : Service() {
         }
     }
 
+    /** 追加/改写当前流式翻译句。DeepSeek 整句累计重写→替换当前行（不堆叠）；微软整句→追加。 */
+    private fun appendOutputCurrent(chunk: String) {
+        val cur = outputCurrent
+        when {
+            cur.isNotEmpty() && chunk.length >= cur.length && chunk.startsWith(cur.toString()) ->
+                // 本句累计重写：只替换当前行，避免逐段追加成上一句的重复堆叠。
+                cur.replace(0, cur.length, chunk)
+            cur.endsWith(chunk) -> Unit // 尾部重叠，忽略
+            else -> {
+                if (cur.isNotEmpty() && !cur.last().isWhitespace() &&
+                    chunk.isNotEmpty() && !chunk.first().isWhitespace()
+                ) cur.append(' ')
+                cur.append(chunk)
+            }
+        }
+        if (cur.length > MAX_OUTPUT_CURRENT_CHARS) finalizeOutputCurrent()
+    }
+
+    /** 新句开始：把当前句定格进滚动历史（空格分隔），超长历史从最前裁剪。不清屏。 */
+    private fun finalizeOutputCurrent() {
+        if (outputCurrent.isEmpty()) return
+        if (outputHistory.isNotEmpty() && !outputHistory.last().isWhitespace() &&
+            !outputCurrent.first().isWhitespace()
+        ) outputHistory.append(' ')
+        outputHistory.append(outputCurrent)
+        outputCurrent.clear()
+        trimOutputHistory()
+    }
+
+    private fun trimOutputHistory() {
+        val overflow = outputHistory.length - MAX_OUTPUT_HISTORY_CHARS
+        if (overflow > 0) outputHistory.delete(0, overflow)
+    }
+
     private fun appendFull(buffer: StringBuilder, chunk: String) {
         // Prefer cumulative server rewrites when present
         if (chunk.length >= buffer.length && buffer.isNotEmpty() && chunk.startsWith(buffer.toString())) {
@@ -377,13 +415,14 @@ class SubtitleSessionService : Service() {
         val outFull = fullOutput.toString()
         if (inFull.isNotBlank() || outFull.isNotBlank()) {
             SessionBus.markSessionFinished(inFull, outFull, message)
-            if (currentSettings.historyMode == HistoryMode.SAVE_ALL) {
-                // Fire-and-forget via the repository's process-scoped IO scope:
-                // this service's ioScope is cancelled in onDestroy right after.
-                (application as LiveTranslateApp).historyRepository.append(
-                    HistoryEntry(System.currentTimeMillis(), inFull, outFull),
-                )
-            }
+            // Fire-and-forget via the repository's process-scoped IO scope:
+            // this service's ioScope is cancelled in onDestroy right after.
+            // SAVE_ALL keeps everything (no cap); AUTO_CLEAR trims to historyLimit.
+            (application as LiveTranslateApp).historyRepository.append(
+                HistoryEntry(System.currentTimeMillis(), inFull, outFull),
+                maxEntries = if (currentSettings.historyMode == HistoryMode.SAVE_ALL) null
+                else currentSettings.historyLimit,
+            )
         } else {
             SessionBus.setStatus(SessionBus.Status.Stopped, message)
         }
@@ -431,6 +470,8 @@ class SubtitleSessionService : Service() {
     companion object {
         private const val TAG = "SubtitleSessionService"
         private const val NOTIFICATION_ID = 42
+        private const val MAX_OUTPUT_CURRENT_CHARS = 500
+        private const val MAX_OUTPUT_HISTORY_CHARS = 2000
         const val ACTION_START = "com.xzm.realtimetranslate.action.START_SUBTITLE"
         const val ACTION_STOP = "com.xzm.realtimetranslate.action.STOP_SUBTITLE"
         const val EXTRA_RESULT_CODE = "result_code"

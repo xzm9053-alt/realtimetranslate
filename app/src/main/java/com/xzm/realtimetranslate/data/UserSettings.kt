@@ -28,6 +28,7 @@ data class UserSettings(
     val modelMirrorUrl: String = Defaults.MODEL_MIRROR_URL,
     val huggingfaceToken: String = Defaults.HF_TOKEN,
     val historyMode: HistoryMode = Defaults.HISTORY_MODE,
+    val historyLimit: Int = Defaults.HISTORY_LIMIT,
 ) {
     object Defaults {
         // Kept for schema compatibility; the engine now reads DeepSeek settings directly.
@@ -52,6 +53,10 @@ data class UserSettings(
         const val OVERLAY_HEIGHT_DP = 120
         val AUDIO_SOURCE: AudioSourceMode = AudioSourceMode.MEDIA
         val HISTORY_MODE: HistoryMode = HistoryMode.SAVE_ALL
+        // Max entries kept in AUTO_CLEAR mode (configurable, 5..200).
+        const val HISTORY_LIMIT = 20
+        const val HISTORY_LIMIT_MIN = 5
+        const val HISTORY_LIMIT_MAX = 200
     }
 }
 
