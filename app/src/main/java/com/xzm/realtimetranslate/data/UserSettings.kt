@@ -13,7 +13,9 @@ data class UserSettings(
     val targetLanguageCode: String = Defaults.TARGET_LANGUAGE,
     val fontSizeSp: Float = Defaults.FONT_SIZE_SP,
     val backgroundAlpha: Float = Defaults.BACKGROUND_ALPHA,
-    val bilingual: Boolean = Defaults.BILINGUAL,
+    val displayMode: SubtitleDisplayMode = Defaults.DISPLAY_MODE,
+    val sourceTextColor: Long = Defaults.SOURCE_TEXT_COLOR,
+    val translationTextColor: Long = Defaults.TRANSLATION_TEXT_COLOR,
     val playTranslatedAudio: Boolean = Defaults.PLAY_TRANSLATED_AUDIO,
     val translatedVolume: Float = Defaults.TRANSLATED_VOLUME,
     val overlayX: Int = Defaults.OVERLAY_X,
@@ -44,7 +46,11 @@ data class UserSettings(
         val TRANSLATION_ENGINE: TranslationEngineType = TranslationEngineType.DEEPSEEK
         const val FONT_SIZE_SP = 18f
         const val BACKGROUND_ALPHA = 0.65f
-        const val BILINGUAL = false
+        val DISPLAY_MODE: SubtitleDisplayMode = SubtitleDisplayMode.TRANSLATION
+        // Subtitle text colors, ARGB as Long. Defaults keep the current look:
+        // source semi-transparent white (alpha 200), translation opaque white.
+        const val SOURCE_TEXT_COLOR = 0xC8FFFFFF
+        const val TRANSLATION_TEXT_COLOR = 0xFFFFFFFF
         const val PLAY_TRANSLATED_AUDIO = false
         const val TRANSLATED_VOLUME = 0.8f
         const val OVERLAY_X = 24

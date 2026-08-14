@@ -2,8 +2,11 @@ package com.xzm.realtimetranslate.ui.settings
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -26,6 +30,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -38,6 +44,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.xzm.realtimetranslate.BuildConfig
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.HistoryMode
+import com.xzm.realtimetranslate.data.SubtitleDisplayMode
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
 import com.xzm.realtimetranslate.ui.components.PageTitle
@@ -341,17 +348,53 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-            SettingSwitchRow(
-                title = stringResource(R.string.settings_bilingual),
-                summary = stringResource(
-                    if (settings.bilingual) {
-                        R.string.settings_bilingual_on
-                    } else {
-                        R.string.settings_bilingual_off
-                    },
-                ),
-                checked = settings.bilingual,
-                onCheckedChange = { c -> viewModel.update { it.copy(bilingual = c) } },
+            Text(
+                text = stringResource(R.string.settings_bilingual),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+            OptionRow(
+                label = stringResource(R.string.display_mode_both),
+                summary = stringResource(R.string.display_mode_both_summary),
+                selected = settings.displayMode == SubtitleDisplayMode.BOTH,
+                onClick = { viewModel.update { it.copy(displayMode = SubtitleDisplayMode.BOTH) } },
+            )
+            OptionRow(
+                label = stringResource(R.string.display_mode_source),
+                summary = stringResource(R.string.display_mode_source_summary),
+                selected = settings.displayMode == SubtitleDisplayMode.SOURCE,
+                onClick = { viewModel.update { it.copy(displayMode = SubtitleDisplayMode.SOURCE) } },
+            )
+            OptionRow(
+                label = stringResource(R.string.display_mode_translation),
+                summary = stringResource(R.string.display_mode_translation_summary),
+                selected = settings.displayMode == SubtitleDisplayMode.TRANSLATION,
+                onClick = {
+                    viewModel.update { it.copy(displayMode = SubtitleDisplayMode.TRANSLATION) }
+                },
+            )
+            Text(
+                text = stringResource(R.string.settings_source_color),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+            ColorSwatchRow(
+                selected = settings.sourceTextColor,
+                onSelect = { c -> viewModel.update { it.copy(sourceTextColor = c) } },
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            Text(
+                text = stringResource(R.string.settings_translation_color),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+            ColorSwatchRow(
+                selected = settings.translationTextColor,
+                onSelect = { c -> viewModel.update { it.copy(translationTextColor = c) } },
+                modifier = Modifier.padding(horizontal = 16.dp),
             )
             TextButton(
                 text = stringResource(R.string.settings_reset_appearance),
@@ -560,6 +603,50 @@ private fun OptionRow(
         }
         if (selected) {
             Text(text = "✓", color = Booth.Accent, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+/** Preset subtitle text colors (ARGB as Long) — readable on the dark overlay. */
+private val SUBTITLE_COLOR_PRESETS: List<Long> = listOf(
+    0xFFFFFFFF, 0xFFD6D6D6, 0xFFB0BEC5, 0xFF000000, 0xFFFFD600,
+    0xFFFFC400, 0xFFFF9800, 0xFFFF5252, 0xFFE91E8C, 0xFFCE93D8,
+    0xFF448AFF, 0xFF00E5FF, 0xFF69F0AE, 0xFF00C853,
+)
+
+@Composable
+private fun ColorSwatchRow(
+    selected: Long,
+    onSelect: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        SUBTITLE_COLOR_PRESETS.chunked(7).forEach { rowColors ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                rowColors.forEach { c ->
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .aspectRatio(1f)
+                            .clip(CircleShape)
+                            .background(Color(c.toInt()))
+                            .then(
+                                if (c == selected) {
+                                    Modifier.border(3.dp, Booth.Accent, CircleShape)
+                                } else {
+                                    Modifier
+                                },
+                            )
+                            .clickable { onSelect(c) },
+                    )
+                }
+            }
         }
     }
 }

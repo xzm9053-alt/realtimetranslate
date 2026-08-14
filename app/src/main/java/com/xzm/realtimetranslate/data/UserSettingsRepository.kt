@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -22,7 +23,11 @@ class UserSettingsRepository(private val context: Context) {
         val targetLanguage = stringPreferencesKey("target_language")
         val fontSizeSp = floatPreferencesKey("font_size_sp")
         val backgroundAlpha = floatPreferencesKey("background_alpha")
-        val bilingual = booleanPreferencesKey("bilingual")
+        val displayMode = stringPreferencesKey("display_mode")
+        // Legacy pre-3-option boolean key — read once for migration, never written.
+        val legacyBilingual = booleanPreferencesKey("bilingual")
+        val sourceTextColor = longPreferencesKey("source_text_color")
+        val translationTextColor = longPreferencesKey("translation_text_color")
         val playTranslatedAudio = booleanPreferencesKey("play_translated_audio")
         val translatedVolume = floatPreferencesKey("translated_volume")
         val overlayX = intPreferencesKey("overlay_x")
@@ -52,7 +57,9 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.targetLanguage] = next.targetLanguageCode
             prefs[Keys.fontSizeSp] = next.fontSizeSp
             prefs[Keys.backgroundAlpha] = next.backgroundAlpha
-            prefs[Keys.bilingual] = next.bilingual
+            prefs[Keys.displayMode] = next.displayMode.name
+            prefs[Keys.sourceTextColor] = next.sourceTextColor
+            prefs[Keys.translationTextColor] = next.translationTextColor
             prefs[Keys.playTranslatedAudio] = next.playTranslatedAudio
             prefs[Keys.translatedVolume] = next.translatedVolume
             prefs[Keys.overlayX] = next.overlayX
@@ -75,7 +82,9 @@ class UserSettingsRepository(private val context: Context) {
             it.copy(
                 fontSizeSp = UserSettings.Defaults.FONT_SIZE_SP,
                 backgroundAlpha = UserSettings.Defaults.BACKGROUND_ALPHA,
-                bilingual = UserSettings.Defaults.BILINGUAL,
+                displayMode = UserSettings.Defaults.DISPLAY_MODE,
+                sourceTextColor = UserSettings.Defaults.SOURCE_TEXT_COLOR,
+                translationTextColor = UserSettings.Defaults.TRANSLATION_TEXT_COLOR,
             )
         }
     }
@@ -87,7 +96,11 @@ class UserSettingsRepository(private val context: Context) {
         targetLanguageCode = this[Keys.targetLanguage] ?: UserSettings.Defaults.TARGET_LANGUAGE,
         fontSizeSp = this[Keys.fontSizeSp] ?: UserSettings.Defaults.FONT_SIZE_SP,
         backgroundAlpha = this[Keys.backgroundAlpha] ?: UserSettings.Defaults.BACKGROUND_ALPHA,
-        bilingual = this[Keys.bilingual] ?: UserSettings.Defaults.BILINGUAL,
+        displayMode = this[Keys.displayMode]?.let { SubtitleDisplayMode.fromStorage(it) }
+            ?: legacyDisplayMode(this),
+        sourceTextColor = this[Keys.sourceTextColor] ?: UserSettings.Defaults.SOURCE_TEXT_COLOR,
+        translationTextColor = this[Keys.translationTextColor]
+            ?: UserSettings.Defaults.TRANSLATION_TEXT_COLOR,
         playTranslatedAudio = this[Keys.playTranslatedAudio]
             ?: UserSettings.Defaults.PLAY_TRANSLATED_AUDIO,
         translatedVolume = this[Keys.translatedVolume] ?: UserSettings.Defaults.TRANSLATED_VOLUME,
@@ -104,4 +117,11 @@ class UserSettingsRepository(private val context: Context) {
         historyMode = HistoryMode.fromStorage(this[Keys.historyMode]),
         historyLimit = this[Keys.historyLimit] ?: UserSettings.Defaults.HISTORY_LIMIT,
     )
+
+    /** Migrate the pre-3-option boolean: true→BOTH, false/absent→TRANSLATION. */
+    private fun legacyDisplayMode(p: Preferences): SubtitleDisplayMode =
+        when (p[Keys.legacyBilingual]) {
+            true -> SubtitleDisplayMode.BOTH
+            else -> SubtitleDisplayMode.TRANSLATION
+        }
 }

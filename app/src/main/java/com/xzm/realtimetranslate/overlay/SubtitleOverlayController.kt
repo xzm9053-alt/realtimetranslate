@@ -19,6 +19,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import com.xzm.realtimetranslate.data.SubtitleDisplayMode
 import com.xzm.realtimetranslate.data.UserSettings
 import kotlin.math.max
 import kotlin.math.min
@@ -29,8 +30,8 @@ import kotlin.math.roundToInt
  * - thin top grabber to move
  * - bottom-right handle to resize box only (font size unchanged)
  * - clamps size/position on orientation change so the handle never goes off-screen
- * - bilingual: source + divider + translation, each with independent auto-scroll
- * - translation-only: single auto-scrolling pane
+ * - display mode: BOTH (source + divider + translation, split) / SOURCE-only /
+ *   TRANSLATION-only, each pane with independent auto-scroll
  */
 class SubtitleOverlayController(
     private val context: Context,
@@ -124,12 +125,12 @@ class SubtitleOverlayController(
     }
 
     fun updateSettings(value: UserSettings) {
-        val bilingualChanged = value.bilingual != settings.bilingual
+        val displayModeChanged = value.displayMode != settings.displayMode
         val fontChanged = value.fontSizeSp != settings.fontSizeSp
         settings = value
         applySettingsToViews()
         applyLayoutMode()
-        if (bilingualChanged || fontChanged) {
+        if (displayModeChanged || fontChanged) {
             // Layout geometry of lines changes — re-baseline counters
             lastInputLineCount = 0
             lastOutputLineCount = 0
@@ -282,7 +283,7 @@ class SubtitleOverlayController(
         grabberRow.setOnTouchListener(MoveTouchListener())
         column.addView(grabberRow)
 
-        // ---- Source pane (bilingual only) ----
+        // ---- Source pane (BOTH / SOURCE only) ----
         val sourceSection = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(
@@ -290,7 +291,11 @@ class SubtitleOverlayController(
                 0,
                 1f,
             )
-            visibility = if (settings.bilingual) View.VISIBLE else View.GONE
+            visibility = if (settings.displayMode != SubtitleDisplayMode.TRANSLATION) {
+                View.VISIBLE
+            } else {
+                View.GONE
+            }
         }
         inputSection = sourceSection
 
@@ -309,7 +314,6 @@ class SubtitleOverlayController(
         inputScroll = inScroll
 
         val input = TextView(context).apply {
-            setTextColor(Color.argb(200, 255, 255, 255))
             typeface = Typeface.DEFAULT
             setLineSpacing(0f, 1.15f)
             // No maxLines — grow and scroll
@@ -336,7 +340,11 @@ class SubtitleOverlayController(
                 bottomMargin = (4 * density).roundToInt()
             }
             setBackgroundColor(Color.argb(70, 255, 255, 255))
-            visibility = if (settings.bilingual) View.VISIBLE else View.GONE
+            visibility = if (settings.displayMode == SubtitleDisplayMode.BOTH) {
+                View.VISIBLE
+            } else {
+                View.GONE
+            }
         }
         dividerView = divider
         column.addView(divider)
@@ -357,7 +365,6 @@ class SubtitleOverlayController(
         outputScroll = outScroll
 
         val output = TextView(context).apply {
-            setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT
             setLineSpacing(0f, 1.15f)
             text = "…"
@@ -390,14 +397,21 @@ class SubtitleOverlayController(
         return root
     }
 
-    /** Switch bilingual (split + divider) vs translation-only (full height scroll). */
+    /**
+     * Three display modes: BOTH (source + divider + translation, split half/half),
+     * SOURCE-only (source fills the whole height), TRANSLATION-only (translation fills
+     * the whole height). Hidden panes are GONE so they take no space; a single visible
+     * pane with weight 1f fills the overlay.
+     */
     private fun applyLayoutMode() {
-        val bilingual = settings.bilingual
-        inputSection?.visibility = if (bilingual) View.VISIBLE else View.GONE
-        dividerView?.visibility = if (bilingual) View.VISIBLE else View.GONE
+        val mode = settings.displayMode
+        inputSection?.visibility = if (mode != SubtitleDisplayMode.TRANSLATION) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+        dividerView?.visibility = if (mode == SubtitleDisplayMode.BOTH) View.VISIBLE else View.GONE
 
-        // When translation-only, output takes all remaining weight.
-        // When bilingual, both panes share weight 1f each.
         (inputSection?.layoutParams as? LinearLayout.LayoutParams)?.let { lp ->
             lp.weight = 1f
             lp.height = 0
@@ -415,6 +429,9 @@ class SubtitleOverlayController(
         (rootView?.background as? GradientDrawable)?.setColor(Color.argb(alpha, 0, 0, 0))
         inputView?.setTextSize(TypedValue.COMPLEX_UNIT_SP, settings.fontSizeSp * 0.9f)
         outputView?.setTextSize(TypedValue.COMPLEX_UNIT_SP, settings.fontSizeSp)
+        // User-picked text colors (ARGB Long → Int, setTextColor(Int) reads ARGB directly).
+        inputView?.setTextColor(settings.sourceTextColor.toInt())
+        outputView?.setTextColor(settings.translationTextColor.toInt())
     }
 
     private fun applyTranscriptsToViews() {

@@ -84,9 +84,15 @@
     <string name="settings_font_size">字体大小 %1$d sp · 系统默认字体</string>
     <string name="settings_bg_alpha">背景透明度 %1$d%%</string>
     <string name="settings_bilingual">双语显示</string>
-    <string name="settings_bilingual_on">显示原文 + 译文</string>
-    <string name="settings_bilingual_off">仅显示译文</string>
+    <string name="display_mode_both">原文 + 译文</string>
+    <string name="display_mode_both_summary">上下分栏同时显示识别原文与翻译</string>
+    <string name="display_mode_source">仅原文</string>
+    <string name="display_mode_source_summary">只显示识别出的原文</string>
+    <string name="display_mode_translation">仅译文</string>
+    <string name="display_mode_translation_summary">只显示翻译结果</string>
     <string name="settings_reset_appearance">重置字幕外观</string>
+    <string name="settings_source_color">原文颜色</string>
+    <string name="settings_translation_color">译文颜色</string>
     <string name="settings_voice">译音</string>
     <string name="settings_play_voice">播放译音</string>
     <string name="settings_play_voice_summary">默认关闭（暂未接入 TTS 引擎）。</string>

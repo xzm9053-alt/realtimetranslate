@@ -19,13 +19,13 @@ An **Android real-time subtitles** app: captures audio playing on your phone (me
 | **On-device ASR** | Alibaba SenseVoice int8 model, bundled in the APK, unpacked on first launch, works offline |
 | **Translation engine** | DeepSeek (streaming SSE; model & API URL configurable) / Microsoft (free, no key) |
 | **Floating overlay** | Over other apps; thin top grabber to move; corner handle to resize (font size unchanged) |
-| **Display modes** | Translation only, or bilingual (source + translation with a divider) |
+| **Display modes** | Source + translation (split panes with a divider), source only, or translation only |
 | **Auto-scroll** | Separate panes for source / translation; **scrolls one line only when a line wraps** |
 | **Audio capture** | Media: `MediaProjection` + `AudioPlaybackCapture`; mic: `AudioRecord` → 16 kHz PCM |
 | **History** | Sessions saved per your setting (auto-clean / save-all, max 20); expand, long-press to copy, save each as txt, clear all |
 | **Export** | After stop, save this session's source + translation as `.txt` to Downloads |
 | **Translated voice** | Toggle & volume (off by default; volume can go past 100% to sit above the original) |
-| **Settings** | Engine & API key, model status/repair, subtitle appearance (font size, background opacity, bilingual), voice, history policy, permissions, about |
+| **Settings** | Engine & API key, model status/repair, subtitle appearance (font size, background opacity, source/translation text colors, display mode), voice, history policy, permissions, about |
 | **Language** | Follows the system: Chinese device → Chinese UI; otherwise → English |
 
 ---
@@ -78,7 +78,7 @@ After you stop, if there is content, use **Save this session as .txt** on the su
 
 - Drag the **thin top bar** to move
 - Drag the **corner handle** to resize (font size unchanged)
-- In Settings: font size, background opacity, bilingual toggle, reset appearance
+- In Settings: font size, background opacity, source/translation text colors, display mode, reset appearance
 - In History: long-press a source/translation block to copy; expand and "Save as .txt" per entry
 
 ---
