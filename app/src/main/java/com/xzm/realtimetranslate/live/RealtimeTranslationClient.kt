@@ -129,6 +129,8 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
                     modelDir = models.paths.senseVoiceModel.parentFile!!,
                     sileroVadPath = models.paths.sileroVad.absolutePath,
                     language = AsrEngine.senseVoiceLanguageFor(settings.sourceLanguageCode),
+                    vadMinSilenceDuration = settings.vadMinSilenceSec,
+                    vadMaxSpeechDuration = settings.vadMaxSpeechSec,
                     onSegment = { text -> onSegment(text, config) },
                 )
                 asrEngine = engine

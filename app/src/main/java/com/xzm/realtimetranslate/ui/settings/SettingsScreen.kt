@@ -1,7 +1,5 @@
 package com.xzm.realtimetranslate.ui.settings
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,7 +30,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -58,6 +55,7 @@ import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(
@@ -316,6 +314,48 @@ fun SettingsScreen(
         }
 
         SmallTitle(
+            text = stringResource(R.string.settings_vad),
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
+        SectionCard {
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_vad_desc),
+                    fontSize = 13.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                )
+                Text(
+                    text = stringResource(R.string.settings_vad_pause_value, settings.vadMinSilenceSec),
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                Slider(
+                    value = settings.vadMinSilenceSec.coerceIn(0.1f, 1.0f),
+                    onValueChange = { v ->
+                        viewModel.update { it.copy(vadMinSilenceSec = (v * 10).roundToInt() / 10f) }
+                    },
+                    valueRange = 0.1f..1.0f,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    text = stringResource(R.string.settings_vad_max_value, settings.vadMaxSpeechSec),
+                    fontSize = 13.sp,
+                )
+                Slider(
+                    value = settings.vadMaxSpeechSec.coerceIn(1f, 10f),
+                    onValueChange = { v ->
+                        viewModel.update { it.copy(vadMaxSpeechSec = (v * 2).roundToInt() / 2f) }
+                    },
+                    valueRange = 1f..10f,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+
+        SmallTitle(
             text = stringResource(R.string.settings_appearance),
             modifier = Modifier.padding(horizontal = 24.dp),
         )
@@ -406,51 +446,6 @@ fun SettingsScreen(
         }
 
         SmallTitle(
-            text = stringResource(R.string.settings_voice),
-            modifier = Modifier.padding(horizontal = 24.dp),
-        )
-        SectionCard {
-            SettingSwitchRow(
-                title = stringResource(R.string.settings_play_voice),
-                summary = stringResource(R.string.settings_play_voice_summary),
-                checked = settings.playTranslatedAudio,
-                onCheckedChange = { c -> viewModel.update { it.copy(playTranslatedAudio = c) } },
-            )
-            Column(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Text(
-                    text = buildString {
-                        append(
-                            stringResource(
-                                R.string.settings_voice_volume,
-                                (settings.translatedVolume * 100).toInt(),
-                            ),
-                        )
-                        if (settings.translatedVolume > 1f) {
-                            append(stringResource(R.string.settings_voice_volume_boost))
-                        }
-                    },
-                    fontSize = 13.sp,
-                )
-                Slider(
-                    value = settings.translatedVolume.coerceIn(0f, 2f),
-                    onValueChange = { v ->
-                        viewModel.update { it.copy(translatedVolume = v.coerceIn(0f, 2f)) }
-                    },
-                    valueRange = 0f..2f,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Text(
-                    text = stringResource(R.string.settings_voice_volume_hint),
-                    fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                )
-            }
-        }
-
-        SmallTitle(
             text = stringResource(R.string.settings_history),
             modifier = Modifier.padding(horizontal = 24.dp),
         )
@@ -527,8 +522,6 @@ fun SettingsScreen(
             modifier = Modifier.padding(horizontal = 24.dp),
         )
         SectionCard {
-            val context = LocalContext.current
-            val githubUrl = stringResource(R.string.github_url).trim()
             Column(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -538,34 +531,6 @@ fun SettingsScreen(
                     fontSize = 13.sp,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 )
-                Text(
-                    text = stringResource(R.string.settings_github),
-                    fontWeight = FontWeight.Medium,
-                )
-                if (githubUrl.isBlank()) {
-                    Text(
-                        text = stringResource(R.string.settings_github_pending),
-                        fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    )
-                } else {
-                    Text(
-                        text = githubUrl,
-                        fontSize = 13.sp,
-                        color = Booth.Accent,
-                    )
-                    TextButton(
-                        text = stringResource(R.string.settings_github_open),
-                        onClick = {
-                            runCatching {
-                                context.startActivity(
-                                    Intent(Intent.ACTION_VIEW, Uri.parse(githubUrl)),
-                                )
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
             }
         }
 

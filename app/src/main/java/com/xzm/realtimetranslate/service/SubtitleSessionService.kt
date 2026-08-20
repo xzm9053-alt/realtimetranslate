@@ -18,7 +18,6 @@ import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.audio.MicAudioCapturer
 import com.xzm.realtimetranslate.audio.PcmMixer
 import com.xzm.realtimetranslate.audio.SystemAudioCapturer
-import com.xzm.realtimetranslate.audio.TranslatedAudioPlayer
 import com.xzm.realtimetranslate.data.AudioSourceMode
 import com.xzm.realtimetranslate.data.HistoryEntry
 import com.xzm.realtimetranslate.data.HistoryMode
@@ -48,7 +47,6 @@ class SubtitleSessionService : Service() {
     private var micCapturer: MicAudioCapturer? = null
     private var pcmMixer: PcmMixer? = null
     private var liveClient: RealtimeTranslationClient? = null
-    private var audioPlayer: TranslatedAudioPlayer? = null
     private var overlay: SubtitleOverlayController? = null
     private var settingsJob: Job? = null
     private var eventsJob: Job? = null
@@ -167,11 +165,6 @@ class SubtitleSessionService : Service() {
             val client = RealtimeTranslationClient(app)
             liveClient = client
 
-            val player = TranslatedAudioPlayer()
-            audioPlayer = player
-            player.setEnabled(currentSettings.playTranslatedAudio)
-            player.setVolume(currentSettings.translatedVolume)
-
             eventsJob = scope.launch {
                 launch {
                     client.connectionState.collect { state ->
@@ -215,11 +208,8 @@ class SubtitleSessionService : Service() {
                         is RealtimeTranslationClient.LiveEvent.OutputReset -> {
                             finalizeOutputCurrent()
                         }
-                        is RealtimeTranslationClient.LiveEvent.AudioChunk -> {
-                            if (currentSettings.playTranslatedAudio) {
-                                player.playPcm(event.pcm, event.mimeType)
-                            }
-                        }
+                        // 译音播放已移除，音频块事件直接忽略。
+                        is RealtimeTranslationClient.LiveEvent.AudioChunk -> Unit
                         is RealtimeTranslationClient.LiveEvent.Error -> {
                             SessionBus.setStatus(SessionBus.Status.Error, event.message)
                         }
@@ -232,14 +222,8 @@ class SubtitleSessionService : Service() {
 
             settingsJob = scope.launch {
                 app.settingsRepository.settings.collectLatest { s ->
-                    val prevPlay = currentSettings.playTranslatedAudio
                     currentSettings = s
                     overlay?.updateSettings(s)
-                    player.setEnabled(s.playTranslatedAudio)
-                    player.setVolume(s.translatedVolume)
-                    if (prevPlay && !s.playTranslatedAudio) {
-                        Log.i(TAG, "translated audio disabled")
-                    }
                 }
             }
 
@@ -435,8 +419,6 @@ class SubtitleSessionService : Service() {
         liveClient?.close()
         liveClient?.destroy()
         liveClient = null
-        audioPlayer?.release()
-        audioPlayer = null
         overlay?.hide()
         overlay = null
         try {
@@ -456,7 +438,6 @@ class SubtitleSessionService : Service() {
         micCapturer?.stop()
         pcmMixer?.close()
         liveClient?.destroy()
-        audioPlayer?.release()
         overlay?.hide()
         try {
             mediaProjection?.stop()

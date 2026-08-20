@@ -349,7 +349,7 @@ class SubtitleOverlayController(
         dividerView = divider
         column.addView(divider)
 
-        // ---- Translation pane (always) ----
+        // ---- Translation pane (BOTH / TRANSLATION) ----
         val outScroll = ScrollView(context).apply {
             isFillViewport = false
             isVerticalScrollBarEnabled = false
@@ -411,6 +411,8 @@ class SubtitleOverlayController(
             View.GONE
         }
         dividerView?.visibility = if (mode == SubtitleDisplayMode.BOTH) View.VISIBLE else View.GONE
+        // SOURCE 模式隐藏译文窗格（GONE 不占空间，原文 weight 1f 撑满全高）。
+        outputScroll?.visibility = if (mode == SubtitleDisplayMode.SOURCE) View.GONE else View.VISIBLE
 
         (inputSection?.layoutParams as? LinearLayout.LayoutParams)?.let { lp ->
             lp.weight = 1f

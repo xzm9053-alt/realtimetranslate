@@ -28,8 +28,6 @@ class UserSettingsRepository(private val context: Context) {
         val legacyBilingual = booleanPreferencesKey("bilingual")
         val sourceTextColor = longPreferencesKey("source_text_color")
         val translationTextColor = longPreferencesKey("translation_text_color")
-        val playTranslatedAudio = booleanPreferencesKey("play_translated_audio")
-        val translatedVolume = floatPreferencesKey("translated_volume")
         val overlayX = intPreferencesKey("overlay_x")
         val overlayY = intPreferencesKey("overlay_y")
         val overlayWidthDp = intPreferencesKey("overlay_width_dp")
@@ -42,6 +40,8 @@ class UserSettingsRepository(private val context: Context) {
         val huggingfaceToken = stringPreferencesKey("huggingface_token")
         val historyMode = stringPreferencesKey("history_mode")
         val historyLimit = intPreferencesKey("history_limit")
+        val vadMinSilenceSec = floatPreferencesKey("vad_min_silence_sec")
+        val vadMaxSpeechSec = floatPreferencesKey("vad_max_speech_sec")
     }
 
     val settings: Flow<UserSettings> = context.dataStore.data.map { prefs ->
@@ -60,8 +60,6 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.displayMode] = next.displayMode.name
             prefs[Keys.sourceTextColor] = next.sourceTextColor
             prefs[Keys.translationTextColor] = next.translationTextColor
-            prefs[Keys.playTranslatedAudio] = next.playTranslatedAudio
-            prefs[Keys.translatedVolume] = next.translatedVolume
             prefs[Keys.overlayX] = next.overlayX
             prefs[Keys.overlayY] = next.overlayY
             prefs[Keys.overlayWidthDp] = next.overlayWidthDp
@@ -74,6 +72,8 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.huggingfaceToken] = next.huggingfaceToken
             prefs[Keys.historyMode] = next.historyMode.name
             prefs[Keys.historyLimit] = next.historyLimit
+            prefs[Keys.vadMinSilenceSec] = next.vadMinSilenceSec
+            prefs[Keys.vadMaxSpeechSec] = next.vadMaxSpeechSec
         }
     }
 
@@ -101,9 +101,6 @@ class UserSettingsRepository(private val context: Context) {
         sourceTextColor = this[Keys.sourceTextColor] ?: UserSettings.Defaults.SOURCE_TEXT_COLOR,
         translationTextColor = this[Keys.translationTextColor]
             ?: UserSettings.Defaults.TRANSLATION_TEXT_COLOR,
-        playTranslatedAudio = this[Keys.playTranslatedAudio]
-            ?: UserSettings.Defaults.PLAY_TRANSLATED_AUDIO,
-        translatedVolume = this[Keys.translatedVolume] ?: UserSettings.Defaults.TRANSLATED_VOLUME,
         overlayX = this[Keys.overlayX] ?: UserSettings.Defaults.OVERLAY_X,
         overlayY = this[Keys.overlayY] ?: UserSettings.Defaults.OVERLAY_Y,
         overlayWidthDp = this[Keys.overlayWidthDp] ?: UserSettings.Defaults.OVERLAY_WIDTH_DP,
@@ -116,6 +113,8 @@ class UserSettingsRepository(private val context: Context) {
         huggingfaceToken = this[Keys.huggingfaceToken] ?: UserSettings.Defaults.HF_TOKEN,
         historyMode = HistoryMode.fromStorage(this[Keys.historyMode]),
         historyLimit = this[Keys.historyLimit] ?: UserSettings.Defaults.HISTORY_LIMIT,
+        vadMinSilenceSec = this[Keys.vadMinSilenceSec] ?: UserSettings.Defaults.VAD_MIN_SILENCE_SEC,
+        vadMaxSpeechSec = this[Keys.vadMaxSpeechSec] ?: UserSettings.Defaults.VAD_MAX_SPEECH_SEC,
     )
 
     /** Migrate the pre-3-option boolean: true→BOTH, false/absent→TRANSLATION. */

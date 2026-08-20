@@ -28,6 +28,10 @@ class AsrEngine(
     numThreads: Int = 2,
     /** SenseVoice language tag ("auto"/"zh"/"en"/"ja"/"ko"/"yue"); empty behaves as auto. */
     language: String = "auto",
+    /** 停顿多久切一段（Silero minSilenceDuration）。 */
+    vadMinSilenceDuration: Float = 0.2f,
+    /** 单段语音最长多久强制切段（Silero maxSpeechDuration）。 */
+    vadMaxSpeechDuration: Float = 2f,
 ) {
 
     // VAD runs synchronously on the caller thread (cheap); recognition is queued.
@@ -37,10 +41,10 @@ class AsrEngine(
             sileroVadModelConfig = SileroVadModelConfig(
                 model = sileroVadPath,
                 threshold = 0.5f,
-                minSilenceDuration = 0.2f,   // 停顿 200ms 切一段（用户指定，提速）
+                minSilenceDuration = vadMinSilenceDuration,
                 minSpeechDuration = 0.25f,
                 windowSize = 512,
-                maxSpeechDuration = 2f,      // 单段最长 2s 强制切段（用户指定，字幕更快更跟嘴）
+                maxSpeechDuration = vadMaxSpeechDuration,
             ),
             sampleRate = 16000,
             numThreads = 1,

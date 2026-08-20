@@ -16,8 +16,6 @@ data class UserSettings(
     val displayMode: SubtitleDisplayMode = Defaults.DISPLAY_MODE,
     val sourceTextColor: Long = Defaults.SOURCE_TEXT_COLOR,
     val translationTextColor: Long = Defaults.TRANSLATION_TEXT_COLOR,
-    val playTranslatedAudio: Boolean = Defaults.PLAY_TRANSLATED_AUDIO,
-    val translatedVolume: Float = Defaults.TRANSLATED_VOLUME,
     val overlayX: Int = Defaults.OVERLAY_X,
     val overlayY: Int = Defaults.OVERLAY_Y,
     val overlayWidthDp: Int = Defaults.OVERLAY_WIDTH_DP,
@@ -31,6 +29,8 @@ data class UserSettings(
     val huggingfaceToken: String = Defaults.HF_TOKEN,
     val historyMode: HistoryMode = Defaults.HISTORY_MODE,
     val historyLimit: Int = Defaults.HISTORY_LIMIT,
+    val vadMinSilenceSec: Float = Defaults.VAD_MIN_SILENCE_SEC,
+    val vadMaxSpeechSec: Float = Defaults.VAD_MAX_SPEECH_SEC,
 ) {
     object Defaults {
         // Kept for schema compatibility; the engine now reads DeepSeek settings directly.
@@ -51,8 +51,6 @@ data class UserSettings(
         // source semi-transparent white (alpha 200), translation opaque white.
         const val SOURCE_TEXT_COLOR = 0xC8FFFFFF
         const val TRANSLATION_TEXT_COLOR = 0xFFFFFFFF
-        const val PLAY_TRANSLATED_AUDIO = false
-        const val TRANSLATED_VOLUME = 0.8f
         const val OVERLAY_X = 24
         const val OVERLAY_Y = -1
         const val OVERLAY_WIDTH_DP = 360
@@ -63,6 +61,9 @@ data class UserSettings(
         const val HISTORY_LIMIT = 20
         const val HISTORY_LIMIT_MIN = 5
         const val HISTORY_LIMIT_MAX = 200
+        // Silero VAD 切句参数（秒）。
+        const val VAD_MIN_SILENCE_SEC = 0.2f
+        const val VAD_MAX_SPEECH_SEC = 2f
     }
 }
 

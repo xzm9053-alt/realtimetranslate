@@ -49,3 +49,12 @@ tools/
 
 # Build logs
 build_log*.txt
+
+# Promo video tooling / outputs (local only, not part of the project)
+promo/frames/
+promo/test_frames/
+promo/sfx/
+promo/*.wav
+promo/*.mp4
+promo/.env
+promo/__pycache__/

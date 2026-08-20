@@ -80,6 +80,11 @@
     <string name="settings_model_download">重新下载 / 修复模型</string>
     <string name="settings_model_downloading">下载中…点击刷新状态</string>
 
+    <string name="settings_vad">语音切片</string>
+    <string name="settings_vad_desc">切句灵敏度：停顿多久算一句、一句话最多说多久。下次启动会话生效。</string>
+    <string name="settings_vad_pause_value">停顿切段 %1$.1f 秒</string>
+    <string name="settings_vad_max_value">单句最长 %1$.1f 秒</string>
+
     <string name="settings_appearance">字幕外观</string>
     <string name="settings_font_size">字体大小 %1$d sp · 系统默认字体</string>
     <string name="settings_bg_alpha">背景透明度 %1$d%%</string>
@@ -93,12 +98,6 @@
     <string name="settings_reset_appearance">重置字幕外观</string>
     <string name="settings_source_color">原文颜色</string>
     <string name="settings_translation_color">译文颜色</string>
-    <string name="settings_voice">译音</string>
-    <string name="settings_play_voice">播放译音</string>
-    <string name="settings_play_voice_summary">默认关闭（暂未接入 TTS 引擎）。</string>
-    <string name="settings_voice_volume">译音音量 %1$d%%</string>
-    <string name="settings_voice_volume_boost">（增强，可能轻微失真）</string>
-    <string name="settings_voice_volume_hint">可拉过 100%，让译音压过原片外文声。过高可能削波。</string>
     <string name="settings_history">历史记录</string>
     <string name="settings_history_desc">对已结束会话的原文/译文做何处理。</string>
     <string name="history_mode_auto_clear">自动清理</string>
@@ -111,9 +110,6 @@
     <string name="settings_permissions_hint">启动字幕时会请求系统录屏授权，用于捕获其它 App 的播放声音。</string>
     <string name="settings_about">关于</string>
     <string name="settings_version">版本 %1$s</string>
-    <string name="settings_github">GitHub</string>
-    <string name="settings_github_pending">仓库链接未配置</string>
-    <string name="settings_github_open">打开项目仓库</string>
 
     <string name="lang_auto">自动检测</string>
     <string name="lang_zh_hans">中文（简体）</string>

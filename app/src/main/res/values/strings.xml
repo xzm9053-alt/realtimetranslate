@@ -80,6 +80,11 @@
     <string name="settings_model_download">Re-download / repair model</string>
     <string name="settings_model_downloading">Downloading… tap to refresh status</string>
 
+    <string name="settings_vad">Speech slicing</string>
+    <string name="settings_vad_desc">How pauses and sentence length split speech into subtitles. Applies on your next session.</string>
+    <string name="settings_vad_pause_value">Cut after pause %1$.1f s</string>
+    <string name="settings_vad_max_value">Max sentence %1$.1f s</string>
+
     <string name="settings_appearance">Subtitle appearance</string>
     <string name="settings_font_size">Font size %1$d sp · system default font</string>
     <string name="settings_bg_alpha">Background opacity %1$d%%</string>
@@ -93,12 +98,6 @@
     <string name="settings_reset_appearance">Reset subtitle appearance</string>
     <string name="settings_source_color">Source color</string>
     <string name="settings_translation_color">Translation color</string>
-    <string name="settings_voice">Translated voice</string>
-    <string name="settings_play_voice">Play translated voice</string>
-    <string name="settings_play_voice_summary">Off by default (no TTS engine configured yet).</string>
-    <string name="settings_voice_volume">Voice volume %1$d%%</string>
-    <string name="settings_voice_volume_boost"> (boosted, may distort slightly)</string>
-    <string name="settings_voice_volume_hint">Can go past 100%% so translation sits above the original. Too high may clip.</string>
     <string name="settings_history">History</string>
     <string name="settings_history_desc">What to do with a finished session\'s transcripts.</string>
     <string name="history_mode_auto_clear">Auto-clean</string>
@@ -111,10 +110,6 @@
     <string name="settings_permissions_hint">Starting subtitles will request screen-capture permission to record other apps\' audio.</string>
     <string name="settings_about">About</string>
     <string name="settings_version">Version %1$s</string>
-    <string name="settings_github">GitHub</string>
-    <string name="settings_github_pending">Repository URL not configured</string>
-    <string name="settings_github_open">Open project repository</string>
-    <string name="github_url" translatable="false">https://github.com/xzm9053-alt/realtimetranslate</string>
 
     <string name="lang_auto">Auto-detect</string>
     <string name="lang_zh_hans">Chinese (Simplified)</string>
