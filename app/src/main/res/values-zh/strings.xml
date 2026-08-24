@@ -110,6 +110,8 @@
     <string name="settings_permissions_hint">启动字幕时会请求系统录屏授权，用于捕获其它 App 的播放声音。</string>
     <string name="settings_about">关于</string>
     <string name="settings_version">版本 %1$s</string>
+    <string name="settings_bilibili">Bilibili 主页 · %1$s</string>
+    <string name="settings_bilibili_author">刘西瓜皮皮</string>
 
     <string name="lang_auto">自动检测</string>
     <string name="lang_zh_hans">中文（简体）</string>

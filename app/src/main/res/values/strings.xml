@@ -110,6 +110,8 @@
     <string name="settings_permissions_hint">Starting subtitles will request screen-capture permission to record other apps\' audio.</string>
     <string name="settings_about">About</string>
     <string name="settings_version">Version %1$s</string>
+    <string name="settings_bilibili">Bilibili Home · %1$s</string>
+    <string name="settings_bilibili_author">刘西瓜皮皮</string>
 
     <string name="lang_auto">Auto-detect</string>
     <string name="lang_zh_hans">Chinese (Simplified)</string>

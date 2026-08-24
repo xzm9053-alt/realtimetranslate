@@ -1,5 +1,7 @@
 package com.xzm.realtimetranslate.ui.settings
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -77,6 +80,7 @@ fun SettingsScreen(
 
     var revealKey by remember { mutableStateOf(false) }
     val isDeepSeek = settings.translationEngine == TranslationEngineType.DEEPSEEK
+    val context = LocalContext.current
 
     // Dark-mode safe field colors (explicit text / cursor colors)
     val scheme = MiuixTheme.colorScheme
@@ -526,6 +530,26 @@ fun SettingsScreen(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                Text(
+                    text = stringResource(
+                        R.string.settings_bilibili,
+                        stringResource(R.string.settings_bilibili_author),
+                    ),
+                    fontSize = 13.sp,
+                    color = Booth.Accent,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            runCatching {
+                                context.startActivity(
+                                    Intent(
+                                        Intent.ACTION_VIEW,
+                                        Uri.parse("https://space.bilibili.com/1366321010"),
+                                    )
+                                )
+                            }
+                        },
+                )
                 Text(
                     text = stringResource(R.string.settings_version, BuildConfig.VERSION_NAME),
                     fontSize = 13.sp,
