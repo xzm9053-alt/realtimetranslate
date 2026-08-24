@@ -1,5 +1,8 @@
 package com.xzm.realtimetranslate.overlay
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.ComponentCallbacks
 import android.content.Context
@@ -7,6 +10,7 @@ import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Typeface
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.util.Log
@@ -14,13 +18,16 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.WindowManager
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import com.xzm.realtimetranslate.data.SubtitleDisplayMode
 import com.xzm.realtimetranslate.data.UserSettings
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -48,6 +55,24 @@ class SubtitleOverlayController(
     private var dividerView: View? = null
     private var inputSection: LinearLayout? = null
     private var container: LinearLayout? = null
+
+    // ---- 折叠成小球 ----
+    private var ballView: TextView? = null
+    private var resizeHandle: View? = null
+    private var rootBackground: Drawable? = null
+    private var rootPadL = 0
+    private var rootPadT = 0
+    private var rootPadR = 0
+    private var rootPadB = 0
+    private var isCollapsed = false
+    private var isAnimating = false
+    private var collapsedSide = SIDE_LEFT
+    private var savedX = 0
+    private var savedY = 0
+    private var savedW = 0
+    private var savedH = 0
+    /** 半球「点击 vs 滑动」判定阈值（像素）。 */
+    private val touchSlopPx: Int = ViewConfiguration.get(context).scaledTouchSlop
 
     private var settings: UserSettings = UserSettings()
     private var inputText: String = ""
@@ -159,6 +184,12 @@ class SubtitleOverlayController(
         dividerView = null
         inputSection = null
         container = null
+        ballView = null
+        resizeHandle = null
+        rootBackground = null
+        // 重置折叠状态，防止残留状态污染下次会话。
+        isCollapsed = false
+        isAnimating = false
     }
 
     private fun clampAndApply(persist: Boolean, reason: String) {
@@ -175,10 +206,19 @@ class SubtitleOverlayController(
         val oldX = params.x
         val oldY = params.y
 
-        params.width = clampWidth(params.width, screenW)
-        params.height = clampHeight(params.height, screenH)
-        params.x = safeCoerce(params.x, 0, max(0, screenW - params.width))
-        params.y = safeCoerce(params.y, 0, max(0, screenH - params.height))
+        if (isCollapsed) {
+            // 折叠态：半球吸附边缘（一半移出屏幕），屏幕变化时保持吸附；不持久化小球几何。
+            val size = ballSizePx()
+            params.width = size
+            params.height = size
+            params.x = if (collapsedSide == SIDE_LEFT) -size / 2 else screenW - size / 2
+            params.y = safeCoerce(params.y, 0, max(0, screenH - size))
+        } else {
+            params.width = clampWidth(params.width, screenW)
+            params.height = clampHeight(params.height, screenH)
+            params.x = safeCoerce(params.x, 0, max(0, screenW - params.width))
+            params.y = safeCoerce(params.y, 0, max(0, screenH - params.height))
+        }
 
         val changed = params.width != oldW || params.height != oldH ||
             params.x != oldX || params.y != oldY || screenChanged
@@ -191,7 +231,7 @@ class SubtitleOverlayController(
             )
             runCatching { windowManager.updateViewLayout(view, params) }
                 .onFailure { Log.e(TAG, "updateViewLayout failed", it) }
-            if (persist || screenChanged) {
+            if ((persist || screenChanged) && !isCollapsed) {
                 persistGeometry()
             }
         }
@@ -391,7 +431,29 @@ class SubtitleOverlayController(
             }
         }
         handle.setOnTouchListener(ResizeTouchListener())
+        resizeHandle = handle
         root.addView(handle)
+
+        // 折叠小球（默认隐藏）：半透明圆形 + 方向箭头，点按展开。
+        val ball = TextView(context).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+            )
+            gravity = Gravity.CENTER
+            text = "«"
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+            textSize = BALL_SIZE_DP * 0.45f
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.argb(230, 20, 20, 28))
+            }
+            visibility = View.GONE
+            setOnTouchListener(BallTouchListener())
+        }
+        ballView = ball
+        root.addView(ball)
 
         applyLayoutMode()
         return root
@@ -428,7 +490,10 @@ class SubtitleOverlayController(
 
     private fun applySettingsToViews() {
         val alpha = (settings.backgroundAlpha * 255).toInt().coerceIn(25, 242)
-        (rootView?.background as? GradientDrawable)?.setColor(Color.argb(alpha, 0, 0, 0))
+        // 折叠时 root 背景被摘除存于 rootBackground，展开恢复时颜色也应保持最新设置。
+        val bg = (rootView?.background as? GradientDrawable)
+            ?: (rootBackground as? GradientDrawable)
+        bg?.setColor(Color.argb(alpha, 0, 0, 0))
         inputView?.setTextSize(TypedValue.COMPLEX_UNIT_SP, settings.fontSizeSp * 0.9f)
         outputView?.setTextSize(TypedValue.COMPLEX_UNIT_SP, settings.fontSizeSp)
         // User-picked text colors (ARGB Long → Int, setTextColor(Int) reads ARGB directly).
@@ -524,6 +589,172 @@ class SubtitleOverlayController(
         }.onFailure { Log.e(TAG, "persistGeometry failed", it) }
     }
 
+    private fun ballSizePx(): Int =
+        (BALL_SIZE_DP * context.resources.displayMetrics.density).roundToInt()
+
+    /**
+     * 拖动松手时判定贴边：窗口左边缘贴边→折叠到左；右边缘贴边→折叠到右。
+     * 返回是否已触发折叠（触发则上层不再 persist，避免小球几何覆盖窗口位置）。
+     */
+    private fun maybeFold(): Boolean {
+        val params = layoutParams ?: return false
+        if (isCollapsed || isAnimating) return false
+        val (screenW, _, _) = screenMetrics()
+        return when {
+            params.x <= EDGE_COLLAPSE_PX -> {
+                fold(SIDE_LEFT); true
+            }
+            screenW - (params.x + params.width) <= EDGE_COLLAPSE_PX -> {
+                fold(SIDE_RIGHT); true
+            }
+            else -> false
+        }
+    }
+
+    /** 收起窗口成吸附边缘的小球（丝滑动画）。翻译继续，仅收界面。 */
+    private fun fold(side: Int) {
+        val params = layoutParams ?: return
+        val root = rootView ?: return
+        val ball = ballView ?: return
+        val column = container ?: return
+        if (isCollapsed || isAnimating) return
+
+        savedX = params.x
+        savedY = params.y
+        savedW = params.width
+        savedH = params.height
+        collapsedSide = side
+        isAnimating = true
+
+        // 摘下窗口背景与 padding，折叠期间由小球（圆形）接管。
+        rootBackground = root.background
+        rootPadL = root.paddingLeft
+        rootPadT = root.paddingTop
+        rootPadR = root.paddingRight
+        rootPadB = root.paddingBottom
+        root.setBackground(null)
+        root.setPadding(0, 0, 0, 0)
+        resizeHandle?.visibility = View.GONE
+
+        val size = ballSizePx()
+        val (screenW, screenH, _) = screenMetrics()
+        // 半球：一半移出屏幕边缘，屏幕内露出光滑半圆。
+        val targetX = if (side == SIDE_LEFT) -size / 2 else screenW - size / 2
+        val targetY = savedY.coerceIn(0, max(0, screenH - size))
+        // 箭头指向屏幕内侧（点它展开的方向）。
+        ball.text = if (side == SIDE_LEFT) "»" else "«"
+        ball.visibility = View.VISIBLE
+        ball.alpha = 0f
+
+        val startX = params.x
+        val startY = params.y
+        val startW = params.width
+        val startH = params.height
+        val anim = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = COLLAPSE_ANIM_MS
+            interpolator = AccelerateDecelerateInterpolator()
+            addUpdateListener { a ->
+                val f = a.animatedValue as Float
+                params.x = (startX + (targetX - startX) * f).roundToInt()
+                params.y = (startY + (targetY - startY) * f).roundToInt()
+                params.width = (startW + (size - startW) * f).roundToInt()
+                params.height = (startH + (size - startH) * f).roundToInt()
+                runCatching { windowManager.updateViewLayout(root, params) }
+                    .onFailure { Log.e(TAG, "fold update failed", it) }
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(a: Animator) {
+                    // 视图可能已在动画期间被 hide() 移除，此时丢弃收尾、不写状态。
+                    if (rootView == null) return
+                    params.x = targetX
+                    params.y = targetY
+                    params.width = size
+                    params.height = size
+                    runCatching { windowManager.updateViewLayout(root, params) }
+                        .onFailure { Log.e(TAG, "fold finalize failed", it) }
+                    column.visibility = View.GONE
+                    column.alpha = 1f
+                    ball.alpha = 1f
+                    isAnimating = false
+                    isCollapsed = true
+                }
+            })
+        }
+        column.animate().alpha(0f).setDuration(COLLAPSE_ANIM_MS).start()
+        ball.animate().alpha(1f).setDuration(COLLAPSE_ANIM_MS).start()
+        anim.start()
+    }
+
+    /** 点小球展开：丝滑恢复到折叠前的位置与大小。 */
+    private fun expand() {
+        val params = layoutParams ?: return
+        val root = rootView ?: return
+        val ball = ballView ?: return
+        val column = container ?: return
+        if (!isCollapsed || isAnimating) return
+
+        isAnimating = true
+
+        val (screenW, screenH, _) = screenMetrics()
+        val targetW = clampWidth(savedW, screenW)
+        val targetH = clampHeight(savedH, screenH)
+        val targetX = safeCoerce(savedX, 0, max(0, screenW - targetW))
+        val targetY = safeCoerce(savedY, 0, max(0, screenH - targetH))
+
+        // 恢复窗口背景与 padding。
+        val bg = rootBackground
+        if (bg != null) root.setBackground(bg)
+        rootBackground = null
+        root.setPadding(rootPadL, rootPadT, rootPadR, rootPadB)
+        resizeHandle?.visibility = View.VISIBLE
+
+        column.visibility = View.VISIBLE
+        column.alpha = 0f
+
+        val startX = params.x
+        val startY = params.y
+        val startW = params.width
+        val startH = params.height
+        val anim = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = COLLAPSE_ANIM_MS
+            interpolator = AccelerateDecelerateInterpolator()
+            addUpdateListener { a ->
+                val f = a.animatedValue as Float
+                params.x = (startX + (targetX - startX) * f).roundToInt()
+                params.y = (startY + (targetY - startY) * f).roundToInt()
+                params.width = (startW + (targetW - startW) * f).roundToInt()
+                params.height = (startH + (targetH - startH) * f).roundToInt()
+                runCatching { windowManager.updateViewLayout(root, params) }
+                    .onFailure { Log.e(TAG, "expand update failed", it) }
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(a: Animator) {
+                    // 视图可能已在动画期间被 hide() 移除，此时丢弃收尾、不写状态。
+                    if (rootView == null) return
+                    params.x = targetX
+                    params.y = targetY
+                    params.width = targetW
+                    params.height = targetH
+                    runCatching { windowManager.updateViewLayout(root, params) }
+                        .onFailure { Log.e(TAG, "expand finalize failed", it) }
+                    ball.visibility = View.GONE
+                    ball.alpha = 1f
+                    column.alpha = 1f
+                    // 折叠期间文本持续更新、行计数可能过期——展开后重算滚动基线并滚到最新。
+                    lastInputLineCount = 0
+                    lastOutputLineCount = 0
+                    inputView?.let { tv -> inputScroll?.let { sv -> scrollToShowLastLine(tv, sv) } }
+                    outputView?.let { tv -> outputScroll?.let { sv -> scrollToShowLastLine(tv, sv) } }
+                    isAnimating = false
+                    isCollapsed = false
+                }
+            })
+        }
+        ball.animate().alpha(0f).setDuration(COLLAPSE_ANIM_MS).start()
+        column.animate().alpha(1f).setDuration(COLLAPSE_ANIM_MS).start()
+        anim.start()
+    }
+
     private inner class MoveTouchListener : View.OnTouchListener {
         private var lastX = 0f
         private var lastY = 0f
@@ -562,8 +793,16 @@ class SubtitleOverlayController(
                         persistGeometry()
                         true
                     }
-                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                        clampAndApply(persist = true, reason = "move-up")
+                    MotionEvent.ACTION_UP -> {
+                        // 贴边则折叠成小球；否则正常落位。折叠时窗口几何已在 MOVE 中持久化，
+                        // 不在此 persist，避免小球几何覆盖窗口位置。
+                        if (!maybeFold()) {
+                            clampAndApply(persist = true, reason = "move-up")
+                        }
+                        true
+                    }
+                    MotionEvent.ACTION_CANCEL -> {
+                        clampAndApply(persist = true, reason = "move-cancel")
                         true
                     }
                     else -> false
@@ -625,10 +864,75 @@ class SubtitleOverlayController(
         }
     }
 
+    /** 折叠态半球：沿屏幕边缘上下滑动；微位移松手视为点击 → 展开。 */
+    private inner class BallTouchListener : View.OnTouchListener {
+        private var downX = 0f
+        private var downY = 0f
+        private var dragging = false
+
+        @SuppressLint("ClickableViewAccessibility")
+        override fun onTouch(v: View, event: MotionEvent): Boolean {
+            val params = layoutParams ?: return false
+            val root = rootView ?: return false
+            return try {
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        downX = event.rawX
+                        downY = event.rawY
+                        dragging = false
+                        true
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val dx = event.rawX - downX
+                        val dy = event.rawY - downY
+                        if (!dragging && (abs(dx) > touchSlopPx || abs(dy) > touchSlopPx)) {
+                            dragging = true
+                        }
+                        if (dragging) {
+                            val (_, screenH, _) = screenMetrics()
+                            val size = ballSizePx()
+                            // 沿边缘只改 y，x 保持吸附（半出屏）。
+                            params.y = safeCoerce(
+                                params.y + dy.roundToInt(),
+                                0,
+                                max(0, screenH - size),
+                            )
+                            windowManager.updateViewLayout(root, params)
+                            downX = event.rawX
+                            downY = event.rawY
+                        }
+                        true
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        // 点击（未滑动）→ 展开。
+                        if (!dragging) {
+                            expand()
+                        }
+                        true
+                    }
+                    MotionEvent.ACTION_CANCEL -> {
+                        dragging = false
+                        true
+                    }
+                    else -> false
+                }
+            } catch (t: Throwable) {
+                Log.e(TAG, "ball touch failed", t)
+                true
+            }
+        }
+    }
+
     companion object {
         private const val TAG = "SubtitleOverlay"
         private const val MIN_WIDTH_PX = 200
         private const val MIN_HEIGHT_PX = 80
         private const val EDGE_MARGIN_PX = 8
+        // ---- 折叠成小球 ----
+        private const val SIDE_LEFT = 0
+        private const val SIDE_RIGHT = 1
+        private const val BALL_SIZE_DP = 56
+        private const val EDGE_COLLAPSE_PX = 60
+        private const val COLLAPSE_ANIM_MS = 250L
     }
 }
