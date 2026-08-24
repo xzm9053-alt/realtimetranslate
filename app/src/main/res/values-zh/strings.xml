@@ -113,6 +113,33 @@
     <string name="settings_bilibili">Bilibili 主页 · %1$s</string>
     <string name="settings_bilibili_author">刘西瓜皮皮</string>
 
+    <!-- 屏幕取词翻译 -->
+    <string name="settings_ocr">屏幕取词翻译</string>
+    <string name="settings_ocr_desc">框选屏幕区域，实时识别其中的文字并翻译。OCR 内置离线运行，无需联网。</string>
+    <string name="ocr_script_chinese">中英混合</string>
+    <string name="ocr_script_chinese_summary">中文（可含英文 / 数字）</string>
+    <string name="ocr_script_japanese">日文</string>
+    <string name="ocr_script_japanese_summary">识别日文文字</string>
+    <string name="ocr_script_korean">韩文</string>
+    <string name="ocr_script_korean_summary">识别韩文文字</string>
+    <string name="ocr_notification_title">屏幕取词翻译中</string>
+    <string name="ocr_notification_text">正在识别所选区域并翻译</string>
+    <string name="ocr_starting">正在启动屏幕取词…</string>
+    <string name="ocr_running">正在识别所选区域…</string>
+    <string name="ocr_stopped">屏幕取词已停止</string>
+    <string name="ocr_auth_failed">录屏授权失败</string>
+    <string name="ocr_projection_failed">无法创建录屏会话</string>
+    <string name="ocr_projection_stopped">录屏权限已撤销</string>
+    <string name="ocr_region_invalid">区域已失效，请重新选择选区</string>
+    <string name="ocr_translate_failed">翻译失败</string>
+    <string name="ocr_region_hint">拖动 / 缩放选框，框住要翻译的文字</string>
+    <string name="ocr_start">开始翻译</string>
+    <string name="ocr_cancel">取消</string>
+    <string name="subtitle_start_ocr">屏幕取词翻译</string>
+    <string name="subtitle_stop_ocr">停止屏幕取词</string>
+    <string name="subtitle_ocr_busy">音频字幕正在运行，请先停止</string>
+    <string name="subtitle_audio_busy">屏幕取词正在运行，请先停止</string>
+
     <string name="lang_auto">自动检测</string>
     <string name="lang_zh_hans">中文（简体）</string>
     <string name="lang_zh_hant">中文（繁体）</string>

@@ -118,6 +118,14 @@ dependencies {
     // Local ASR: sherpa-onnx (SenseVoice + Silero VAD). Verify latest at https://jitpack.io/#k2-fsa/sherpa-onnx
     implementation("com.github.k2-fsa:sherpa-onnx:1.13.4")
 
+    // Screen-region OCR: ML Kit Text Recognition v2 (BUNDLED models — fully offline,
+    // no Google Play Services, works on Chinese-market devices).
+    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
+    implementation("com.google.mlkit:text-recognition-japanese:16.0.1")
+    implementation("com.google.mlkit:text-recognition-korean:16.0.1")
+    // Task.await() for ML Kit's async recognizer inside our coroutines loop.
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

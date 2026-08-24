@@ -37,6 +37,7 @@ import com.xzm.realtimetranslate.data.AudioSourceMode
 import com.xzm.realtimetranslate.data.LanguageOption
 import com.xzm.realtimetranslate.data.SupportedLanguages
 import com.xzm.realtimetranslate.data.UserSettings
+import com.xzm.realtimetranslate.service.ScreenOcrBus
 import com.xzm.realtimetranslate.service.SessionBus
 import com.xzm.realtimetranslate.ui.components.PageTitle
 import com.xzm.realtimetranslate.ui.components.SectionCard
@@ -57,17 +58,22 @@ fun SubtitleScreen(
     modifier: Modifier = Modifier,
     settings: UserSettings,
     session: SessionBus.UiState,
+    ocrSession: ScreenOcrBus.UiState,
     exportMessage: String?,
     onSourceLanguage: (String) -> Unit,
     onTargetLanguage: (String) -> Unit,
     onAudioSource: (AudioSourceMode) -> Unit,
     onStart: () -> Unit,
     onStop: () -> Unit,
+    onOcrStart: () -> Unit,
+    onOcrStop: () -> Unit,
     onExport: () -> Unit,
     canDrawOverlays: Boolean,
 ) {
     val running = session.status == SessionBus.Status.Running ||
         session.status == SessionBus.Status.Starting
+    val ocrRunning = ocrSession.status == ScreenOcrBus.Status.Running ||
+        ocrSession.status == ScreenOcrBus.Status.Starting
 
     var picker by remember { mutableStateOf<LangPicker?>(null) }
 
@@ -134,6 +140,7 @@ fun SubtitleScreen(
 
                 Button(
                     onClick = { if (running) onStop() else onStart() },
+                    enabled = !ocrRunning,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp),
@@ -152,12 +159,94 @@ fun SubtitleScreen(
                     )
                 }
 
+                if (ocrRunning) {
+                    Text(
+                        text = stringResource(R.string.subtitle_audio_busy),
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        fontSize = 12.sp,
+                    )
+                }
+
                 if (!canDrawOverlays) {
                     Text(
                         text = stringResource(R.string.subtitle_need_overlay),
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         fontSize = 12.sp,
                     )
+                }
+            }
+        }
+
+        SmallTitle(
+            text = stringResource(R.string.settings_ocr),
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
+        SectionCard {
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_ocr_desc),
+                    fontSize = 13.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                )
+                if (ocrSession.message.isNotBlank()) {
+                    Text(
+                        text = ocrSession.message,
+                        fontSize = 13.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Button(
+                    onClick = { if (ocrRunning) onOcrStop() else onOcrStart() },
+                    enabled = !running,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    colors = if (ocrRunning) {
+                        ButtonDefaults.buttonColors()
+                    } else {
+                        ButtonDefaults.buttonColorsPrimary()
+                    },
+                ) {
+                    Text(
+                        text = stringResource(
+                            if (ocrRunning) R.string.subtitle_stop_ocr
+                            else R.string.subtitle_start_ocr,
+                        ),
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 16.sp,
+                    )
+                }
+                if (running) {
+                    Text(
+                        text = stringResource(R.string.subtitle_ocr_busy),
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        fontSize = 12.sp,
+                    )
+                }
+                if (ocrSession.inputPreview.isNotBlank() || ocrSession.outputPreview.isNotBlank()) {
+                    if (ocrSession.inputPreview.isNotBlank()) {
+                        Text(
+                            text = ocrSession.inputPreview,
+                            fontSize = 13.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    if (ocrSession.outputPreview.isNotBlank()) {
+                        Text(
+                            text = ocrSession.outputPreview,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
         }

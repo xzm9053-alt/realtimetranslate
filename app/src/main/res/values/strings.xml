@@ -113,6 +113,33 @@
     <string name="settings_bilibili">Bilibili Home · %1$s</string>
     <string name="settings_bilibili_author">刘西瓜皮皮</string>
 
+    <!-- Screen-region OCR -->
+    <string name="settings_ocr">Screen text OCR</string>
+    <string name="settings_ocr_desc">Recognize text inside a region of the screen and translate it live. OCR runs fully offline with models bundled in the app.</string>
+    <string name="ocr_script_chinese">Chinese + Latin</string>
+    <string name="ocr_script_chinese_summary">Chinese with embedded English / numbers</string>
+    <string name="ocr_script_japanese">Japanese</string>
+    <string name="ocr_script_japanese_summary">Japanese text recognition</string>
+    <string name="ocr_script_korean">Korean</string>
+    <string name="ocr_script_korean_summary">Korean text recognition</string>
+    <string name="ocr_notification_title">Screen OCR running</string>
+    <string name="ocr_notification_text">Recognizing the selected area and translating</string>
+    <string name="ocr_starting">Starting screen OCR…</string>
+    <string name="ocr_running">Recognizing selected area…</string>
+    <string name="ocr_stopped">Screen OCR stopped</string>
+    <string name="ocr_auth_failed">Screen capture authorization failed</string>
+    <string name="ocr_projection_failed">Could not create the capture session</string>
+    <string name="ocr_projection_stopped">Screen capture permission revoked</string>
+    <string name="ocr_region_invalid">Region out of screen — please reselect it</string>
+    <string name="ocr_translate_failed">Translation failed</string>
+    <string name="ocr_region_hint">Drag / resize the box over the text to translate</string>
+    <string name="ocr_start">Start translating</string>
+    <string name="ocr_cancel">Cancel</string>
+    <string name="subtitle_start_ocr">Screen OCR translate</string>
+    <string name="subtitle_stop_ocr">Stop screen OCR</string>
+    <string name="subtitle_ocr_busy">Audio subtitles are running — stop them first</string>
+    <string name="subtitle_audio_busy">Screen OCR is running — stop it first</string>
+
     <string name="lang_auto">Auto-detect</string>
     <string name="lang_zh_hans">Chinese (Simplified)</string>
     <string name="lang_zh_hant">Chinese (Traditional)</string>

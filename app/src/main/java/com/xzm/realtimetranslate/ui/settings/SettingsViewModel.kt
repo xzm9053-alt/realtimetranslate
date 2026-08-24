@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.xzm.realtimetranslate.LiveTranslateApp
 import com.xzm.realtimetranslate.data.ApiKeyStore
 import com.xzm.realtimetranslate.data.HistoryMode
+import com.xzm.realtimetranslate.data.OcrScript
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
 import com.xzm.realtimetranslate.data.UserSettingsRepository
@@ -114,6 +115,10 @@ class SettingsViewModel(
 
     fun setEngine(type: TranslationEngineType) {
         update { it.copy(translationEngine = type) }
+    }
+
+    fun setOcrScript(script: OcrScript) {
+        update { it.copy(ocrScript = script) }
     }
 
     fun setHistoryMode(mode: HistoryMode) {

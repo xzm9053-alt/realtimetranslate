@@ -31,6 +31,8 @@ data class UserSettings(
     val historyLimit: Int = Defaults.HISTORY_LIMIT,
     val vadMinSilenceSec: Float = Defaults.VAD_MIN_SILENCE_SEC,
     val vadMaxSpeechSec: Float = Defaults.VAD_MAX_SPEECH_SEC,
+    // Screen-region OCR recognizer script (ML Kit bundled models).
+    val ocrScript: OcrScript = Defaults.OCR_SCRIPT,
 ) {
     object Defaults {
         // Kept for schema compatibility; the engine now reads DeepSeek settings directly.
@@ -64,6 +66,8 @@ data class UserSettings(
         // Silero VAD 切句参数（秒）。
         const val VAD_MIN_SILENCE_SEC = 0.2f
         const val VAD_MAX_SPEECH_SEC = 2f
+        // Default OCR script for screen-region text recognition.
+        val OCR_SCRIPT: OcrScript = OcrScript.CHINESE_MIX
     }
 }
 

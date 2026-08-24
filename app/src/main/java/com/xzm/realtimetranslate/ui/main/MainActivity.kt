@@ -5,6 +5,7 @@ import android.app.Activity
 import android.app.Application
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Rect
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Bundle
@@ -40,6 +41,9 @@ import com.xzm.realtimetranslate.LiveTranslateApp
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.AudioSourceMode
 import com.xzm.realtimetranslate.data.TranslationEngineType
+import com.xzm.realtimetranslate.overlay.RegionSelectorOverlay
+import com.xzm.realtimetranslate.service.ScreenOcrBus
+import com.xzm.realtimetranslate.service.ScreenTextSessionService
 import com.xzm.realtimetranslate.service.SessionBus
 import com.xzm.realtimetranslate.service.SubtitleSessionService
 import com.xzm.realtimetranslate.ui.history.HistoryScreen
@@ -86,10 +90,67 @@ class MainActivity : ComponentActivity() {
                 )
 
                 val session by SessionBus.state.collectAsStateWithLifecycle()
+                val ocrSession by ScreenOcrBus.state.collectAsStateWithLifecycle()
                 val settings by subtitleVm.settings.collectAsStateWithLifecycle()
                 val exportMessage by subtitleVm.exportMessage.collectAsStateWithLifecycle()
 
                 var pendingStart by remember { mutableStateOf(false) }
+                var pendingOcrStart by remember { mutableStateOf(false) }
+                var pendingOcrRegion by remember { mutableStateOf<Rect?>(null) }
+
+                val ocrProjectionLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.StartActivityForResult(),
+                ) { result ->
+                    val region = pendingOcrRegion
+                    pendingOcrRegion = null
+                    if (result.resultCode == Activity.RESULT_OK && result.data != null && region != null) {
+                        runCatching {
+                            ScreenTextSessionService.start(
+                                this,
+                                region = region,
+                                resultCode = result.resultCode,
+                                data = result.data!!,
+                            )
+                        }.onFailure {
+                            Log.e(TAG, "start ocr service failed", it)
+                            ScreenOcrBus.setStatus(
+                                ScreenOcrBus.Status.Error,
+                                getString(R.string.msg_service_start_failed, it.message.orEmpty()),
+                            )
+                        }
+                    } else {
+                        ScreenOcrBus.setStatus(
+                            ScreenOcrBus.Status.Error,
+                            getString(R.string.msg_projection_cancelled),
+                        )
+                    }
+                }
+
+                fun requestOcrProjection(region: Rect) {
+                    ScreenOcrBus.setStatus(
+                        ScreenOcrBus.Status.Starting,
+                        getString(R.string.msg_requesting_projection),
+                    )
+                    pendingOcrRegion = region
+                    val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                    ocrProjectionLauncher.launch(mpm.createScreenCaptureIntent())
+                }
+
+                fun showRegionSelector() {
+                    val selector = RegionSelectorOverlay(
+                        context = this@MainActivity,
+                        onConfirm = { region -> requestOcrProjection(region) },
+                        onCancel = { /* 用户取消选区 */ },
+                    )
+                    selector.show()
+                }
+
+                fun stopOcr() {
+                    scope.launch {
+                        runCatching { ScreenOcrBus.stop() }
+                        runCatching { ScreenTextSessionService.stop(this@MainActivity) }
+                    }
+                }
 
                 val projectionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.StartActivityForResult(),
@@ -120,9 +181,20 @@ class MainActivity : ComponentActivity() {
                 val overlayLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.StartActivityForResult(),
                 ) {
-                    if (PermissionUtils.canDrawOverlays(this) && pendingStart) {
-                        pendingStart = false
-                        continueStartAfterPermissions(settings.audioSourceMode, projectionLauncher::launch)
+                    if (PermissionUtils.canDrawOverlays(this)) {
+                        when {
+                            pendingStart -> {
+                                pendingStart = false
+                                continueStartAfterPermissions(
+                                    settings.audioSourceMode,
+                                    projectionLauncher::launch,
+                                )
+                            }
+                            pendingOcrStart -> {
+                                pendingOcrStart = false
+                                showRegionSelector()
+                            }
+                        }
                     }
                 }
 
@@ -145,8 +217,33 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                val ocrPermissionLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestMultiplePermissions(),
+                ) { granted ->
+                    val ok = granted.values.all { it }
+                    if (!ok) {
+                        ScreenOcrBus.setStatus(
+                            ScreenOcrBus.Status.Error,
+                            getString(R.string.msg_need_permissions),
+                        )
+                        return@rememberLauncherForActivityResult
+                    }
+                    if (!PermissionUtils.canDrawOverlays(this)) {
+                        pendingOcrStart = true
+                        overlayLauncher.launch(PermissionUtils.overlaySettingsIntent(this))
+                    } else {
+                        showRegionSelector()
+                    }
+                }
+
                 fun requestStartSubtitle() {
                     try {
+                        // Mutual exclusion: starting audio subtitles stops a running OCR session.
+                        if (ocrSession.status == ScreenOcrBus.Status.Running ||
+                            ocrSession.status == ScreenOcrBus.Status.Starting
+                        ) {
+                            stopOcr()
+                        }
                         // DeepSeek needs a key; Microsoft free translation is keyless.
                         val needDeepSeek = settings.translationEngine ==
                             TranslationEngineType.DEEPSEEK
@@ -188,6 +285,63 @@ class MainActivity : ComponentActivity() {
                         Log.e(TAG, "requestStartSubtitle", t)
                         SessionBus.setStatus(
                             SessionBus.Status.Error,
+                            getString(R.string.msg_start_failed, t.message.orEmpty()),
+                        )
+                    }
+                }
+
+                fun requestStartOcr() {
+                    try {
+                        if (ocrSession.status == ScreenOcrBus.Status.Running ||
+                            ocrSession.status == ScreenOcrBus.Status.Starting
+                        ) {
+                            stopOcr()
+                            return
+                        }
+                        // Mutual exclusion: starting OCR stops a running audio session.
+                        if (session.status == SessionBus.Status.Running ||
+                            session.status == SessionBus.Status.Starting
+                        ) {
+                            scope.launch {
+                                runCatching { SessionBus.stop() }
+                                runCatching {
+                                    SubtitleSessionService.stop(this@MainActivity)
+                                }
+                            }
+                        }
+                        // DeepSeek needs a key; Microsoft free translation is keyless.
+                        val needDeepSeek = settings.translationEngine ==
+                            TranslationEngineType.DEEPSEEK
+                        if (needDeepSeek && !app.apiKeyStore.hasDeepSeekKey()) {
+                            ScreenOcrBus.setStatus(
+                                ScreenOcrBus.Status.Error,
+                                getString(R.string.msg_need_deepseek_key),
+                            )
+                            tab = 1
+                            return
+                        }
+                        val needed = buildList {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                add(Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                        }.filter {
+                            ContextCompat.checkSelfPermission(this, it) !=
+                                PackageManager.PERMISSION_GRANTED
+                        }
+                        if (needed.isNotEmpty()) {
+                            ocrPermissionLauncher.launch(needed.toTypedArray())
+                            return
+                        }
+                        if (!PermissionUtils.canDrawOverlays(this)) {
+                            pendingOcrStart = true
+                            overlayLauncher.launch(PermissionUtils.overlaySettingsIntent(this))
+                            return
+                        }
+                        showRegionSelector()
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "requestStartOcr", t)
+                        ScreenOcrBus.setStatus(
+                            ScreenOcrBus.Status.Error,
                             getString(R.string.msg_start_failed, t.message.orEmpty()),
                         )
                     }
@@ -252,6 +406,7 @@ class MainActivity : ComponentActivity() {
                                 onAudioSource = { mode ->
                                     scope.launch { subtitleVm.setAudioSource(mode) }
                                 },
+                                ocrSession = ocrSession,
                                 onStart = { requestStartSubtitle() },
                                 onStop = {
                                     scope.launch {
@@ -261,6 +416,8 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                 },
+                                onOcrStart = { requestStartOcr() },
+                                onOcrStop = { stopOcr() },
                                 onExport = { subtitleVm.exportLastSession() },
                                 canDrawOverlays = PermissionUtils.canDrawOverlays(this@MainActivity),
                             )

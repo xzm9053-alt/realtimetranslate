@@ -42,6 +42,7 @@ class UserSettingsRepository(private val context: Context) {
         val historyLimit = intPreferencesKey("history_limit")
         val vadMinSilenceSec = floatPreferencesKey("vad_min_silence_sec")
         val vadMaxSpeechSec = floatPreferencesKey("vad_max_speech_sec")
+        val ocrScript = stringPreferencesKey("ocr_script")
     }
 
     val settings: Flow<UserSettings> = context.dataStore.data.map { prefs ->
@@ -74,6 +75,7 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.historyLimit] = next.historyLimit
             prefs[Keys.vadMinSilenceSec] = next.vadMinSilenceSec
             prefs[Keys.vadMaxSpeechSec] = next.vadMaxSpeechSec
+            prefs[Keys.ocrScript] = next.ocrScript.name
         }
     }
 
@@ -115,6 +117,7 @@ class UserSettingsRepository(private val context: Context) {
         historyLimit = this[Keys.historyLimit] ?: UserSettings.Defaults.HISTORY_LIMIT,
         vadMinSilenceSec = this[Keys.vadMinSilenceSec] ?: UserSettings.Defaults.VAD_MIN_SILENCE_SEC,
         vadMaxSpeechSec = this[Keys.vadMaxSpeechSec] ?: UserSettings.Defaults.VAD_MAX_SPEECH_SEC,
+        ocrScript = OcrScript.fromStorage(this[Keys.ocrScript]),
     )
 
     /** Migrate the pre-3-option boolean: true→BOTH, false/absent→TRANSLATION. */

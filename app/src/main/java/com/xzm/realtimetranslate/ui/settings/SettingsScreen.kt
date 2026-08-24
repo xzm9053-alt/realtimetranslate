@@ -44,6 +44,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.xzm.realtimetranslate.BuildConfig
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.HistoryMode
+import com.xzm.realtimetranslate.data.OcrScript
 import com.xzm.realtimetranslate.data.SubtitleDisplayMode
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
@@ -355,6 +356,41 @@ fun SettingsScreen(
                     },
                     valueRange = 1f..10f,
                     modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+
+        SmallTitle(
+            text = stringResource(R.string.settings_ocr),
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
+        SectionCard {
+            Column(
+                modifier = Modifier.padding(vertical = 6.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_ocr_desc),
+                    fontSize = 13.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+                OptionRow(
+                    label = stringResource(R.string.ocr_script_chinese),
+                    summary = stringResource(R.string.ocr_script_chinese_summary),
+                    selected = settings.ocrScript == OcrScript.CHINESE_MIX,
+                    onClick = { viewModel.setOcrScript(OcrScript.CHINESE_MIX) },
+                )
+                OptionRow(
+                    label = stringResource(R.string.ocr_script_japanese),
+                    summary = stringResource(R.string.ocr_script_japanese_summary),
+                    selected = settings.ocrScript == OcrScript.JAPANESE,
+                    onClick = { viewModel.setOcrScript(OcrScript.JAPANESE) },
+                )
+                OptionRow(
+                    label = stringResource(R.string.ocr_script_korean),
+                    summary = stringResource(R.string.ocr_script_korean_summary),
+                    selected = settings.ocrScript == OcrScript.KOREAN,
+                    onClick = { viewModel.setOcrScript(OcrScript.KOREAN) },
                 )
             }
         }

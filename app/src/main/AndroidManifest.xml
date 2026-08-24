@@ -39,5 +39,14 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Real-time floating subtitle overlay while capturing system or microphone audio for translation" />
         </service>
+
+        <service
+            android:name=".service.ScreenTextSessionService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Real-time screen-region OCR and translation overlay" />
+        </service>
     </application>
 </manifest>

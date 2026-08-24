@@ -7,6 +7,7 @@ import com.xzm.realtimetranslate.translate.AsrEngine
 import com.xzm.realtimetranslate.translate.DeepSeekTranslationEngine
 import com.xzm.realtimetranslate.translate.MicrosoftFreeTranslationEngine
 import com.xzm.realtimetranslate.translate.TranslationEngine
+import com.xzm.realtimetranslate.translate.TranslationEngineFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -135,14 +136,10 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
                 )
                 asrEngine = engine
 
-                translationEngine = when (settings.translationEngine) {
-                    TranslationEngineType.DEEPSEEK -> DeepSeekTranslationEngine(
-                        apiKey = app.apiKeyStore.getDeepSeekKey(),
-                        baseUrl = settings.deepseekBaseUrl.ifBlank { "https://api.deepseek.com" },
-                        model = settings.deepseekModel.ifBlank { "deepseek-v4-flash" },
-                    )
-                    TranslationEngineType.MICROSOFT -> MicrosoftFreeTranslationEngine()
-                }
+                translationEngine = TranslationEngineFactory.create(
+                    settings = settings,
+                    apiKey = app.apiKeyStore.getDeepSeekKey(),
+                )
 
                 setupComplete.set(true)
                 _connectionState.value = ConnectionState.Ready
