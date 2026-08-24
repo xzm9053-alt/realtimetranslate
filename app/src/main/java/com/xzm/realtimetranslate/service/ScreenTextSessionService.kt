@@ -22,7 +22,8 @@ import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
 import com.xzm.realtimetranslate.ocr.ScreenTextCapturer
 import com.xzm.realtimetranslate.ocr.ScreenTextOcr
-import com.xzm.realtimetranslate.overlay.SubtitleOverlayController
+import com.xzm.realtimetranslate.overlay.OcrBallOverlay
+import com.xzm.realtimetranslate.overlay.RegionSelectorOverlay
 import com.xzm.realtimetranslate.translate.TranslationEngine
 import com.xzm.realtimetranslate.translate.TranslationEngineFactory
 import com.xzm.realtimetranslate.ui.main.MainActivity
@@ -36,6 +37,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Foreground OCR session: captures a screen region picked by the user,
@@ -51,7 +53,7 @@ class ScreenTextSessionService : Service() {
     private var mediaProjection: MediaProjection? = null
     private var capturer: ScreenTextCapturer? = null
     private var ocr: ScreenTextOcr? = null
-    private var overlay: SubtitleOverlayController? = null
+    private var overlay: OcrBallOverlay? = null
     private var settingsJob: Job? = null
     private var commandJob: Job? = null
     private var ocrJob: Job? = null
@@ -61,6 +63,13 @@ class ScreenTextSessionService : Service() {
 
     @Volatile
     private var currentRegion: Rect = Rect()
+
+    /** 帧去重与文本去重状态：点球重选区域时由 [updateRegion] 复位，迫使下一帧重新识别。 */
+    @Volatile
+    private var lastHash = Long.MIN_VALUE
+
+    @Volatile
+    private var lastText = ""
 
     @Volatile
     private var stopped = false
@@ -148,15 +157,17 @@ class ScreenTextSessionService : Service() {
                 null,
             )
 
-            val overlayController = SubtitleOverlayController(this@ScreenTextSessionService) { x, y, w, h ->
-                ioScope.launch {
-                    app.settingsRepository.update {
-                        it.copy(overlayX = x, overlayY = y, overlayWidthDp = w, overlayHeightDp = h)
-                    }
-                }
+            // 半球球 + 译文气泡：点球 → 服务内直接弹区域选择器重选，不重启投影/服务。
+            val ocrOverlay = OcrBallOverlay(this@ScreenTextSessionService) {
+                if (stopped) return@OcrBallOverlay
+                RegionSelectorOverlay(
+                    this@ScreenTextSessionService,
+                    onConfirm = { newRegion -> updateRegion(newRegion) },
+                    onCancel = { },
+                ).show()
             }
-            overlay = overlayController
-            overlayController.show(currentSettings)
+            overlay = ocrOverlay
+            ocrOverlay.show(currentSettings)
 
             val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
             val bounds = wm.currentWindowMetrics.bounds
@@ -187,27 +198,46 @@ class ScreenTextSessionService : Service() {
         }
     }
 
-    /** Serial loop: capture → skip unchanged frames → OCR → translate → overlay. */
+    /**
+     * Serial loop: capture → skip unchanged frames → OCR → translate → overlay.
+     *
+     * The loop runs on the main dispatcher because [translateAndShow] touches the
+     * overlay's view hierarchy (main-thread only). The two expensive steps — frame
+     * capture (pixel copy) and OCR — are delegated to [Dispatchers.IO] via
+     * [withContext]; the translation engines stream on IO via flowOn, so collecting
+     * them here never blocks the main thread.
+     */
+    /** 点球重选区域：只换 capture 区域并复位去重状态，下一帧即按新区域识别。 */
+    private fun updateRegion(newRegion: Rect) {
+        if (stopped) return
+        currentRegion = newRegion
+        lastHash = Long.MIN_VALUE
+        lastText = ""
+        ScreenOcrBus.setStatus(ScreenOcrBus.Status.Running, getString(R.string.ocr_region_updated))
+    }
+
     private fun runOcrLoop() {
         ocrJob?.cancel()
-        ocrJob = ioScope.launch {
+        ocrJob = scope.launch {
             val app = application as LiveTranslateApp
             val engine = TranslationEngineFactory.create(
                 settings = currentSettings,
                 apiKey = app.apiKeyStore.getDeepSeekKey(),
             )
-            var lastHash = Long.MIN_VALUE
-            var lastText = ""
             while (isActive && !stopped) {
-                val frame = try {
-                    capturer?.captureRegion(currentRegion)
-                } catch (t: Throwable) {
-                    Log.w(TAG, "captureRegion failed", t)
-                    null
+                val frame = withContext(Dispatchers.IO) {
+                    try {
+                        capturer?.captureRegion(currentRegion)
+                    } catch (t: Throwable) {
+                        Log.w(TAG, "captureRegion failed", t)
+                        null
+                    }
                 }
                 if (frame != null && frame.hash != lastHash) {
                     lastHash = frame.hash
-                    val text = ocr?.recognize(frame.bitmap, currentSettings.ocrScript)
+                    val text = withContext(Dispatchers.IO) {
+                        ocr?.recognize(frame.bitmap, currentSettings.ocrScript)
+                    }
                     if (!text.isNullOrBlank() && text != lastText) {
                         lastText = text
                         translateAndShow(engine, text)
@@ -252,14 +282,19 @@ class ScreenTextSessionService : Service() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         if (stopped || capturer == null) return
+        // 球/气泡随屏幕尺寸变化重新贴边与排布。
+        overlay?.reclamp()
+        val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        val bounds = wm.currentWindowMetrics.bounds
+        val newW = bounds.width()
+        val newH = bounds.height()
+        val dpi = resources.configuration.densityDpi
         ioScope.launch {
-            val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            val bounds = wm.currentWindowMetrics.bounds
-            val newW = bounds.width()
-            val newH = bounds.height()
-            val dpi = resources.configuration.densityDpi
             capturer?.resize(newW, newH, dpi)
-            if (!regionFits(currentRegion, newW, newH)) {
+        }
+        if (!regionFits(currentRegion, newW, newH)) {
+            // stopEverything hides the overlay view hierarchy → main thread only.
+            scope.launch {
                 stopEverything(getString(R.string.ocr_region_invalid))
             }
         }

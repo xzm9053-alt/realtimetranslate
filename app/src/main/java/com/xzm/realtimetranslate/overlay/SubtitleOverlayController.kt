@@ -57,7 +57,7 @@ class SubtitleOverlayController(
     private var container: LinearLayout? = null
 
     // ---- 折叠成小球 ----
-    private var ballView: TextView? = null
+    private var ballView: BallView? = null
     private var resizeHandle: View? = null
     private var rootBackground: Drawable? = null
     private var rootPadL = 0
@@ -66,7 +66,8 @@ class SubtitleOverlayController(
     private var rootPadB = 0
     private var isCollapsed = false
     private var isAnimating = false
-    private var collapsedSide = SIDE_LEFT
+    /** 折叠态球吸附边：LEFT / RIGHT（半球贴边）或 FLOAT（完整圆浮动）。 */
+    private var ballSide = BallView.SIDE_RIGHT
     private var savedX = 0
     private var savedY = 0
     private var savedW = 0
@@ -190,6 +191,7 @@ class SubtitleOverlayController(
         // 重置折叠状态，防止残留状态污染下次会话。
         isCollapsed = false
         isAnimating = false
+        ballSide = BallView.SIDE_RIGHT
     }
 
     private fun clampAndApply(persist: Boolean, reason: String) {
@@ -207,12 +209,28 @@ class SubtitleOverlayController(
         val oldY = params.y
 
         if (isCollapsed) {
-            // 折叠态：半球吸附边缘（一半移出屏幕），屏幕变化时保持吸附；不持久化小球几何。
+            // 折叠态：窗口 size/2 宽紧贴屏幕边缘，BallView 圆心对准屏幕边缘、由窗口裁出真半球；
+            // FLOAT 时保持 size×size 完整圆。屏幕变化时保持吸附；不持久化小球几何。
             val size = ballSizePx()
-            params.width = size
-            params.height = size
-            params.x = if (collapsedSide == SIDE_LEFT) -size / 2 else screenW - size / 2
+            when (ballSide) {
+                BallView.SIDE_LEFT -> {
+                    params.width = size / 2
+                    params.height = size
+                    params.x = 0
+                }
+                BallView.SIDE_RIGHT -> {
+                    params.width = size / 2
+                    params.height = size
+                    params.x = screenW - size / 2
+                }
+                else -> {
+                    params.width = size
+                    params.height = size
+                    params.x = safeCoerce(params.x, 0, max(0, screenW - size))
+                }
+            }
             params.y = safeCoerce(params.y, 0, max(0, screenH - size))
+            ballView?.side = ballSide
         } else {
             params.width = clampWidth(params.width, screenW)
             params.height = clampHeight(params.height, screenH)
@@ -434,21 +452,15 @@ class SubtitleOverlayController(
         resizeHandle = handle
         root.addView(handle)
 
-        // 折叠小球（默认隐藏）：半透明圆形 + 方向箭头，点按展开。
-        val ball = TextView(context).apply {
+        // 折叠小球（默认隐藏）：共享半球渲染视图（纯色圆、无文字/箭头，避免小尺寸球内字体错乱），
+        // 贴边时窗口裁出真半球；点按展开。
+        val ball = BallView(context).apply {
+            diameterPx = ballSizePx()
+            side = BallView.SIDE_FLOAT
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT,
             )
-            gravity = Gravity.CENTER
-            text = "«"
-            setTextColor(Color.WHITE)
-            typeface = Typeface.DEFAULT_BOLD
-            textSize = BALL_SIZE_DP * 0.45f
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.argb(230, 20, 20, 28))
-            }
             visibility = View.GONE
             setOnTouchListener(BallTouchListener())
         }
@@ -602,10 +614,10 @@ class SubtitleOverlayController(
         val (screenW, _, _) = screenMetrics()
         return when {
             params.x <= EDGE_COLLAPSE_PX -> {
-                fold(SIDE_LEFT); true
+                fold(BallView.SIDE_LEFT); true
             }
             screenW - (params.x + params.width) <= EDGE_COLLAPSE_PX -> {
-                fold(SIDE_RIGHT); true
+                fold(BallView.SIDE_RIGHT); true
             }
             else -> false
         }
@@ -623,10 +635,10 @@ class SubtitleOverlayController(
         savedY = params.y
         savedW = params.width
         savedH = params.height
-        collapsedSide = side
+        ballSide = side
         isAnimating = true
 
-        // 摘下窗口背景与 padding，折叠期间由小球（圆形）接管。
+        // 摘下窗口背景与 padding，折叠期间由小球（半球）接管。
         rootBackground = root.background
         rootPadL = root.paddingLeft
         rootPadT = root.paddingTop
@@ -638,11 +650,12 @@ class SubtitleOverlayController(
 
         val size = ballSizePx()
         val (screenW, screenH, _) = screenMetrics()
-        // 半球：一半移出屏幕边缘，屏幕内露出光滑半圆。
-        val targetX = if (side == SIDE_LEFT) -size / 2 else screenW - size / 2
+        // 半球：窗口贴边只留 size/2 宽，BallView 圆心对准屏幕边缘、由窗口裁出真半球。
+        val targetW = size / 2
+        val targetH = size
+        val targetX = if (side == BallView.SIDE_LEFT) 0 else screenW - size / 2
         val targetY = savedY.coerceIn(0, max(0, screenH - size))
-        // 箭头指向屏幕内侧（点它展开的方向）。
-        ball.text = if (side == SIDE_LEFT) "»" else "«"
+        ball.side = side
         ball.visibility = View.VISIBLE
         ball.alpha = 0f
 
@@ -657,8 +670,8 @@ class SubtitleOverlayController(
                 val f = a.animatedValue as Float
                 params.x = (startX + (targetX - startX) * f).roundToInt()
                 params.y = (startY + (targetY - startY) * f).roundToInt()
-                params.width = (startW + (size - startW) * f).roundToInt()
-                params.height = (startH + (size - startH) * f).roundToInt()
+                params.width = (startW + (targetW - startW) * f).roundToInt()
+                params.height = (startH + (targetH - startH) * f).roundToInt()
                 runCatching { windowManager.updateViewLayout(root, params) }
                     .onFailure { Log.e(TAG, "fold update failed", it) }
             }
@@ -668,8 +681,9 @@ class SubtitleOverlayController(
                     if (rootView == null) return
                     params.x = targetX
                     params.y = targetY
-                    params.width = size
-                    params.height = size
+                    params.width = targetW
+                    params.height = targetH
+                    ball.side = side
                     runCatching { windowManager.updateViewLayout(root, params) }
                         .onFailure { Log.e(TAG, "fold finalize failed", it) }
                     column.visibility = View.GONE
@@ -864,49 +878,62 @@ class SubtitleOverlayController(
         }
     }
 
-    /** 折叠态半球：沿屏幕边缘上下滑动；微位移松手视为点击 → 展开。 */
+    /** 折叠态半球：可沿屏幕两侧上下推、拖离边缘成完整圆、跨边换向；轻点 → 展开。 */
     private inner class BallTouchListener : View.OnTouchListener {
         private var downX = 0f
         private var downY = 0f
         private var dragging = false
+        private var grabDx = 0f
+        private var grabDy = 0f
 
         @SuppressLint("ClickableViewAccessibility")
         override fun onTouch(v: View, event: MotionEvent): Boolean {
             val params = layoutParams ?: return false
             val root = rootView ?: return false
+            if (ballView == null) return false
             return try {
                 when (event.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
                         downX = event.rawX
                         downY = event.rawY
                         dragging = false
+                        val (screenW, _, _) = screenMetrics()
+                        val (cx, cy) = ballCenter(params, screenW)
+                        grabDx = event.rawX - cx
+                        grabDy = event.rawY - cy
                         true
                     }
                     MotionEvent.ACTION_MOVE -> {
-                        val dx = event.rawX - downX
-                        val dy = event.rawY - downY
-                        if (!dragging && (abs(dx) > touchSlopPx || abs(dy) > touchSlopPx)) {
+                        if (!dragging &&
+                            (abs(event.rawX - downX) > touchSlopPx ||
+                                abs(event.rawY - downY) > touchSlopPx)
+                        ) {
                             dragging = true
+                            // 拖离贴边：窗口变 size×size，完整圆跟手。
+                            setBallFloat(params)
                         }
                         if (dragging) {
-                            val (_, screenH, _) = screenMetrics()
+                            val (screenW, screenH, _) = screenMetrics()
                             val size = ballSizePx()
-                            // 沿边缘只改 y，x 保持吸附（半出屏）。
-                            params.y = safeCoerce(
-                                params.y + dy.roundToInt(),
-                                0,
-                                max(0, screenH - size),
-                            )
-                            windowManager.updateViewLayout(root, params)
-                            downX = event.rawX
-                            downY = event.rawY
+                            val cx = (event.rawX - grabDx).roundToInt()
+                                .coerceIn(size / 2, max(size / 2, screenW - size / 2))
+                            val cy = (event.rawY - grabDy).roundToInt()
+                                .coerceIn(size / 2, max(size / 2, screenH - size / 2))
+                            params.width = size
+                            params.height = size
+                            params.x = cx - size / 2
+                            params.y = cy - size / 2
+                            runCatching { windowManager.updateViewLayout(root, params) }
+                                .onFailure { Log.e(TAG, "ball move failed", it) }
                         }
                         true
                     }
                     MotionEvent.ACTION_UP -> {
-                        // 点击（未滑动）→ 展开。
                         if (!dragging) {
+                            // 轻点（未滑动）→ 展开回大框。
                             expand()
+                        } else {
+                            parkBall(params)
                         }
                         true
                     }
@@ -923,14 +950,72 @@ class SubtitleOverlayController(
         }
     }
 
+    /** 当前球心屏幕坐标（左贴边=0，右贴边=screenW，浮动=窗口中心）。 */
+    private fun ballCenter(params: WindowManager.LayoutParams, screenW: Int): Pair<Int, Int> {
+        val cx = when (ballSide) {
+            BallView.SIDE_LEFT -> 0
+            BallView.SIDE_RIGHT -> screenW
+            else -> params.x + params.width / 2
+        }
+        return cx to (params.y + params.height / 2)
+    }
+
+    /** 拖离贴边：窗口切到 size×size 完整圆，圆心对准当前球心（含 grip 偏移）。 */
+    private fun setBallFloat(params: WindowManager.LayoutParams) {
+        val root = rootView ?: return
+        val (screenW, screenH, _) = screenMetrics()
+        val size = ballSizePx()
+        val (cx, cy) = ballCenter(params, screenW)
+        ballSide = BallView.SIDE_FLOAT
+        params.width = size
+        params.height = size
+        params.x = (cx - size / 2).coerceIn(0, max(0, screenW - size))
+        params.y = (cy - size / 2).coerceIn(0, max(0, screenH - size))
+        ballView?.side = BallView.SIDE_FLOAT
+        runCatching { windowManager.updateViewLayout(root, params) }
+            .onFailure { Log.e(TAG, "ball float failed", it) }
+    }
+
+    /** 松手吸附：靠近左/右边缘 → 半球贴边；否则保持完整圆浮动。 */
+    private fun parkBall(params: WindowManager.LayoutParams) {
+        val root = rootView ?: return
+        val (screenW, screenH, _) = screenMetrics()
+        val size = ballSizePx()
+        val cx = params.x + size / 2
+        ballSide = when {
+            cx <= size * 3 / 4 -> BallView.SIDE_LEFT
+            cx >= screenW - size * 3 / 4 -> BallView.SIDE_RIGHT
+            else -> BallView.SIDE_FLOAT
+        }
+        when (ballSide) {
+            BallView.SIDE_LEFT -> {
+                params.width = size / 2
+                params.height = size
+                params.x = 0
+            }
+            BallView.SIDE_RIGHT -> {
+                params.width = size / 2
+                params.height = size
+                params.x = screenW - size / 2
+            }
+            else -> {
+                params.width = size
+                params.height = size
+                params.x = safeCoerce(params.x, 0, max(0, screenW - size))
+            }
+        }
+        params.y = safeCoerce(params.y, 0, max(0, screenH - size))
+        ballView?.side = ballSide
+        runCatching { windowManager.updateViewLayout(root, params) }
+            .onFailure { Log.e(TAG, "ball park failed", it) }
+    }
+
     companion object {
         private const val TAG = "SubtitleOverlay"
         private const val MIN_WIDTH_PX = 200
         private const val MIN_HEIGHT_PX = 80
         private const val EDGE_MARGIN_PX = 8
         // ---- 折叠成小球 ----
-        private const val SIDE_LEFT = 0
-        private const val SIDE_RIGHT = 1
         private const val BALL_SIZE_DP = 56
         private const val EDGE_COLLAPSE_PX = 60
         private const val COLLAPSE_ANIM_MS = 250L
