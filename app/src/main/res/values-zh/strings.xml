@@ -116,6 +116,10 @@
     <!-- 屏幕取词翻译 -->
     <string name="settings_ocr">屏幕取词翻译</string>
     <string name="settings_ocr_desc">框选屏幕区域，实时识别其中的文字并翻译。OCR 内置离线运行，无需联网。</string>
+    <string name="ocr_script_auto">自动（推荐）</string>
+    <string name="ocr_script_auto_summary">自动识别英文 / 日文，选用对应模型</string>
+    <string name="ocr_script_latin">英语 / 拉丁</string>
+    <string name="ocr_script_latin_summary">识别英文界面文字与数字</string>
     <string name="ocr_script_chinese">中英混合</string>
     <string name="ocr_script_chinese_summary">中文（可含英文 / 数字）</string>
     <string name="ocr_script_japanese">日文</string>
@@ -137,6 +141,10 @@
     <string name="ocr_popup_close">关闭</string>
     <string name="ocr_start">开始翻译</string>
     <string name="ocr_cancel">取消</string>
+    <string name="ocr_outline_enabled">显示取词选区框</string>
+    <string name="ocr_outline_enabled_summary">取词时在屏幕上用淡色框标出正在翻译的区域</string>
+    <string name="ocr_outline_color">选区框颜色</string>
+    <string name="ocr_outline_alpha">选区框明显程度：%1$d%%</string>
     <string name="subtitle_start_ocr">屏幕取词翻译</string>
     <string name="subtitle_stop_ocr">停止屏幕取词</string>
     <string name="subtitle_ocr_busy">音频字幕正在运行，请先停止</string>

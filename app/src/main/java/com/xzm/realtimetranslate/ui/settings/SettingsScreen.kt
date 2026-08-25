@@ -375,6 +375,18 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
                 OptionRow(
+                    label = stringResource(R.string.ocr_script_auto),
+                    summary = stringResource(R.string.ocr_script_auto_summary),
+                    selected = settings.ocrScript == OcrScript.AUTO,
+                    onClick = { viewModel.setOcrScript(OcrScript.AUTO) },
+                )
+                OptionRow(
+                    label = stringResource(R.string.ocr_script_latin),
+                    summary = stringResource(R.string.ocr_script_latin_summary),
+                    selected = settings.ocrScript == OcrScript.LATIN,
+                    onClick = { viewModel.setOcrScript(OcrScript.LATIN) },
+                )
+                OptionRow(
                     label = stringResource(R.string.ocr_script_chinese),
                     summary = stringResource(R.string.ocr_script_chinese_summary),
                     selected = settings.ocrScript == OcrScript.CHINESE_MIX,
@@ -392,6 +404,49 @@ fun SettingsScreen(
                     selected = settings.ocrScript == OcrScript.KOREAN,
                     onClick = { viewModel.setOcrScript(OcrScript.KOREAN) },
                 )
+                SettingSwitchRow(
+                    title = stringResource(R.string.ocr_outline_enabled),
+                    summary = stringResource(R.string.ocr_outline_enabled_summary),
+                    checked = settings.ocrRegionOutlineEnabled,
+                    onCheckedChange = { v ->
+                        viewModel.update { it.copy(ocrRegionOutlineEnabled = v) }
+                    },
+                )
+                if (settings.ocrRegionOutlineEnabled) {
+                    Text(
+                        text = stringResource(R.string.ocr_outline_color),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
+                    ColorSwatchRow(
+                        selected = settings.ocrRegionOutlineColor,
+                        onSelect = { c ->
+                            viewModel.update { it.copy(ocrRegionOutlineColor = c) }
+                        },
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = stringResource(
+                                R.string.ocr_outline_alpha,
+                                (settings.ocrRegionOutlineAlpha * 100).toInt(),
+                            ),
+                            fontSize = 13.sp,
+                        )
+                        Slider(
+                            value = settings.ocrRegionOutlineAlpha,
+                            onValueChange = { v ->
+                                viewModel.update { it.copy(ocrRegionOutlineAlpha = v) }
+                            },
+                            valueRange = 0.1f..1f,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
             }
         }
 

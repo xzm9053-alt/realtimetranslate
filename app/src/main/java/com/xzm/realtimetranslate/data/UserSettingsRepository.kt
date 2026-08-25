@@ -43,6 +43,9 @@ class UserSettingsRepository(private val context: Context) {
         val vadMinSilenceSec = floatPreferencesKey("vad_min_silence_sec")
         val vadMaxSpeechSec = floatPreferencesKey("vad_max_speech_sec")
         val ocrScript = stringPreferencesKey("ocr_script")
+        val ocrRegionOutlineEnabled = booleanPreferencesKey("ocr_region_outline_enabled")
+        val ocrRegionOutlineColor = longPreferencesKey("ocr_region_outline_color")
+        val ocrRegionOutlineAlpha = floatPreferencesKey("ocr_region_outline_alpha")
     }
 
     val settings: Flow<UserSettings> = context.dataStore.data.map { prefs ->
@@ -76,6 +79,9 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.vadMinSilenceSec] = next.vadMinSilenceSec
             prefs[Keys.vadMaxSpeechSec] = next.vadMaxSpeechSec
             prefs[Keys.ocrScript] = next.ocrScript.name
+            prefs[Keys.ocrRegionOutlineEnabled] = next.ocrRegionOutlineEnabled
+            prefs[Keys.ocrRegionOutlineColor] = next.ocrRegionOutlineColor
+            prefs[Keys.ocrRegionOutlineAlpha] = next.ocrRegionOutlineAlpha
         }
     }
 
@@ -118,6 +124,12 @@ class UserSettingsRepository(private val context: Context) {
         vadMinSilenceSec = this[Keys.vadMinSilenceSec] ?: UserSettings.Defaults.VAD_MIN_SILENCE_SEC,
         vadMaxSpeechSec = this[Keys.vadMaxSpeechSec] ?: UserSettings.Defaults.VAD_MAX_SPEECH_SEC,
         ocrScript = OcrScript.fromStorage(this[Keys.ocrScript]),
+        ocrRegionOutlineEnabled = this[Keys.ocrRegionOutlineEnabled]
+            ?: UserSettings.Defaults.OCR_OUTLINE_ENABLED,
+        ocrRegionOutlineColor = this[Keys.ocrRegionOutlineColor]
+            ?: UserSettings.Defaults.OCR_OUTLINE_COLOR,
+        ocrRegionOutlineAlpha = this[Keys.ocrRegionOutlineAlpha]
+            ?: UserSettings.Defaults.OCR_OUTLINE_ALPHA,
     )
 
     /** Migrate the pre-3-option boolean: true→BOTH, false/absent→TRANSLATION. */

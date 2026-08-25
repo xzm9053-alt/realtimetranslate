@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.os.Build
+import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
@@ -17,6 +18,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.xzm.realtimetranslate.R
+import com.xzm.realtimetranslate.util.realScreenMetrics
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -123,6 +125,17 @@ class RegionSelectorOverlay(
             val sv = selectionView ?: return@setOnClickListener
             sv.enforceMinSize()
             val r = Rect(sv.region)
+            // Convert window/view coords → physical screen coords. If the overlay
+            // window is laid out below the status bar (onScreen.y > 0 — some ROMs,
+            // e.g. MIUI, inset overlays despite FLAG_LAYOUT_IN_SCREEN), the region
+            // stored in view coords is smaller than the physical screen by that
+            // offset, so the 1:1 capture crop reads the text ABOVE the box. Adding
+            // the on-screen origin keeps the region in the MediaProjection frame's
+            // coordinate space. No-op (0,0) when the window is correctly full-screen.
+            val loc = IntArray(2)
+            sv.getLocationOnScreen(loc)
+            r.offset(loc[0], loc[1])
+            Log.i(TAG, "OCRMAP selectionView=${sv.width}x${sv.height} onScreen=(${loc[0]},${loc[1]}) region=$r")
             hide()
             onConfirm(r)
         }
@@ -140,20 +153,7 @@ class RegionSelectorOverlay(
         selectionView = null
     }
 
-    private fun screenMetrics(): Triple<Int, Int, Float> {
-        val density = context.resources.displayMetrics.density
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val bounds = windowManager.currentWindowMetrics.bounds
-            Triple(bounds.width(), bounds.height(), density)
-        } else {
-            @Suppress("DEPRECATION")
-            val display = windowManager.defaultDisplay
-            val real = android.util.DisplayMetrics()
-            @Suppress("DEPRECATION")
-            display.getRealMetrics(real)
-            Triple(real.widthPixels, real.heightPixels, density)
-        }
-    }
+    private fun screenMetrics(): Triple<Int, Int, Float> = context.realScreenMetrics()
 
     private fun defaultRegion(screenW: Int, screenH: Int): Rect {
         val w = (screenW * 0.72f).roundToInt()
@@ -354,6 +354,7 @@ class RegionSelectorOverlay(
     }
 
     companion object {
+        private const val TAG = "RegionSelectorOverlay"
         private const val ACCENT = 0xFF2E7CF6.toInt()
     }
 }

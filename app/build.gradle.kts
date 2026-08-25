@@ -120,6 +120,8 @@ dependencies {
 
     // Screen-region OCR: ML Kit Text Recognition v2 (BUNDLED models — fully offline,
     // no Google Play Services, works on Chinese-market devices).
+    // Latin model handles English/Latin UI text much better than the CJK models.
+    implementation("com.google.mlkit:text-recognition:16.0.1")
     implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
     implementation("com.google.mlkit:text-recognition-japanese:16.0.1")
     implementation("com.google.mlkit:text-recognition-korean:16.0.1")

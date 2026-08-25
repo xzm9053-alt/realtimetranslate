@@ -4,12 +4,16 @@ import android.annotation.SuppressLint
 import android.content.ComponentCallbacks
 import android.content.Context
 import android.content.res.Configuration
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.PixelFormat
+import android.graphics.Rect
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
-import android.text.TextUtils
+import android.text.method.ScrollingMovementMethod
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
@@ -21,6 +25,7 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.UserSettings
+import com.xzm.realtimetranslate.util.realScreenMetrics
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -29,13 +34,16 @@ import kotlin.math.roundToInt
  * Screen-OCR presentation: an edge-snapped hemisphere ball plus a translation
  * bubble that pops out of the ball. Independent of the audio subtitle overlay.
  *
- * Two windows:
+ * Three windows:
  * - **ball window**: draggable hemisphere (SIDE_LEFT / SIDE_RIGHT / SIDE_FLOAT
  *   state machine). Tapping it fires [onTap] — the service re-opens the region
  *   selector to pick a new capture area.
  * - **popup window**: the latest translation anchored beside the ball, with a ✕
  *   close button. Stays until closed or a new sentence arrives (which re-opens
  *   it); streaming updates to the same sentence only re-paint the open bubble.
+ * - **region outline window**: a subtle, touch-transparent outline of the OCR
+ *   capture area, kept on screen so the user can see which part is being
+ *   translated. Managed via [showRegionOutline] / [hideRegionOutline].
  */
 class OcrBallOverlay(
     private val context: Context,
@@ -50,6 +58,10 @@ class OcrBallOverlay(
     private var popupWindowView: FrameLayout? = null
     private var popupParams: WindowManager.LayoutParams? = null
     private var popupText: TextView? = null
+
+    private var outlineWindowView: FrameLayout? = null
+    private var outlineView: RegionOutlineView? = null
+    private var lastRegion: Rect? = null
 
     private var settings: UserSettings = UserSettings()
 
@@ -112,6 +124,15 @@ class OcrBallOverlay(
 
     fun updateSettings(value: UserSettings) {
         settings = value
+        // Capture-area outline follows the appearance settings live.
+        val region = lastRegion
+        if (region != null) {
+            if (value.ocrRegionOutlineEnabled) {
+                showRegionOutline(region)
+            } else {
+                hideRegionOutline()
+            }
+        }
         val tv = popupText ?: return
         tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, clampedFontSp(value.fontSizeSp))
         tv.setTextColor(value.translationTextColor.toInt())
@@ -159,6 +180,7 @@ class OcrBallOverlay(
         popupWindowView = null
         popupParams = null
         popupText = null
+        hideRegionOutline()
         ballWindowView?.let { runCatching { windowManager.removeView(it) } }
         ballWindowView = null
         ballParams = null
@@ -274,12 +296,17 @@ class OcrBallOverlay(
     private fun ensurePopup() {
         if (popupWindowView != null) return
         val density = context.resources.displayMetrics.density
+        val (_, screenH, _) = screenMetrics()
+        val maxPopupHeightPx = (screenH * POPUP_MAX_HEIGHT_FRACTION).roundToInt()
 
         val tv = TextView(context).apply {
             typeface = Typeface.DEFAULT
             setLineSpacing(0f, 1.15f)
-            maxLines = MAX_POPUP_LINES
-            ellipsize = TextUtils.TruncateAt.END
+            // No hard line cap: the bubble grows up to maxHeight and scrolls
+            // beyond it, so long translations stay fully readable.
+            movementMethod = ScrollingMovementMethod()
+            maxHeight = maxPopupHeightPx
+            isVerticalScrollBarEnabled = true
             setTextSize(TypedValue.COMPLEX_UNIT_SP, clampedFontSp(settings.fontSizeSp))
             setTextColor(settings.translationTextColor.toInt())
             text = ""
@@ -350,14 +377,17 @@ class OcrBallOverlay(
         popupText = null
     }
 
-    /** Anchors the bubble beside the ball, choosing the side with more room. */
+    /** Anchors the bubble beside the ball, choosing the side with more room.
+     *  Never lets the bubble cover the ball so it stays draggable: if the bubble
+     *  is too wide for either side (only when the ball floats mid-screen and the
+     *  translation is long), it parks below or above the ball instead. */
     private fun movePopup() {
         val view = popupWindowView ?: return
         val params = popupParams ?: return
         if (view.parent == null) return
         val (screenW, screenH, density) = screenMetrics()
         val maxW = (screenW * 0.7f).roundToInt()
-        val maxH = (screenH * 0.35f).roundToInt()
+        val maxH = (screenH * POPUP_MAX_HEIGHT_FRACTION).roundToInt()
         view.measure(
             View.MeasureSpec.makeMeasureSpec(maxW, View.MeasureSpec.AT_MOST),
             View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST),
@@ -368,17 +398,149 @@ class OcrBallOverlay(
         val margin = (12 * density).roundToInt()
         val ballLeft = centerX - size / 2
         val ballRight = centerX + size / 2
+        val ballTop = centerY - size / 2
+        val ballBottom = centerY + size / 2
         val rightRoom = screenW - ballRight - margin
         val leftRoom = ballLeft - margin
-        val x: Int = if (rightRoom >= pw || rightRoom >= leftRoom) {
-            (ballRight + margin).coerceAtMost(max(0, screenW - pw))
-        } else {
-            (ballLeft - margin - pw).coerceAtLeast(0)
+        val centeredY = (centerY - ph / 2).coerceIn(margin, max(margin, screenH - ph - margin))
+        val (x, y) = when {
+            pw <= rightRoom -> ballRight + margin to centeredY
+            pw <= leftRoom -> ballLeft - margin - pw to centeredY
+            else -> {
+                // Too wide to sit beside the ball: drop below it (or above) on the
+                // side with more room, so the ball is never covered.
+                val xv = (if (rightRoom >= leftRoom) screenW - pw else 0)
+                    .coerceIn(0, max(0, screenW - pw))
+                val yv = when {
+                    ph <= screenH - ballBottom - margin -> ballBottom + margin
+                    ph <= ballTop - margin -> ballTop - margin - ph
+                    else -> margin
+                }
+                xv to yv
+            }
         }
-        val y = (centerY - ph / 2).coerceIn(margin, max(margin, screenH - ph - margin))
         params.x = x
         params.y = y
         runCatching { windowManager.updateViewLayout(view, params) }
+    }
+
+    // ---- region outline window ----
+
+    /** Shows (or moves) the subtle outline of the OCR capture area. Touch-transparent.
+     *  No-ops (and hides) when the user disabled it in settings. Always re-applies
+     *  the appearance so color/opacity changes take effect live. */
+    fun showRegionOutline(rect: Rect) {
+        lastRegion = Rect(rect)
+        if (!settings.ocrRegionOutlineEnabled) {
+            hideRegionOutline()
+            return
+        }
+        if (outlineView == null) createOutlineWindow()
+        outlineView?.apply {
+            setRegion(rect)
+            applyAppearance(
+                settings.ocrRegionOutlineColor.toInt(),
+                settings.ocrRegionOutlineAlpha,
+            )
+        }
+    }
+
+    fun hideRegionOutline() {
+        outlineWindowView?.let { runCatching { windowManager.removeView(it) } }
+        outlineWindowView = null
+        outlineView = null
+    }
+
+    private fun createOutlineWindow() {
+        val view = RegionOutlineView(context).apply {
+            applyAppearance(
+                settings.ocrRegionOutlineColor.toInt(),
+                settings.ocrRegionOutlineAlpha,
+            )
+        }
+        val root = FrameLayout(context).apply {
+            setBackgroundColor(Color.TRANSPARENT)
+            addView(
+                view,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                ),
+            )
+        }
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_PHONE
+            },
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = 0
+            y = 0
+        }
+        outlineView = view
+        outlineWindowView = root
+        windowManager.addView(root, params)
+    }
+
+    /** Draws only a faint rounded box at the capture region; no dim, no handles,
+     *  no hint text — just enough to know where the OCR area is. */
+    private class RegionOutlineView(context: Context) : View(context) {
+        /** Region in physical screen coords; converted to this view's coords in onDraw. */
+        private val region = Rect()
+        private val rectF = RectF()
+
+        private val density = context.resources.displayMetrics.density
+        private val fillPaint = Paint().apply {
+            style = Paint.Style.FILL
+            color = Color.argb(18, 255, 255, 255)
+        }
+        private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = (1.5f * density)
+            color = Color.argb(130, 46, 124, 246)
+        }
+        private val cornerRadius = 8 * density
+
+        fun setRegion(r: Rect) {
+            region.set(r)
+            invalidate()
+        }
+
+        /** Applies the user's outline color + opacity ("明显程度"). [colorArgb] is
+         *  opaque — its alpha byte is overridden by [alpha]. */
+        fun applyAppearance(colorArgb: Int, alpha: Float) {
+            val a = (alpha.coerceIn(0.05f, 1f) * 255).toInt()
+            borderPaint.color = (a shl 24) or (colorArgb and 0x00FFFFFF)
+            fillPaint.color = Color.argb((a * 0.15f).roundToInt(), 255, 255, 255)
+            invalidate()
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            // Physical coords → this view's coords: if the outline window is inset
+            // below the status bar, subtract its on-screen origin so the box stays
+            // aligned with where the user drew it.
+            val loc = IntArray(2)
+            getLocationOnScreen(loc)
+            rectF.set(
+                (region.left - loc[0]).toFloat(),
+                (region.top - loc[1]).toFloat(),
+                (region.right - loc[0]).toFloat(),
+                (region.bottom - loc[1]).toFloat(),
+            )
+            canvas.drawRoundRect(rectF, cornerRadius, cornerRadius, fillPaint)
+            canvas.drawRoundRect(rectF, cornerRadius, cornerRadius, borderPaint)
+        }
     }
 
     // ---- helpers ----
@@ -407,20 +569,7 @@ class OcrBallOverlay(
             y = 0
         }
 
-    private fun screenMetrics(): Triple<Int, Int, Float> {
-        val density = context.resources.displayMetrics.density
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val bounds = windowManager.currentWindowMetrics.bounds
-            Triple(bounds.width(), bounds.height(), density)
-        } else {
-            @Suppress("DEPRECATION")
-            val display = windowManager.defaultDisplay
-            val real = android.util.DisplayMetrics()
-            @Suppress("DEPRECATION")
-            display.getRealMetrics(real)
-            Triple(real.widthPixels, real.heightPixels, density)
-        }
-    }
+    private fun screenMetrics(): Triple<Int, Int, Float> = context.realScreenMetrics()
 
     private fun registerCallbacks() {
         if (callbacksRegistered) return
@@ -439,6 +588,7 @@ class OcrBallOverlay(
         private const val BALL_SIZE_DP = 56
         private const val MIN_FONT_SP = 12f
         private const val MAX_FONT_SP = 28f
-        private const val MAX_POPUP_LINES = 6
+        /** Bubble max height as a fraction of screen height; overflow scrolls. */
+        private const val POPUP_MAX_HEIGHT_FRACTION = 0.55f
     }
 }

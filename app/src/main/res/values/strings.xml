@@ -116,6 +116,10 @@
     <!-- Screen-region OCR -->
     <string name="settings_ocr">Screen text OCR</string>
     <string name="settings_ocr_desc">Recognize text inside a region of the screen and translate it live. OCR runs fully offline with models bundled in the app.</string>
+    <string name="ocr_script_auto">Auto (recommended)</string>
+    <string name="ocr_script_auto_summary">Auto-picks English or Japanese model</string>
+    <string name="ocr_script_latin">English / Latin</string>
+    <string name="ocr_script_latin_summary">English UI text and digits</string>
     <string name="ocr_script_chinese">Chinese + Latin</string>
     <string name="ocr_script_chinese_summary">Chinese with embedded English / numbers</string>
     <string name="ocr_script_japanese">Japanese</string>
@@ -137,6 +141,10 @@
     <string name="ocr_popup_close">Close</string>
     <string name="ocr_start">Start translating</string>
     <string name="ocr_cancel">Cancel</string>
+    <string name="ocr_outline_enabled">Show capture-area outline</string>
+    <string name="ocr_outline_enabled_summary">Keep a faint box on screen showing the area being translated</string>
+    <string name="ocr_outline_color">Outline color</string>
+    <string name="ocr_outline_alpha">Outline intensity: %1$d%%</string>
     <string name="subtitle_start_ocr">Screen OCR translate</string>
     <string name="subtitle_stop_ocr">Stop screen OCR</string>
     <string name="subtitle_ocr_busy">Audio subtitles are running — stop them first</string>

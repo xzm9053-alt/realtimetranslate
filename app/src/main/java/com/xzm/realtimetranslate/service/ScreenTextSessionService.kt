@@ -27,6 +27,7 @@ import com.xzm.realtimetranslate.overlay.RegionSelectorOverlay
 import com.xzm.realtimetranslate.translate.TranslationEngine
 import com.xzm.realtimetranslate.translate.TranslationEngineFactory
 import com.xzm.realtimetranslate.ui.main.MainActivity
+import com.xzm.realtimetranslate.util.realScreenMetrics
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -168,12 +169,18 @@ class ScreenTextSessionService : Service() {
             }
             overlay = ocrOverlay
             ocrOverlay.show(currentSettings)
+            // 在球旁用一条淡色细框标出当前 OCR 选区，让用户知道在翻译屏幕哪块。
+            ocrOverlay.showRegionOutline(region)
 
-            val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            val bounds = wm.currentWindowMetrics.bounds
-            val displayW = bounds.width()
-            val displayH = bounds.height()
+            // The virtual display must match the real (full) display size so the
+            // region Rect — which lives in full-screen coordinates — maps 1:1.
+            val (displayW, displayH, _) = realScreenMetrics()
             val densityDpi = resources.configuration.densityDpi
+            val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            val windowBounds =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) wm.currentWindowMetrics.bounds else null
+            Log.i(TAG, "OCRMAP realScreen=${displayW}x$displayH dpi=$densityDpi " +
+                "windowBounds=$windowBounds region=$region")
             if (!regionFits(region, displayW, displayH)) {
                 ScreenOcrBus.setStatus(ScreenOcrBus.Status.Error, getString(R.string.ocr_region_invalid))
                 stopEverything(getString(R.string.ocr_region_invalid))
@@ -213,6 +220,7 @@ class ScreenTextSessionService : Service() {
         currentRegion = newRegion
         lastHash = Long.MIN_VALUE
         lastText = ""
+        overlay?.showRegionOutline(newRegion)
         ScreenOcrBus.setStatus(ScreenOcrBus.Status.Running, getString(R.string.ocr_region_updated))
     }
 
@@ -284,10 +292,7 @@ class ScreenTextSessionService : Service() {
         if (stopped || capturer == null) return
         // 球/气泡随屏幕尺寸变化重新贴边与排布。
         overlay?.reclamp()
-        val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        val bounds = wm.currentWindowMetrics.bounds
-        val newW = bounds.width()
-        val newH = bounds.height()
+        val (newW, newH, _) = realScreenMetrics()
         val dpi = resources.configuration.densityDpi
         ioScope.launch {
             capturer?.resize(newW, newH, dpi)

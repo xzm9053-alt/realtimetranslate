@@ -33,6 +33,13 @@ data class UserSettings(
     val vadMaxSpeechSec: Float = Defaults.VAD_MAX_SPEECH_SEC,
     // Screen-region OCR recognizer script (ML Kit bundled models).
     val ocrScript: OcrScript = Defaults.OCR_SCRIPT,
+    // Screen-OCR capture-area outline: a subtle box kept on screen after the
+    // user picks a region so they can see which part is being translated.
+    val ocrRegionOutlineEnabled: Boolean = Defaults.OCR_OUTLINE_ENABLED,
+    // Opaque outline color (alpha applied separately via OCR_OUTLINE_ALPHA).
+    val ocrRegionOutlineColor: Long = Defaults.OCR_OUTLINE_COLOR,
+    // Border opacity 0.1..1.0 — "明显程度" of the outline.
+    val ocrRegionOutlineAlpha: Float = Defaults.OCR_OUTLINE_ALPHA,
 ) {
     object Defaults {
         // Kept for schema compatibility; the engine now reads DeepSeek settings directly.
@@ -66,8 +73,14 @@ data class UserSettings(
         // Silero VAD 切句参数（秒）。
         const val VAD_MIN_SILENCE_SEC = 0.2f
         const val VAD_MAX_SPEECH_SEC = 2f
-        // Default OCR script for screen-region text recognition.
-        val OCR_SCRIPT: OcrScript = OcrScript.CHINESE_MIX
+        // Default OCR script for screen-region text recognition. AUTO runs the
+        // Latin + Japanese recognizers and picks the better result (English/Japanese
+        // screens), matching the default "auto" source language.
+        val OCR_SCRIPT: OcrScript = OcrScript.AUTO
+        // Capture-area outline defaults keep the subtle look (accent, ~50% alpha).
+        const val OCR_OUTLINE_ENABLED = true
+        const val OCR_OUTLINE_COLOR = 0xFF2E7CF6
+        const val OCR_OUTLINE_ALPHA = 0.5f
     }
 }
 
