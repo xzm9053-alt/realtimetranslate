@@ -37,9 +37,31 @@ class ScreenTextCapturer(
     @Volatile
     private var displayH = displayH
 
+    /**
+     * Guards [imageReader] / [virtualDisplay] / [cropBitmap]. Frames are cropped
+     * on the IO dispatcher while a rotation may resize on the main thread;
+     * closing a reader that still has an unclosed [Image] makes the native side
+     * touch a freed buffer.
+     */
+    private val lock = Any()
+
+    @Volatile
+    private var released = false
+
     private var imageReader: ImageReader? = null
     private var virtualDisplay: VirtualDisplay? = null
+
+    /** Reused across frames to avoid per-frame allocation. Safe only because
+     *  capture and OCR run strictly in sequence — do not hand this bitmap to a
+     *  second consumer while another capture may run. */
     private var cropBitmap: Bitmap? = null
+
+    /** Frame size currently obtainable. Always matches the live [ImageReader],
+     *  including after a failed [resize] — callers use it as the "does the
+     *  pipeline still need rebuilding" guard. */
+    val width: Int get() = displayW
+
+    val height: Int get() = displayH
 
     fun start() {
         val reader = ImageReader.newInstance(
@@ -61,7 +83,9 @@ class ScreenTextCapturer(
     }
 
     /** Returns the latest frame cropped to [region] (screen px), or null when no frame is ready. */
-    fun captureRegion(region: Rect): RegionFrame? {
+    fun captureRegion(region: Rect): RegionFrame? = synchronized(lock) { captureLocked(region) }
+
+    private fun captureLocked(region: Rect): RegionFrame? {
         val reader = imageReader ?: return null
         val image: Image = try {
             reader.acquireLatestImage() ?: return null
@@ -77,28 +101,74 @@ class ScreenTextCapturer(
             val bottom = region.bottom.coerceIn(top + 1, displayH)
             val bitmap = copyRegion(image, Rect(left, top, right, bottom))
             return RegionFrame(bitmap, coarseHash(bitmap))
+        } catch (t: Throwable) {
+            // Self-contained: a crop failure must not depend on every caller
+            // having its own try/catch.
+            Log.w(TAG, "copyRegion failed region=$region frame=${displayW}x$displayH", t)
+            return null
         } finally {
             // Must always close, even on error paths.
             image.close()
         }
     }
 
-    /** Handles display rotation: keep the same projection token, swap the ImageReader. */
-    fun resize(w: Int, h: Int, dpi: Int) {
+    /**
+     * Handles display rotation / resize: keep the same projection token, swap
+     * the ImageReader and resize the virtual display.
+     *
+     * All-or-nothing — on failure the previous pipeline is left untouched and
+     * [captureRegion] keeps working at the old size. Callers must not let an
+     * exception escape here: this runs on a coroutine with no handler of its
+     * own.
+     *
+     * @return true when the pipeline now runs at `w`×`h`.
+     */
+    fun resize(w: Int, h: Int, dpi: Int): Boolean = synchronized(lock) { resizeLocked(w, h, dpi) }
+
+    private fun resizeLocked(w: Int, h: Int, dpi: Int): Boolean {
+        if (released) return false
+        if (w <= 0 || h <= 0 || dpi <= 0) return false
+        val vd = virtualDisplay ?: return false
+        val old = imageReader
+        if (old != null && w == displayW && h == displayH) return true
+
+        // Build the replacement first: if this fails, nothing has changed yet.
+        val reader = try {
+            ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, MAX_IMAGES)
+        } catch (t: Throwable) {
+            Log.w(TAG, "ImageReader.newInstance(${w}x$h) failed", t)
+            return false
+        }
+        // Repoint the display BEFORE closing the old reader, so the producer
+        // never renders into a closed surface.
+        try {
+            vd.resize(w, h, dpi)
+            vd.setSurface(reader.surface)
+        } catch (t: Throwable) {
+            Log.w(TAG, "virtualDisplay resize to ${w}x$h@$dpi failed", t)
+            runCatching { reader.close() }
+            return false
+        }
+        // Publish in a single step: [displayW]/[displayH] drive captureRegion's
+        // clamp, so they must never describe a different frame than imageReader.
+        imageReader = reader
         displayW = w
         displayH = h
-        virtualDisplay?.resize(w, h, dpi)
-        imageReader?.close()
-        val reader = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, MAX_IMAGES)
-        imageReader = reader
-        virtualDisplay?.setSurface(reader.surface)
+        cropBitmap = null
+        runCatching { old?.close() }
+        Log.d(TAG, "virtual display resized: ${w}x${h} @ ${dpi}dpi")
+        return true
     }
 
     fun release() {
-        runCatching { virtualDisplay?.release() }
-        virtualDisplay = null
-        runCatching { imageReader?.close() }
-        imageReader = null
+        synchronized(lock) {
+            released = true
+            runCatching { virtualDisplay?.release() }
+            virtualDisplay = null
+            runCatching { imageReader?.close() }
+            imageReader = null
+            cropBitmap = null
+        }
     }
 
     /**

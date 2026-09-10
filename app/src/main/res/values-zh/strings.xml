@@ -138,6 +138,7 @@
     <string name="ocr_translate_failed">翻译失败</string>
     <string name="ocr_region_hint">拖动 / 缩放选框，框住要翻译的文字</string>
     <string name="ocr_region_updated">区域已更新</string>
+    <string name="ocr_region_adjusted">屏幕已旋转，点悬浮球可重选区域</string>
     <string name="ocr_popup_close">关闭</string>
     <string name="ocr_start">开始翻译</string>
     <string name="ocr_cancel">取消</string>

@@ -13,7 +13,9 @@ import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import android.util.Log
+import android.view.Surface
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
 import com.xzm.realtimetranslate.LiveTranslateApp
@@ -27,7 +29,12 @@ import com.xzm.realtimetranslate.overlay.RegionSelectorOverlay
 import com.xzm.realtimetranslate.translate.TranslationEngine
 import com.xzm.realtimetranslate.translate.TranslationEngineFactory
 import com.xzm.realtimetranslate.ui.main.MainActivity
+import com.xzm.realtimetranslate.util.clampRegion
+import com.xzm.realtimetranslate.util.realDisplayRotation
 import com.xzm.realtimetranslate.util.realScreenMetrics
+import com.xzm.realtimetranslate.util.remapRegion
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -48,8 +55,17 @@ import kotlinx.coroutines.withContext
  */
 class ScreenTextSessionService : Service() {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // SupervisorJob only isolates sibling coroutines — it does NOT stop an
+    // uncaught exception in a root coroutine from reaching the thread's default
+    // handler and killing the process. Hence the explicit handlers.
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Main.immediate +
+            CoroutineExceptionHandler { _, t -> Log.e(TAG, "scope uncaught", t) },
+    )
+    private val ioScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.IO +
+            CoroutineExceptionHandler { _, t -> Log.e(TAG, "ioScope uncaught", t) },
+    )
 
     private var mediaProjection: MediaProjection? = null
     private var capturer: ScreenTextCapturer? = null
@@ -64,6 +80,22 @@ class ScreenTextSessionService : Service() {
 
     @Volatile
     private var currentRegion: Rect = Rect()
+
+    /** 坐标系 [currentRegion] 是在哪里被画出来的（尺寸 + 旋转）。旋转发生时靠它算出
+     *  显示帧转过的角度，把选区映射到新坐标系；只在主线程读写。 */
+    @Volatile
+    private var regionSpaceW = 0
+
+    @Volatile
+    private var regionSpaceH = 0
+
+    @Volatile
+    private var regionSpaceRot = Surface.ROTATION_0
+
+    /** 旋转/折叠后投影帧会乱几百 ms，这期间不采集，免得用旧坐标裁新尺寸的帧、
+     *  冒出一条莫名其妙的译文气泡。 */
+    @Volatile
+    private var capturePausedUntil = 0L
 
     /** 帧去重与文本去重状态：点球重选区域时由 [updateRegion] 复位，迫使下一帧重新识别。 */
     @Volatile
@@ -129,80 +161,114 @@ class ScreenTextSessionService : Service() {
         val app = application as LiveTranslateApp
 
         scope.launch {
-            currentSettings = app.settingsRepository.settings.first()
-
-            // Engine-aware credential gate: DeepSeek needs a key; Microsoft is keyless.
-            if (currentSettings.translationEngine == TranslationEngineType.DEEPSEEK &&
-                !app.apiKeyStore.hasDeepSeekKey()
-            ) {
-                ScreenOcrBus.setStatus(ScreenOcrBus.Status.Error, getString(R.string.msg_need_deepseek_key))
-                stopSelf()
-                return@launch
+            try {
+                startSessionInternal(region, resultCode, data, app)
+            } catch (t: CancellationException) {
+                throw t
+            } catch (t: Throwable) {
+                // createVirtualDisplay / windowManager.addView / OCR init can all
+                // throw; unguarded they would take the whole process down.
+                Log.e(TAG, "startSession failed", t)
+                val msg = getString(R.string.msg_service_start_failed, t.message.orEmpty())
+                ScreenOcrBus.setStatus(ScreenOcrBus.Status.Error, msg)
+                stopEverything(msg)
             }
-
-            val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-            val projection = mpm.getMediaProjection(resultCode, data)
-            if (projection == null) {
-                ScreenOcrBus.setStatus(ScreenOcrBus.Status.Error, getString(R.string.ocr_projection_failed))
-                stopSelf()
-                return@launch
-            }
-            // Register the callback BEFORE createVirtualDisplay (Android 14 rule).
-            mediaProjection = projection
-            projection.registerCallback(
-                object : MediaProjection.Callback() {
-                    override fun onStop() {
-                        stopEverything(getString(R.string.ocr_projection_stopped))
-                    }
-                },
-                null,
-            )
-
-            // 半球球 + 译文气泡：点球 → 服务内直接弹区域选择器重选，不重启投影/服务。
-            val ocrOverlay = OcrBallOverlay(this@ScreenTextSessionService) {
-                if (stopped) return@OcrBallOverlay
-                RegionSelectorOverlay(
-                    this@ScreenTextSessionService,
-                    onConfirm = { newRegion -> updateRegion(newRegion) },
-                    onCancel = { },
-                ).show()
-            }
-            overlay = ocrOverlay
-            ocrOverlay.show(currentSettings)
-            // 在球旁用一条淡色细框标出当前 OCR 选区，让用户知道在翻译屏幕哪块。
-            ocrOverlay.showRegionOutline(region)
-
-            // The virtual display must match the real (full) display size so the
-            // region Rect — which lives in full-screen coordinates — maps 1:1.
-            val (displayW, displayH, _) = realScreenMetrics()
-            val densityDpi = resources.configuration.densityDpi
-            val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            val windowBounds =
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) wm.currentWindowMetrics.bounds else null
-            Log.i(TAG, "OCRMAP realScreen=${displayW}x$displayH dpi=$densityDpi " +
-                "windowBounds=$windowBounds region=$region")
-            if (!regionFits(region, displayW, displayH)) {
-                ScreenOcrBus.setStatus(ScreenOcrBus.Status.Error, getString(R.string.ocr_region_invalid))
-                stopEverything(getString(R.string.ocr_region_invalid))
-                return@launch
-            }
-            val capturer = ScreenTextCapturer(projection, displayW, displayH, densityDpi, null)
-            this@ScreenTextSessionService.capturer = capturer
-            capturer.start()
-
-            val ocrEngine = ScreenTextOcr()
-            ocr = ocrEngine
-
-            settingsJob = scope.launch {
-                app.settingsRepository.settings.collectLatest { s ->
-                    currentSettings = s
-                    overlay?.updateSettings(s)
-                }
-            }
-
-            ScreenOcrBus.setStatus(ScreenOcrBus.Status.Running, getString(R.string.ocr_running))
-            runOcrLoop()
         }
+    }
+
+    /** Body of [startSession], run on [scope] so a throw is reported and cleaned
+     *  up instead of crashing the process. */
+    private suspend fun startSessionInternal(
+        region: Rect,
+        resultCode: Int,
+        data: Intent,
+        app: LiveTranslateApp,
+    ) {
+        currentSettings = app.settingsRepository.settings.first()
+
+        // Engine-aware credential gate: DeepSeek needs a key; Microsoft is keyless.
+        if (currentSettings.translationEngine == TranslationEngineType.DEEPSEEK &&
+            !app.apiKeyStore.hasDeepSeekKey()
+        ) {
+            ScreenOcrBus.setStatus(ScreenOcrBus.Status.Error, getString(R.string.msg_need_deepseek_key))
+            stopSelf()
+            return
+        }
+
+        val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        val projection = mpm.getMediaProjection(resultCode, data)
+        if (projection == null) {
+            ScreenOcrBus.setStatus(ScreenOcrBus.Status.Error, getString(R.string.ocr_projection_failed))
+            stopSelf()
+            return
+        }
+        // Register the callback BEFORE createVirtualDisplay (Android 14 rule).
+        mediaProjection = projection
+        projection.registerCallback(
+            object : MediaProjection.Callback() {
+                override fun onStop() {
+                    stopEverything(getString(R.string.ocr_projection_stopped))
+                }
+            },
+            null,
+        )
+
+        // 半球球 + 译文气泡：点球 → 服务内直接弹区域选择器重选，不重启投影/服务。
+        val ocrOverlay = OcrBallOverlay(this@ScreenTextSessionService) {
+            if (stopped) return@OcrBallOverlay
+            RegionSelectorOverlay(
+                this@ScreenTextSessionService,
+                onConfirm = { newRegion -> updateRegion(newRegion) },
+                onCancel = { },
+            ).show()
+        }
+        overlay = ocrOverlay
+        ocrOverlay.show(currentSettings)
+        // 在球旁用一条淡色细框标出当前 OCR 选区，让用户知道在翻译屏幕哪块。
+        ocrOverlay.showRegionOutline(region)
+
+        // The virtual display must match the real (full) display size so the
+        // region Rect — which lives in full-screen coordinates — maps 1:1.
+        val (displayW, displayH, _) = realScreenMetrics()
+        val densityDpi = resources.configuration.densityDpi
+        val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        val windowBounds =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) wm.currentWindowMetrics.bounds else null
+        val rotation = realDisplayRotation()
+        Log.i(TAG, "OCRMAP realScreen=${displayW}x$displayH dpi=$densityDpi rot=$rotation " +
+            "windowBounds=$windowBounds region=$region")
+        if (displayW < MIN_REGION_PX || displayH < MIN_REGION_PX) {
+            ScreenOcrBus.setStatus(ScreenOcrBus.Status.Error, getString(R.string.ocr_region_invalid))
+            stopEverything(getString(R.string.ocr_region_invalid))
+            return
+        }
+        // The region was drawn in the coordinate space of *that* moment; if the
+        // display rotated while the projection dialog was up, those numbers are
+        // stale. Squeeze them back in range and carry on — never end the session
+        // over an out-of-range region.
+        val usableRegion = clampRegion(region, displayW, displayH, MIN_REGION_PX)
+        if (usableRegion != region) Log.i(TAG, "OCRMAP clamped $region -> $usableRegion")
+        currentRegion = usableRegion
+        regionSpaceW = displayW
+        regionSpaceH = displayH
+        regionSpaceRot = rotation
+        ocrOverlay.showRegionOutline(usableRegion)
+        val capturer = ScreenTextCapturer(projection, displayW, displayH, densityDpi, null)
+        this@ScreenTextSessionService.capturer = capturer
+        capturer.start()
+
+        val ocrEngine = ScreenTextOcr()
+        ocr = ocrEngine
+
+        settingsJob = scope.launch {
+            app.settingsRepository.settings.collectLatest { s ->
+                currentSettings = s
+                overlay?.updateSettings(s)
+            }
+        }
+
+        ScreenOcrBus.setStatus(ScreenOcrBus.Status.Running, getString(R.string.ocr_running))
+        runOcrLoop()
     }
 
     /**
@@ -217,10 +283,18 @@ class ScreenTextSessionService : Service() {
     /** 点球重选区域：只换 capture 区域并复位去重状态，下一帧即按新区域识别。 */
     private fun updateRegion(newRegion: Rect) {
         if (stopped) return
-        currentRegion = newRegion
+        val (w, h, _) = realScreenMetrics()
+        if (w < MIN_REGION_PX || h < MIN_REGION_PX) return
+        // 正常情况下是恒等变换（选择器就画在当前坐标系）；这里保留是为了维持
+        // 「currentRegion 永远在当前显示范围内」这条不变式 —— 选择器自己的
+        // 屏幕尺寸可能已经过期。
+        currentRegion = clampRegion(newRegion, w, h, MIN_REGION_PX)
+        regionSpaceW = w
+        regionSpaceH = h
+        regionSpaceRot = realDisplayRotation()
         lastHash = Long.MIN_VALUE
         lastText = ""
-        overlay?.showRegionOutline(newRegion)
+        overlay?.showRegionOutline(currentRegion)
         ScreenOcrBus.setStatus(ScreenOcrBus.Status.Running, getString(R.string.ocr_region_updated))
     }
 
@@ -233,6 +307,11 @@ class ScreenTextSessionService : Service() {
                 apiKey = app.apiKeyStore.getDeepSeekKey(),
             )
             while (isActive && !stopped) {
+                if (SystemClock.elapsedRealtime() < capturePausedUntil) {
+                    // 旋转/折叠刚发生：投影帧还在重建，此刻裁出来的是乱帧。
+                    delay(DISPLAY_PAUSE_POLL_MS)
+                    continue
+                }
                 val frame = withContext(Dispatchers.IO) {
                     try {
                         capturer?.captureRegion(currentRegion)
@@ -286,23 +365,72 @@ class ScreenTextSessionService : Service() {
             region.right <= displayW && region.bottom <= displayH &&
             region.width() >= MIN_REGION_PX && region.height() >= MIN_REGION_PX
 
-    /** Rotation / display change: resize the virtual display; abort if the region went stale. */
+    /** Rotation / display change: remap the region and (only if the frame size
+     *  really changed) rebuild the capture pipeline. **Never ends the session.** */
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         if (stopped || capturer == null) return
         // 球/气泡随屏幕尺寸变化重新贴边与排布。
         overlay?.reclamp()
+        capturePausedUntil = SystemClock.elapsedRealtime() + DISPLAY_PAUSE_MS
+        applyDisplayChange()
+    }
+
+    private fun applyDisplayChange() {
+        if (stopped) return
+        val capturer = this.capturer ?: return
         val (newW, newH, _) = realScreenMetrics()
-        val dpi = resources.configuration.densityDpi
-        ioScope.launch {
-            capturer?.resize(newW, newH, dpi)
+        val newRot = realDisplayRotation()
+        if (newW < MIN_REGION_PX || newH < MIN_REGION_PX) {
+            // 现实设备上不可达（最小屏也远大于 48px），保留最后一条真正的失败路径。
+            ScreenOcrBus.setStatus(ScreenOcrBus.Status.Error, getString(R.string.ocr_region_invalid))
+            stopEverything(getString(R.string.ocr_region_invalid))
+            return
         }
-        if (!regionFits(currentRegion, newW, newH)) {
-            // stopEverything hides the overlay view hierarchy → main thread only.
-            scope.launch {
-                stopEverything(getString(R.string.ocr_region_invalid))
+        val geometryChanged = newRot != regionSpaceRot || newW != regionSpaceW || newH != regionSpaceH
+
+        // 1) 选区先映射进新坐标系，再无条件 clamp —— remapRegion 保证结果一定在界内。
+        val region = remapRegion(
+            region = currentRegion,
+            oldW = regionSpaceW,
+            oldH = regionSpaceH,
+            oldRot = regionSpaceRot,
+            newW = newW,
+            newH = newH,
+            newRot = newRot,
+            minPx = MIN_REGION_PX,
+        )
+        regionSpaceW = newW
+        regionSpaceH = newH
+        regionSpaceRot = newRot
+
+        // 2) 只有帧尺寸真变了才重建管线。守卫读 capturer 的活值（与 ImageReader
+        //    同一步更新），不是本类另存的副本 —— 副本在 resize 失败后会脱节。
+        //    系统也会为 AUTO_MIRROR 虚拟屏自动跟随旋转，所以这里可能什么都不用做。
+        if (newW != capturer.width || newH != capturer.height) {
+            val dpi = resources.configuration.densityDpi
+            ioScope.launch {
+                val ok = runCatching { capturer.resize(newW, newH, dpi) }
+                    .onFailure { Log.w(TAG, "capturer.resize threw", it) }
+                    .getOrDefault(false)
+                if (!ok) {
+                    // resize 是全有全无：reader/虚拟屏仍是旧尺寸，选区却已在新坐标系，
+                    // 只有裁切内容暂时不对。绝不因此结束会话。
+                    Log.w(TAG, "resize ${newW}x$newH@$dpi failed; keeping ${capturer.width}x${capturer.height}")
+                }
             }
         }
+
+        if (!geometryChanged) return // 纯 fontScale / uiMode / locale / 键盘变化
+        currentRegion = region
+        lastHash = Long.MIN_VALUE // 换了坐标系，强制下一帧重新识别
+        overlay?.showRegionOutline(region) // 必须同步，否则外框还画在旧位置
+        if (!regionFits(region, newW, newH)) {
+            // clamp 不变式的哨兵；真打印了说明 remapRegion/clampRegion 被改坏了。
+            Log.e(TAG, "BUG: remapped region $region out of ${newW}x$newH")
+        }
+        Log.i(TAG, "OCRMAP display change rot=$newRot ${newW}x$newH region=$region")
+        ScreenOcrBus.setStatus(ScreenOcrBus.Status.Running, getString(R.string.ocr_region_adjusted))
     }
 
     private fun startAsForeground() {
@@ -380,6 +508,9 @@ class ScreenTextSessionService : Service() {
         private const val NOTIFICATION_ID = 43
         private const val FRAME_INTERVAL_MS = 900L
         private const val MIN_REGION_PX = 48
+        /** 旋转/折叠后暂停采集的时长，避开投影帧重建期间的乱帧。 */
+        private const val DISPLAY_PAUSE_MS = 500L
+        private const val DISPLAY_PAUSE_POLL_MS = 100L
         const val ACTION_START = "com.xzm.realtimetranslate.action.START_SCREEN_OCR"
         const val ACTION_STOP = "com.xzm.realtimetranslate.action.STOP_SCREEN_OCR"
         const val EXTRA_REGION = "region"

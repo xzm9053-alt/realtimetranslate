@@ -138,6 +138,7 @@
     <string name="ocr_translate_failed">Translation failed</string>
     <string name="ocr_region_hint">Drag / resize the box over the text to translate</string>
     <string name="ocr_region_updated">Region updated</string>
+    <string name="ocr_region_adjusted">Screen rotated — tap the ball to reselect the area</string>
     <string name="ocr_popup_close">Close</string>
     <string name="ocr_start">Start translating</string>
     <string name="ocr_cancel">Cancel</string>
