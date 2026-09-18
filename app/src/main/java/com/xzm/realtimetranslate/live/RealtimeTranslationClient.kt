@@ -1,5 +1,6 @@
 package com.xzm.realtimetranslate.live
 
+import android.os.SystemClock
 import android.util.Log
 import com.xzm.realtimetranslate.LiveTranslateApp
 import com.xzm.realtimetranslate.data.TranslationEngineType
@@ -26,6 +27,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Drop-in replacement for [LiveTranslateClient] with the exact same public
@@ -50,6 +52,9 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
     private val recentInputs = ArrayDeque<Pair<String, Long>>() // (text, timestamp)
     private val dedupTimeWindowMs = 8_000L
     private val dedupWindowSize = 6
+
+    /** TRANSPROF 诊断用：语音段序号，对照屏幕取词的 ocrloop 日志。 */
+    private val voiceSeq = AtomicInteger(0)
 
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Idle)
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
@@ -208,6 +213,10 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
             if (intentionalClose.get()) return@launch
             val engine = translationEngine
             if (engine == null) return@launch
+            // TRANSPROF 诊断（只读埋点）：语音侧对照组。lockWait 是排队等上一句
+            // 翻译结束的时间，translate 是同引擎的一次完整往返，用来和屏幕侧对比。
+            val seq = voiceSeq.incrementAndGet()
+            val tStart = SystemClock.elapsedRealtime()
 
             // 原文字幕立即上屏，不被上一句的网络翻译阻塞（滚动字幕缓冲天然容错乱序）。
             _events.emit(LiveEvent.InputTranscript(trimmed, languageCode = null))
@@ -215,10 +224,13 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
             // 翻译结果仍串行，保证输出顺序不交错。
             translateMutex.withLock {
                 if (intentionalClose.get()) return@withLock
+                val lockWait = SystemClock.elapsedRealtime() - tStart
                 // 新句开始：先清空字幕当前输出行，避免本句流式增量被逐段追加成上一句的重复堆叠。
                 _events.emit(LiveEvent.OutputReset)
                 val settings = app.settingsRepository.settings.first()
                 val target = config.targetLanguageCode.ifBlank { "zh-Hans" }
+                val tTranslate = SystemClock.elapsedRealtime()
+                var outChars = 0
                 try {
                     engine.translate(
                         text = trimmed,
@@ -226,12 +238,18 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
                         targetLang = target,
                     ).collect { fragment ->
                         if (intentionalClose.get()) return@collect
+                        outChars = fragment.length
                         _events.emit(LiveEvent.OutputTranscript(fragment, languageCode = null))
                     }
                 } catch (t: Throwable) {
                     Log.e(TAG, "translate failed", t)
                     _events.emit(LiveEvent.Error("翻译失败：${t.message}"))
                 }
+                Log.i(
+                    TAG,
+                    "TRANSPROF voice seg#$seq chars=${trimmed.length} lockWait=$lockWait " +
+                        "translate=${SystemClock.elapsedRealtime() - tTranslate} out=$outChars",
+                )
             }
         }
     }

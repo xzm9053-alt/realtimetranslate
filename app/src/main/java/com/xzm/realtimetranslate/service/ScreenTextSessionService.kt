@@ -40,6 +40,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
@@ -272,13 +273,15 @@ class ScreenTextSessionService : Service() {
     }
 
     /**
-     * Serial loop: capture → skip unchanged frames → OCR → translate → overlay.
+     * Capture loop: capture → skip unchanged frames → OCR → hand off to the
+     * translate worker. The loop body never awaits a translation, so the capture
+     * cadence stays at [FRAME_INTERVAL_MS] no matter how slow the engine is.
      *
-     * The loop runs on the main dispatcher because [translateAndShow] touches the
-     * overlay's view hierarchy (main-thread only). The two expensive steps — frame
-     * capture (pixel copy) and OCR — are delegated to [Dispatchers.IO] via
-     * [withContext]; the translation engines stream on IO via flowOn, so collecting
-     * them here never blocks the main thread.
+     * The loop and the worker both run on the main dispatcher because the overlay
+     * view hierarchy is main-thread only. The two expensive steps — frame capture
+     * (pixel copy) and OCR — are delegated to [Dispatchers.IO] via [withContext];
+     * the translation engines stream on IO via flowOn, so collecting them never
+     * blocks the main thread.
      */
     /** 点球重选区域：只换 capture 区域并复位去重状态，下一帧即按新区域识别。 */
     private fun updateRegion(newRegion: Rect) {
@@ -306,12 +309,37 @@ class ScreenTextSessionService : Service() {
                 settings = currentSettings,
                 apiKey = app.apiKeyStore.getDeepSeekKey(),
             )
+            // 翻译 worker：单槽（conflated）Channel = 同时最多一个翻译在飞，且翻译
+            // 期间画面又换了只保留最新的那份文本。引擎再慢也冻不住上面的采集节拍，
+            // 而气泡永远朝最新字幕收敛，不会卡在上一句上不动。
+            // 它是 ocrJob 的子协程，换区域/停会话时随采集循环一起结束。
+            val pendingText = Channel<String>(Channel.CONFLATED)
+            launch {
+                for (text in pendingText) {
+                    if (stopped) break
+                    val tTranslate = SystemClock.elapsedRealtime()
+                    translateAndShow(engine, text)
+                    // TRANSPROF 诊断（只读埋点）：这次翻译实际花了多久。
+                    // 对照上面 ocrloop 的 cycle= 即可看出解耦是否生效。
+                    Log.i(
+                        TAG,
+                        "TRANSPROF translateLatest chars=${text.length} " +
+                            "ms=${SystemClock.elapsedRealtime() - tTranslate}",
+                    )
+                }
+            }
+
+            // TRANSPROF 诊断（只读埋点）：空转轮次累积计数，每 10 轮汇报一次，
+            // 用来判断「是不是每帧都在重发请求」。
+            var idleRounds = 0
             while (isActive && !stopped) {
                 if (SystemClock.elapsedRealtime() < capturePausedUntil) {
                     // 旋转/折叠刚发生：投影帧还在重建，此刻裁出来的是乱帧。
                     delay(DISPLAY_PAUSE_POLL_MS)
                     continue
                 }
+                val cycleStart = SystemClock.elapsedRealtime()
+                val tCapture = SystemClock.elapsedRealtime()
                 val frame = withContext(Dispatchers.IO) {
                     try {
                         capturer?.captureRegion(currentRegion)
@@ -320,18 +348,47 @@ class ScreenTextSessionService : Service() {
                         null
                     }
                 }
+                val captureMs = SystemClock.elapsedRealtime() - tCapture
                 if (frame != null && frame.hash != lastHash) {
                     lastHash = frame.hash
+                    val tOcr = SystemClock.elapsedRealtime()
                     val text = withContext(Dispatchers.IO) {
                         ocr?.recognize(frame.bitmap, currentSettings.ocrScript)
                     }
+                    val ocrMs = SystemClock.elapsedRealtime() - tOcr
                     if (!text.isNullOrBlank() && text != lastText) {
                         lastText = text
-                        translateAndShow(engine, text)
+                        pendingText.trySend(text)
+                        Log.i(
+                            TAG,
+                            "TRANSPROF ocrloop capture=$captureMs ocr=$ocrMs " +
+                                "ocrChars=${text.length} textChanged=true " +
+                                "cycle=${SystemClock.elapsedRealtime() - cycleStart}",
+                        )
+                        idleRounds = 0
+                    } else {
+                        idleRounds++
+                        if (idleRounds % IDLE_LOG_ROUNDS == 0) {
+                            Log.i(
+                                TAG,
+                                "TRANSPROF ocrloopidle rounds=$idleRounds hashChanged=true textChanged=false",
+                            )
+                        }
+                    }
+                } else {
+                    idleRounds++
+                    if (idleRounds % IDLE_LOG_ROUNDS == 0) {
+                        Log.i(
+                            TAG,
+                            "TRANSPROF ocrloopidle rounds=$idleRounds hashChanged=false",
+                        )
                     }
                 }
                 delay(FRAME_INTERVAL_MS)
             }
+            // 采集循环正常退出（stopped）：关掉 Channel 让 worker 一起收尾，
+            // 否则父协程会一直等这个挂在 receive 上的子协程。
+            pendingText.close()
         }
     }
 
@@ -349,6 +406,10 @@ class ScreenTextSessionService : Service() {
                 overlay.updateTranscripts(input = text, output = fragment)
                 ScreenOcrBus.setPreview(input = text, output = fragment)
             }
+        } catch (t: CancellationException) {
+            // 停会话/换区域导致的取消。必须原样上抛：否则会被下面那个
+            // catch (Throwable) 当成翻译失败，把「翻译失败」画到气泡上。
+            throw t
         } catch (t: Throwable) {
             Log.e(TAG, "translate failed", t)
             if (!stopped) {
@@ -508,6 +569,8 @@ class ScreenTextSessionService : Service() {
         private const val NOTIFICATION_ID = 43
         private const val FRAME_INTERVAL_MS = 900L
         private const val MIN_REGION_PX = 48
+        /** TRANSPROF 诊断：空转多少轮汇报一次心跳（900ms × 10 ≈ 9s）。 */
+        private const val IDLE_LOG_ROUNDS = 10
         /** 旋转/折叠后暂停采集的时长，避开投影帧重建期间的乱帧。 */
         private const val DISPLAY_PAUSE_MS = 500L
         private const val DISPLAY_PAUSE_POLL_MS = 100L
