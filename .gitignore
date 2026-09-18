@@ -39,6 +39,10 @@ miuix/
 *.log
 nul
 
+# Locally captured debug logs (adb logcat / gradle dumps; not part of the project)
+log*.txt
+tranprof_*.txt
+
 # Bundled ASR models (fetched by scripts/fetch-models.sh; model.int8.onnx > GitHub 100MB limit)
 app/src/main/assets/models/
 
@@ -51,10 +55,5 @@ tools/
 build_log*.txt
 
 # Promo video tooling / outputs (local only, not part of the project)
-promo/frames/
-promo/test_frames/
-promo/sfx/
-promo/*.wav
-promo/*.mp4
-promo/.env
-promo/__pycache__/
+# Whole directory: it holds the promo pipeline, its renders, and .env (credentials).
+promo/
