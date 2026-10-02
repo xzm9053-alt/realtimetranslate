@@ -19,12 +19,17 @@ enum class TranslationEngineType(
 ) {
     DEEPSEEK(requiresApiKey = true, isLlm = true, keyLabelRes = R.string.settings_deepseek_key),
     ZHIPU(requiresApiKey = true, isLlm = true, keyLabelRes = R.string.settings_zhipu_key),
+    GEMINI(requiresApiKey = true, isLlm = true, keyLabelRes = R.string.settings_gemini_key),
     MICROSOFT(requiresApiKey = false, isLlm = false, keyLabelRes = null),
     GOOGLE_FREE(requiresApiKey = false, isLlm = false, keyLabelRes = null),
-    GOOGLE_API(requiresApiKey = true, isLlm = false, keyLabelRes = R.string.settings_google_key),
     ;
 
     companion object {
+        /**
+         * Stored names are the enum constant names. Anything unrecognised — a fresh
+         * install, or a value from an engine that has since been removed (e.g. the
+         * retired `GOOGLE_API`) — falls back to [DEEPSEEK].
+         */
         fun fromStorage(value: String?): TranslationEngineType =
             entries.firstOrNull { it.name == value } ?: DEEPSEEK
     }

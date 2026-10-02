@@ -33,9 +33,12 @@ object TranslationEngineFactory {
             apiKey = apiKey,
             config = { liveSettings().zhipuConfig() },
         )
+        TranslationEngineType.GEMINI -> GeminiTranslationEngine(
+            apiKey = apiKey,
+            config = { liveSettings().geminiConfig() },
+        )
         TranslationEngineType.MICROSOFT -> MicrosoftFreeTranslationEngine()
         TranslationEngineType.GOOGLE_FREE -> GoogleFreeTranslationEngine()
-        TranslationEngineType.GOOGLE_API -> GoogleApiTranslationEngine(apiKey = apiKey)
     }
 
     /** Convenience overload: pulls the key belonging to [settings]'s engine. */
@@ -52,6 +55,13 @@ object TranslationEngineFactory {
         keys: ApiKeyStore,
         targetLang: String,
     ): Result<String> = create(settings, keys).testConnection(targetLang)
+
+    /** Live model check for the settings screen: which of [candidates] still work. */
+    suspend fun checkModels(
+        settings: UserSettings,
+        keys: ApiKeyStore,
+        candidates: List<String>,
+    ): ModelCheck = create(settings, keys).checkModels(candidates)
 }
 
 private fun UserSettings.deepSeekConfig(): LlmRequestConfig = LlmRequestConfig(
@@ -63,5 +73,11 @@ private fun UserSettings.deepSeekConfig(): LlmRequestConfig = LlmRequestConfig(
 private fun UserSettings.zhipuConfig(): LlmRequestConfig = LlmRequestConfig(
     baseUrl = zhipuBaseUrl.ifBlank { UserSettings.Defaults.ZHIPU_BASE_URL },
     model = zhipuModel.ifBlank { UserSettings.Defaults.ZHIPU_MODEL },
+    thinking = aiDeepThinking,
+)
+
+private fun UserSettings.geminiConfig(): LlmRequestConfig = LlmRequestConfig(
+    baseUrl = geminiBaseUrl.ifBlank { UserSettings.Defaults.GEMINI_BASE_URL },
+    model = geminiModel.ifBlank { UserSettings.Defaults.GEMINI_MODEL },
     thinking = aiDeepThinking,
 )

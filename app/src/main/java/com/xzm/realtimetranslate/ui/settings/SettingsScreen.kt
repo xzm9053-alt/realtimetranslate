@@ -41,6 +41,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -51,6 +52,9 @@ import com.xzm.realtimetranslate.data.OcrScript
 import com.xzm.realtimetranslate.data.SubtitleDisplayMode
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
+import com.xzm.realtimetranslate.translate.ModelAvailability
+import com.xzm.realtimetranslate.translate.ModelProbe
+import com.xzm.realtimetranslate.translate.ModelPresets
 import com.xzm.realtimetranslate.ui.components.PageTitle
 import com.xzm.realtimetranslate.ui.components.SectionCard
 import com.xzm.realtimetranslate.ui.components.SettingSwitchRow
@@ -62,6 +66,9 @@ import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.roundToInt
 
 @Composable
@@ -77,7 +84,9 @@ fun SettingsScreen(
     val zhipuKey by viewModel.zhipuKey.collectAsStateWithLifecycle()
     val zhipuModel by viewModel.zhipuModel.collectAsStateWithLifecycle()
     val zhipuBaseUrl by viewModel.zhipuBaseUrl.collectAsStateWithLifecycle()
-    val googleKey by viewModel.googleKey.collectAsStateWithLifecycle()
+    val geminiKey by viewModel.geminiKey.collectAsStateWithLifecycle()
+    val geminiModel by viewModel.geminiModel.collectAsStateWithLifecycle()
+    val geminiBaseUrl by viewModel.geminiBaseUrl.collectAsStateWithLifecycle()
     val mirrorUrl by viewModel.mirrorUrl.collectAsStateWithLifecycle()
     val hfToken by viewModel.hfToken.collectAsStateWithLifecycle()
     val modelStatus by viewModel.modelStatus.collectAsStateWithLifecycle()
@@ -85,6 +94,10 @@ fun SettingsScreen(
     val downloadProgress by viewModel.downloadProgress.collectAsStateWithLifecycle()
     val testResult by viewModel.testResult.collectAsStateWithLifecycle()
     val testing by viewModel.testing.collectAsStateWithLifecycle()
+    val modelProbes by viewModel.modelProbes.collectAsStateWithLifecycle()
+    val discoveredModels by viewModel.discoveredModels.collectAsStateWithLifecycle()
+    val modelsCheckedAt by viewModel.modelsCheckedAt.collectAsStateWithLifecycle()
+    val checkingModels by viewModel.checkingModels.collectAsStateWithLifecycle()
 
     var revealKey by remember { mutableStateOf(false) }
     val engineType = settings.translationEngine
@@ -146,6 +159,12 @@ fun SettingsScreen(
                     onClick = { viewModel.setEngine(TranslationEngineType.ZHIPU) },
                 )
                 OptionRow(
+                    label = stringResource(R.string.engine_gemini),
+                    summary = stringResource(R.string.engine_gemini_summary),
+                    selected = engineType == TranslationEngineType.GEMINI,
+                    onClick = { viewModel.setEngine(TranslationEngineType.GEMINI) },
+                )
+                OptionRow(
                     label = stringResource(R.string.engine_microsoft),
                     summary = stringResource(R.string.engine_microsoft_summary),
                     selected = engineType == TranslationEngineType.MICROSOFT,
@@ -156,12 +175,6 @@ fun SettingsScreen(
                     summary = stringResource(R.string.engine_google_free_summary),
                     selected = engineType == TranslationEngineType.GOOGLE_FREE,
                     onClick = { viewModel.setEngine(TranslationEngineType.GOOGLE_FREE) },
-                )
-                OptionRow(
-                    label = stringResource(R.string.engine_google_api),
-                    summary = stringResource(R.string.engine_google_api_summary),
-                    selected = engineType == TranslationEngineType.GOOGLE_API,
-                    onClick = { viewModel.setEngine(TranslationEngineType.GOOGLE_API) },
                 )
             }
         }
@@ -183,11 +196,16 @@ fun SettingsScreen(
                                 colors = fieldColors,
                             )
                             RevealKeyButton(revealKey) { revealKey = !revealKey }
-                            EngineTextField(
-                                value = deepSeekModel,
-                                onValueChange = viewModel::updateDeepSeekModel,
-                                labelRes = R.string.settings_deepseek_model,
+                            EngineModelSection(
+                                engineType = engineType,
+                                model = deepSeekModel,
+                                onModelChange = viewModel::updateDeepSeekModel,
+                                probes = modelProbes,
+                                discovered = discoveredModels,
+                                checkedAt = modelsCheckedAt,
+                                checking = checkingModels,
                                 colors = fieldColors,
+                                onCheck = viewModel::checkModels,
                             )
                             EngineTextField(
                                 value = deepSeekBaseUrl,
@@ -205,11 +223,16 @@ fun SettingsScreen(
                                 colors = fieldColors,
                             )
                             RevealKeyButton(revealKey) { revealKey = !revealKey }
-                            EngineTextField(
-                                value = zhipuModel,
-                                onValueChange = viewModel::updateZhipuModel,
-                                labelRes = R.string.settings_zhipu_model,
+                            EngineModelSection(
+                                engineType = engineType,
+                                model = zhipuModel,
+                                onModelChange = viewModel::updateZhipuModel,
+                                probes = modelProbes,
+                                discovered = discoveredModels,
+                                checkedAt = modelsCheckedAt,
+                                checking = checkingModels,
                                 colors = fieldColors,
+                                onCheck = viewModel::checkModels,
                             )
                             EngineTextField(
                                 value = zhipuBaseUrl,
@@ -219,16 +242,33 @@ fun SettingsScreen(
                             )
                             EngineHint(R.string.settings_zhipu_model_hint)
                         }
-                        TranslationEngineType.GOOGLE_API -> {
+                        TranslationEngineType.GEMINI -> {
                             EngineKeyField(
-                                value = googleKey,
-                                onValueChange = viewModel::setGoogleKey,
-                                labelRes = R.string.settings_google_key,
+                                value = geminiKey,
+                                onValueChange = viewModel::setGeminiKey,
+                                labelRes = R.string.settings_gemini_key,
                                 reveal = revealKey,
                                 colors = fieldColors,
                             )
                             RevealKeyButton(revealKey) { revealKey = !revealKey }
-                            EngineHint(R.string.settings_google_api_desc)
+                            EngineModelSection(
+                                engineType = engineType,
+                                model = geminiModel,
+                                onModelChange = viewModel::updateGeminiModel,
+                                probes = modelProbes,
+                                discovered = discoveredModels,
+                                checkedAt = modelsCheckedAt,
+                                checking = checkingModels,
+                                colors = fieldColors,
+                                onCheck = viewModel::checkModels,
+                            )
+                            EngineTextField(
+                                value = geminiBaseUrl,
+                                onValueChange = viewModel::updateGeminiBaseUrl,
+                                labelRes = R.string.settings_gemini_base_url,
+                                colors = fieldColors,
+                            )
+                            EngineHint(R.string.settings_gemini_model_hint)
                         }
                         TranslationEngineType.MICROSOFT -> EngineHint(R.string.settings_microsoft_desc)
                         TranslationEngineType.GOOGLE_FREE -> EngineHint(R.string.settings_google_free_desc)
@@ -713,17 +753,209 @@ fun SettingsScreen(
     }
 }
 
+/**
+ * Model chooser for one AI engine: the built-in presets, then anything the provider
+ * reported that we did not know about, then 「自定义…」 which reveals the free-text field.
+ *
+ * The field also shows by itself whenever the stored model is not one of the rows — a
+ * model this list has never heard of is exactly what that field is for.
+ */
+@Composable
+private fun EngineModelSection(
+    engineType: TranslationEngineType,
+    model: TextFieldValue,
+    onModelChange: (TextFieldValue) -> Unit,
+    probes: Map<String, ModelProbe>,
+    discovered: List<String>,
+    checkedAt: Long,
+    checking: Boolean,
+    colors: TextFieldColors,
+    onCheck: () -> Unit,
+) {
+    val presetCount = ModelPresets.forEngine(engineType).size
+    val models = ModelPresets.visible(engineType, discovered)
+    val current = model.text.trim()
+    // Keyed on the engine so switching engines starts from the preset view again.
+    var customMode by remember(engineType) { mutableStateOf(false) }
+    val showCustomField = customMode || current !in models
+
+    Column {
+        Text(
+            text = stringResource(R.string.settings_model_title),
+            fontSize = 13.sp,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            modifier = Modifier.padding(bottom = 2.dp),
+        )
+        models.forEachIndexed { index, id ->
+            if (index == presetCount && presetCount < models.size) {
+                Text(
+                    text = stringResource(R.string.settings_model_other),
+                    fontSize = 12.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),
+                )
+            }
+            ModelRow(
+                model = id,
+                selected = !customMode && id == current,
+                availability = probes[id]?.availability,
+                onClick = {
+                    customMode = false
+                    onModelChange(TextFieldValue(id))
+                },
+            )
+        }
+        OptionRow(
+            label = stringResource(R.string.settings_model_custom),
+            summary = stringResource(R.string.settings_model_custom_summary),
+            selected = showCustomField,
+            horizontalPadding = 0.dp,
+            onClick = { customMode = true },
+        )
+        if (showCustomField) {
+            EngineTextField(
+                value = model,
+                onValueChange = onModelChange,
+                labelRes = R.string.settings_model_custom_label,
+                colors = colors,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+        EngineHint(R.string.settings_model_presets_hint, Modifier.padding(top = 6.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // The button both greys out and changes its label while running, so a double
+            // tap cannot start a second round of requests.
+            TextButton(
+                text = stringResource(
+                    if (checking) R.string.settings_model_checking else R.string.settings_model_check,
+                ),
+                onClick = { if (!checking) onCheck() },
+                enabled = !checking,
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = if (checkedAt > 0L) {
+                    stringResource(R.string.settings_model_checked_at, formatCheckedAt(checkedAt))
+                } else {
+                    stringResource(R.string.settings_model_never_checked)
+                },
+                fontSize = 12.sp,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            )
+        }
+        // 只有「当前正在用的模型」不通时才展开原因：一堆行的报错正文没人看，
+        // 自己选的那个为什么不行才是用户要的。服务端原话比我们的转述更可信。
+        val probe = probes[current]
+        if (probe != null && probe.availability != ModelAvailability.AVAILABLE &&
+            probe.detail.isNotBlank()
+        ) {
+            Text(
+                text = stringResource(
+                    R.string.settings_model_detail,
+                    probe.detail.take(MAX_DETAIL_CHARS),
+                ),
+                fontSize = 12.sp,
+                color = availabilityStyle(probe.availability).second,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+        EngineHint(R.string.settings_model_check_hint, Modifier.padding(top = 2.dp))
+    }
+}
+
+/** Keeps a provider error body from turning the settings page into a log dump. */
+private const val MAX_DETAIL_CHARS = 160
+
+/** A model the user can pick. A retired one is shown but not selectable. */
+@Composable
+private fun ModelRow(
+    model: String,
+    selected: Boolean,
+    availability: ModelAvailability?,
+    onClick: () -> Unit,
+) {
+    val retired = availability == ModelAvailability.RETIRED
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = !retired, onClick = onClick)
+            .padding(vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = model,
+            modifier = Modifier.weight(1f),
+            fontSize = 14.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            color = when {
+                retired -> MiuixTheme.colorScheme.onSurfaceVariantSummary
+                selected -> Booth.Accent
+                else -> MiuixTheme.colorScheme.onSurface
+            },
+        )
+        if (selected && !retired) {
+            Text(text = "✓", color = Booth.Accent, fontWeight = FontWeight.Bold)
+        }
+        availability?.let { AvailabilityLabel(it) }
+    }
+}
+
+@Composable
+private fun AvailabilityLabel(availability: ModelAvailability) {
+    val (textRes, color) = availabilityStyle(availability)
+    Text(
+        text = stringResource(textRes),
+        fontSize = 12.sp,
+        color = color,
+        modifier = Modifier.padding(start = 8.dp),
+    )
+}
+
+/**
+ * Label and colour for one verdict. Shared so a status's colour cannot say one thing in
+ * the row and another in the detail line below it.
+ *
+ * Red is reserved for a verdict the user must act on (a dead or unreachable model, a
+ * rejected key, an empty account); a transient limit or an inconclusive answer stays
+ * grey, because it is not something to go fix.
+ */
+@Composable
+private fun availabilityStyle(availability: ModelAvailability): Pair<Int, Color> {
+    val scheme = MiuixTheme.colorScheme
+    return when (availability) {
+        ModelAvailability.AVAILABLE -> R.string.model_status_available to Booth.Accent
+        ModelAvailability.RETIRED -> R.string.model_status_retired to scheme.error
+        ModelAvailability.BAD_KEY -> R.string.model_status_bad_key to scheme.error
+        ModelAvailability.NO_BALANCE -> R.string.model_status_no_balance to scheme.error
+        ModelAvailability.RATE_LIMITED ->
+            R.string.model_status_rate_limited to scheme.onSurfaceVariantSummary
+        ModelAvailability.UNKNOWN -> R.string.model_status_unknown to scheme.onSurfaceVariantSummary
+        ModelAvailability.UNREACHABLE ->
+            R.string.model_status_unreachable to scheme.onSurfaceVariantSummary
+    }
+}
+
+/** Absolute rather than relative: a stale check reads better as a date. */
+private fun formatCheckedAt(millis: Long): String =
+    SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(millis))
+
 @Composable
 private fun EngineTextField(
     value: TextFieldValue,
     onValueChange: (TextFieldValue) -> Unit,
     @StringRes labelRes: Int,
     colors: TextFieldColors,
+    modifier: Modifier = Modifier,
 ) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         label = { androidx.compose.material3.Text(stringResource(labelRes)) },
         singleLine = true,
         shape = RoundedCornerShape(16.dp),
@@ -767,26 +999,33 @@ private fun RevealKeyButton(reveal: Boolean, onToggle: () -> Unit) {
 
 /** Small grey explanatory line under an engine's fields. */
 @Composable
-private fun EngineHint(@StringRes textRes: Int) {
+private fun EngineHint(@StringRes textRes: Int, modifier: Modifier = Modifier) {
     Text(
         text = stringResource(textRes),
         fontSize = 13.sp,
         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        modifier = modifier,
     )
 }
 
+/**
+ * @param summary second line; null omits it (used by lists where the label says enough)
+ * @param horizontalPadding overridable because this row is also used inside a column
+ *   that already carries the screen's 16dp inset — the default would double it
+ */
 @Composable
 private fun OptionRow(
     label: String,
-    summary: String,
+    summary: String? = null,
     selected: Boolean,
     onClick: () -> Unit,
+    horizontalPadding: Dp = 16.dp,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = horizontalPadding, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(modifier = Modifier.weight(1f)) {
@@ -796,11 +1035,13 @@ private fun OptionRow(
                     fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                     color = if (selected) Booth.Accent else MiuixTheme.colorScheme.onSurface,
                 )
-                Text(
-                    text = summary,
-                    fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                )
+                if (summary != null) {
+                    Text(
+                        text = summary,
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    )
+                }
             }
         }
         if (selected) {

@@ -27,6 +27,8 @@ data class UserSettings(
     val deepseekBaseUrl: String = Defaults.DEEPSEEK_BASE_URL,
     val zhipuModel: String = Defaults.ZHIPU_MODEL,
     val zhipuBaseUrl: String = Defaults.ZHIPU_BASE_URL,
+    val geminiModel: String = Defaults.GEMINI_MODEL,
+    val geminiBaseUrl: String = Defaults.GEMINI_BASE_URL,
     // Global "deep thinking" switch for AI-style engines (DeepSeek / Zhipu GLM).
     // Off by default: thinking adds ~1.7ms per reasoning character of first-token
     // latency, which is what made DeepSeek feel slow. No effect on the pure
@@ -47,6 +49,13 @@ data class UserSettings(
     val ocrRegionOutlineColor: Long = Defaults.OCR_OUTLINE_COLOR,
     // Border opacity 0.1..1.0 — "明显程度" of the outline.
     val ocrRegionOutlineAlpha: Float = Defaults.OCR_OUTLINE_ALPHA,
+    // Cache of the last live model check, so dead models stay marked across restarts
+    // instead of costing another round of requests. Not a user preference.
+    val discoveredModels: List<String> = emptyList(),
+    /** Model id → [com.xzm.realtimetranslate.translate.ModelAvailability] name. */
+    val modelAvailability: Map<String, String> = emptyMap(),
+    /** Epoch millis of that check; 0 = never run. */
+    val modelsCheckedAt: Long = 0L,
 ) {
     object Defaults {
         // Kept for schema compatibility; the engine now reads DeepSeek settings directly.
@@ -59,6 +68,12 @@ data class UserSettings(
         const val DEEPSEEK_BASE_URL = "https://api.deepseek.com"
         const val ZHIPU_MODEL = "glm-4-flash"
         const val ZHIPU_BASE_URL = "https://open.bigmodel.cn/api/paas/v4"
+        // Gemini via its OpenAI-compatibility layer (the native API has a different
+        // request shape). 3.8 Flash because Google retired the previous default
+        // (gemini-2.5-flash) for new API users with an HTTP 404 — see
+        // migrateGeminiModel and ModelPresets.
+        const val GEMINI_MODEL = "gemini-3.8-flash"
+        const val GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
         const val AI_DEEP_THINKING = false
         const val MODEL_MIRROR_URL = "https://hf-mirror.com"
         const val HF_TOKEN = ""

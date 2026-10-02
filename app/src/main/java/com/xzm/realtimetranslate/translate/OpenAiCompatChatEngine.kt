@@ -3,6 +3,9 @@ package com.xzm.realtimetranslate.translate
 import android.os.SystemClock
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -34,13 +37,16 @@ data class LlmRequestConfig(
 
 /**
  * Shared implementation for OpenAI-compatible chat-completions backends
- * (DeepSeek, Zhipu GLM). Both speak the same protocol: POST
- * `{baseUrl}/chat/completions`, `Authorization: Bearer <key>`, a `data:`-framed
+ * (DeepSeek, Zhipu GLM, Gemini's compatibility layer). All speak the same protocol:
+ * POST `{baseUrl}/chat/completions`, `Authorization: Bearer <key>`, a `data:`-framed
  * SSE stream whose `choices[0].delta.content` carries the running translation.
  *
  * Streaming is done manually over OkHttp so every delta is flushed the moment it
  * arrives. Each emission carries the *cumulative* translation, matching the
  * subtitle UI's rewrite semantics.
+ *
+ * The one thing that is *not* shared is how a provider spells "don't think" — see
+ * [applyThinkingOff].
  */
 abstract class OpenAiCompatChatEngine(
     protected val apiKey: String,
@@ -56,6 +62,17 @@ abstract class OpenAiCompatChatEngine(
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
+    /**
+     * Shares [client]'s connection pool but with tight timeouts: a model probe blocks
+     * the settings screen, and one hung model must not hold it for the translation
+     * client's full 60-second read timeout. Probes run in parallel, so this is the
+     * check's whole wall clock.
+     */
+    private val probeClient = client.newBuilder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(20, TimeUnit.SECONDS)
+        .build()
+
     // 会话内翻译历史（原文→译文），供上下文感知翻译。引擎按会话创建，天然随会话重置。
     private val history = ArrayDeque<Pair<String, String>>()
     private val historyWindow = 4
@@ -64,9 +81,10 @@ abstract class OpenAiCompatChatEngine(
     private val reqSeq = AtomicInteger(0)
 
     /**
-     * Latched once a model rejects `thinking.type=disabled` with HTTP 400 — Zhipu's
-     * glm-5.3 family always thinks and refuses to be turned off. Latched so later
-     * sentences don't each waste a round trip on a doomed request.
+     * Latched once a model rejects the thinking-off parameter with HTTP 400 — Zhipu's
+     * glm-5.3 family and Google's Gemini 3 line both always think and refuse to be
+     * turned off. Latched so later sentences don't each waste a round trip on a
+     * doomed request.
      */
     @Volatile
     private var thinkingDisableRejected = false
@@ -170,6 +188,14 @@ abstract class OpenAiCompatChatEngine(
         }
     }.flowOn(Dispatchers.IO)
 
+    /**
+     * Minimal one-shot probe: it verifies the key, the model name and reachability.
+     *
+     * Deliberately does **not** send the thinking-off parameter, unlike [translate].
+     * A model that rejects it (glm-5.3, Gemini 3) would then fail the connection test
+     * even though translation works fine — [executeWithThinkingFallback] retries
+     * without the field, and there is no equivalent fallback here.
+     */
     override suspend fun testConnection(targetLang: String): Result<String> =
         withContext(Dispatchers.IO) {
             runCatching {
@@ -186,13 +212,7 @@ abstract class OpenAiCompatChatEngine(
                         ),
                     )
                 val url = cfg.baseUrl.trim().trimEnd('/') + "/chat/completions"
-                val req = Request.Builder()
-                    .url(url)
-                    .header("Authorization", "Bearer $apiKey")
-                    .header("Content-Type", "application/json")
-                    .post(body.toString().toRequestBody(JSON_MEDIA_TYPE))
-                    .build()
-                client.newCall(req).execute().use { resp ->
+                client.newCall(chatRequest(url, body, client)).execute().use { resp ->
                     if (!resp.isSuccessful) {
                         val err = resp.body?.string().orEmpty()
                         throw IOException("HTTP ${resp.code}: ${err.take(300)}")
@@ -219,10 +239,101 @@ abstract class OpenAiCompatChatEngine(
         }
 
     /**
-     * Sends the request, retrying once without the `thinking` field if the model
-     * rejects it. A 400 from a request that carried `thinking.type=disabled` means
-     * the model forces thinking (Zhipu glm-5.3 answers HTTP 400 / code 1210); the
-     * field is then latched off for the lifetime of this engine.
+     * Asks the provider which of [candidates] still work, by calling each one.
+     *
+     * Listing models cannot answer that question: a provider keeps a retired model in
+     * its catalogue while every call to it returns 404 — Google did exactly that with
+     * `gemini-2.5-flash`, which is why this checks liveness instead of names.
+     */
+    override suspend fun checkModels(candidates: List<String>): ModelCheck =
+        withContext(Dispatchers.IO) {
+            val cfg = config()
+            // Best effort, and deliberately unable to affect the verdicts below: Google's
+            // compatibility layer has been reported to answer 401 on /models even with a
+            // working key.
+            val discovered = runCatching { fetchModelIds(cfg) }.getOrDefault(emptyList())
+            val probes = coroutineScope {
+                candidates.distinct()
+                    .map { model -> async { model to probeModel(cfg, model) } }
+                    .awaitAll()
+                    .toMap()
+            }
+            ModelCheck(probes = probes, discovered = discovered)
+        }
+
+    /**
+     * One minimal request to find out whether [model] is really served.
+     *
+     * Like [testConnection], this deliberately omits the thinking-off parameter: a model
+     * that rejects it would otherwise be reported as unavailable, which is the opposite
+     * of the truth.
+     */
+    private fun probeModel(cfg: LlmRequestConfig, model: String): ModelProbe {
+        val body = JSONObject()
+            .put("model", model)
+            .put("stream", false)
+            .put("max_tokens", 16)
+            .put(
+                "messages",
+                JSONArray().put(JSONObject().put("role", "user").put("content", "ping")),
+            )
+        // runCatching, not just an IOException catch: the probes run in parallel inside
+        // one coroutineScope, so anything thrown here would cancel the other models'
+        // verdicts as well. One odd model must not cost the whole check.
+        return runCatching {
+            val url = cfg.baseUrl.trim().trimEnd('/') + "/chat/completions"
+            probeClient.newCall(chatRequest(url, body, probeClient)).execute().use { resp ->
+                val text = resp.body?.string().orEmpty()
+                val availability = ModelAvailability.fromHttp(resp.code, text)
+                Log.i(logTag, "MODELPROBE model=$model code=${resp.code} -> $availability")
+                ModelProbe(
+                    availability = availability,
+                    detail = if (availability == ModelAvailability.AVAILABLE) "" else text.take(300),
+                )
+            }
+        }.getOrElse { e ->
+            Log.w(logTag, "MODELPROBE model=$model 失败：${e.javaClass.simpleName}: ${e.message}")
+            ModelProbe(
+                availability = if (e is IOException) {
+                    ModelAvailability.UNREACHABLE
+                } else {
+                    ModelAvailability.UNKNOWN
+                },
+                detail = e.message.orEmpty(),
+            )
+        }
+    }
+
+    /** The provider's own catalogue, OpenAI-shaped (`data[].id`). */
+    private fun fetchModelIds(cfg: LlmRequestConfig): List<String> {
+        val req = Request.Builder()
+            .url(cfg.baseUrl.trim().trimEnd('/') + "/models")
+            .header("Authorization", "Bearer $apiKey")
+            .get()
+            .build()
+        probeClient.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) throw IOException("HTTP ${resp.code}")
+            val data = JSONObject(resp.body!!.string()).optJSONArray("data") ?: return emptyList()
+            return (0 until data.length())
+                // `as? String` rather than optString: org.json turns a JSON null into the
+                // literal "null", which would then be offered as a model name.
+                .mapNotNull { data.optJSONObject(it)?.opt("id") as? String }
+        }
+    }
+
+    private fun chatRequest(url: String, body: JSONObject, client: OkHttpClient): Request =
+        Request.Builder()
+            .url(url)
+            .header("Authorization", "Bearer $apiKey")
+            .header("Content-Type", "application/json")
+            .post(body.toString().toRequestBody(JSON_MEDIA_TYPE))
+            .build()
+
+    /**
+     * Sends the request, retrying once without the thinking-off parameter if the model
+     * rejects it. A 400 from a request that carried one means the model forces thinking
+     * (Zhipu glm-5.3 answers HTTP 400 / code 1210; Gemini 3 refuses to turn off too);
+     * the parameter is then latched off for the lifetime of this engine.
      *
      * Safe to retry: a 400 produces no `data:` frames, so nothing has been emitted.
      */
@@ -234,19 +345,13 @@ abstract class OpenAiCompatChatEngine(
         while (true) {
             val disableThinking = !cfg.thinking && !thinkingDisableRejected
             val body = buildBody(cfg, messages, disableThinking)
-            val req = Request.Builder()
-                .url(url)
-                .header("Authorization", "Bearer $apiKey")
-                .header("Content-Type", "application/json")
-                .post(body.toString().toRequestBody(JSON_MEDIA_TYPE))
-                .build()
-            val resp = client.newCall(req).execute()
+            val resp = client.newCall(chatRequest(url, body, client)).execute()
             if (resp.isSuccessful || !disableThinking || resp.code != 400) return resp
             resp.close()
             thinkingDisableRejected = true
             Log.w(
                 logTag,
-                "$providerName rejected thinking.type=disabled (HTTP 400) — " +
+                "$providerName rejected the thinking-off parameter (HTTP 400) — " +
                     "retrying without it; model ${cfg.model} appears to force thinking",
             )
         }
@@ -265,9 +370,21 @@ abstract class OpenAiCompatChatEngine(
         // 想完才吐译文，首字延迟 = 思考时间，可达 17.6s，而译文本身只有 24~54 字。
         // 翻译是典型的低延迟任务，关掉思考首字延迟降到几百毫秒。
         // 注意：思考开启时 temperature 是被忽略的，关掉后它才真正生效。
-        if (disableThinking) body.put("thinking", JSONObject().put("type", "disabled"))
+        if (disableThinking) applyThinkingOff(body)
         body.put("messages", messages)
         return body
+    }
+
+    /**
+     * Writes this provider's "don't think" parameter into [body].
+     *
+     * Default is DeepSeek's and Zhipu's shared spelling, `{"thinking":{"type":"disabled"}}`.
+     * Providers that spell it differently override this — see [GeminiTranslationEngine],
+     * where the compatibility layer expects a flat `reasoning_effort` and would silently
+     * ignore a `thinking` object.
+     */
+    protected open fun applyThinkingOff(body: JSONObject) {
+        body.put("thinking", JSONObject().put("type", "disabled"))
     }
 
     private fun buildMessages(text: String, target: String): JSONArray {

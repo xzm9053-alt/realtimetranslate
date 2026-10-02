@@ -37,9 +37,10 @@ class TranslationEngineTypeTest {
         assertFalse(TranslationEngineType.GOOGLE_FREE.requiresApiKey)
         assertFalse(TranslationEngineType.GOOGLE_FREE.isLlm)
 
-        assertTrue(TranslationEngineType.GOOGLE_API.requiresApiKey)
-        // Cloud Translation is a plain API — the thinking switch must stay greyed out.
-        assertFalse(TranslationEngineType.GOOGLE_API.isLlm)
+        // Gemini is an LLM reached through an OpenAI-compatible layer, so unlike the
+        // plain translation APIs the thinking switch must stay live for it.
+        assertTrue(TranslationEngineType.GEMINI.requiresApiKey)
+        assertTrue(TranslationEngineType.GEMINI.isLlm)
     }
 
     @Test
@@ -47,11 +48,19 @@ class TranslationEngineTypeTest {
         TranslationEngineType.entries.forEach { type ->
             assertEquals(type, TranslationEngineType.fromStorage(type.name))
         }
-        // Absent key (fresh install) and stale values from a removed engine.
+        // Absent key (fresh install).
         assertEquals(TranslationEngineType.DEEPSEEK, TranslationEngineType.fromStorage(null))
         assertEquals(TranslationEngineType.DEEPSEEK, TranslationEngineType.fromStorage(""))
-        assertEquals(TranslationEngineType.DEEPSEEK, TranslationEngineType.fromStorage("GEMINI"))
+        assertEquals(TranslationEngineType.DEEPSEEK, TranslationEngineType.fromStorage("NOT_AN_ENGINE"))
         // Pre-existing installs stored the old two-value names — those must still load.
         assertEquals(TranslationEngineType.MICROSOFT, TranslationEngineType.fromStorage("MICROSOFT"))
+    }
+
+    @Test
+    fun `a value from a removed engine falls back instead of crashing`() {
+        // GOOGLE_API (Cloud Translation v2) shipped briefly and was then dropped. An
+        // install that had it selected still has the name on disk; selecting an engine
+        // must never throw, so it degrades to the default.
+        assertEquals(TranslationEngineType.DEEPSEEK, TranslationEngineType.fromStorage("GOOGLE_API"))
     }
 }

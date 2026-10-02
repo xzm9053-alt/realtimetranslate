@@ -66,19 +66,42 @@
     <string name="engine_zhipu_summary">Streaming · glm-4-flash is on the free tier · needs an API key</string>
     <string name="engine_google_free">Google Translate (free)</string>
     <string name="engine_google_free_summary">No key needed · unofficial endpoint, may be rate-limited</string>
-    <string name="engine_google_api">Google Cloud Translation (API Key)</string>
-    <string name="engine_google_api_summary">Official v2 API · needs a GCP key with billing enabled</string>
+    <string name="engine_gemini">Google Gemini</string>
+    <string name="engine_gemini_summary">Streaming · has a free tier · needs a Google AI Studio key</string>
     <string name="settings_deepseek_key">DeepSeek API Key</string>
-    <string name="settings_deepseek_model">Model (default deepseek-v4-flash)</string>
     <string name="settings_deepseek_base_url">API base URL (advanced)</string>
     <string name="settings_zhipu_key">Zhipu GLM API Key</string>
-    <string name="settings_zhipu_model">Model (default glm-4-flash)</string>
     <string name="settings_zhipu_base_url">API base URL (advanced)</string>
     <string name="settings_zhipu_model_hint">Tip: some newer models (the glm-5.3 family) force thinking on and answer error 1210 when asked to turn it off. If that happens the app retries automatically; pick glm-4-flash to avoid it entirely.</string>
-    <string name="settings_google_key">Google Cloud Translation API Key</string>
+    <string name="settings_gemini_key">Gemini API Key (Google AI Studio)</string>
     <string name="settings_microsoft_desc">Uses the free Microsoft Translator endpoint, no key required. It may occasionally be rate-limited; switch to DeepSeek if it stops responding.</string>
     <string name="settings_google_free_desc">Google\'s keyless web endpoint. It is undocumented, so it can change or rate-limit without notice — if it stops working, switch to the API Key channel or Microsoft.</string>
-    <string name="settings_google_api_desc">Create an API key in the Google Cloud Console and enable the Cloud Translation API. A billing account must be linked to the project.</string>
+    <string name="settings_gemini_base_url">API base URL (advanced)</string>
+    <string name="settings_gemini_model_hint">Get a free key at Google AI Studio (aistudio.google.com). Google retired gemini-2.5-flash for new API users, so the presets now use the 3.x Flash line.</string>
+
+    <!-- Model chooser: presets + a live availability check + a free-text escape hatch. -->
+    <string name="settings_model_title">Model</string>
+    <string name="settings_model_custom">Custom…</string>
+    <string name="settings_model_custom_summary">Type a model name yourself</string>
+    <string name="settings_model_custom_label">Model name</string>
+    <string name="settings_model_other">Other models the provider listed</string>
+    <string name="settings_model_presets_hint">This built-in list goes stale as providers retire models. Use Custom… for anything newer.</string>
+    <string name="settings_model_check">Check availability</string>
+    <string name="settings_model_checking">Checking…</string>
+    <string name="settings_model_never_checked">Not checked yet</string>
+    <!-- %1$s is a date and time, e.g. "09-02 14:32". -->
+    <string name="settings_model_checked_at">Last checked %1$s</string>
+    <string name="settings_model_check_hint">Sends one tiny request per model. Providers keep retired models in their published lists, so asking is the only reliable answer.</string>
+    <!-- %1$s is the provider's raw error text, already truncated. -->
+    <string name="settings_model_detail">Provider said: %1$s</string>
+
+    <string name="model_status_available">Available</string>
+    <string name="model_status_retired">Retired</string>
+    <string name="model_status_bad_key">Key rejected</string>
+    <string name="model_status_no_balance">No balance</string>
+    <string name="model_status_rate_limited">Rate-limited</string>
+    <string name="model_status_unknown">Unconfirmed</string>
+    <string name="model_status_unreachable">No connection</string>
     <string name="settings_ai_thinking">AI deep thinking</string>
     <string name="settings_ai_thinking_summary">Off keeps subtitles fastest. On lets the model reason before translating — usually more accurate, but the first words can take several seconds.</string>
     <string name="settings_ai_thinking_summary_na">The current engine is a plain translation API, so it has no thinking mode.</string>

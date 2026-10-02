@@ -16,4 +16,13 @@ interface TranslationEngine {
 
     /** Cheap connectivity check (no translation needed). */
     suspend fun testConnection(targetLang: String): Result<String>
+
+    /**
+     * Asks the provider which of [candidates] it can actually serve right now, and
+     * (best effort) what else it offers. The settings screen uses this to mark retired
+     * models before the user picks one.
+     *
+     * Engines with no model to choose return an empty [ModelCheck] — the default.
+     */
+    suspend fun checkModels(candidates: List<String>): ModelCheck = ModelCheck()
 }

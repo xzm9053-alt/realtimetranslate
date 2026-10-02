@@ -66,19 +66,42 @@
     <string name="engine_zhipu_summary">流式 · glm-4-flash 属免费档 · 需要 API Key</string>
     <string name="engine_google_free">谷歌翻译（免费）</string>
     <string name="engine_google_free_summary">无需 Key · 非官方端点，可能被限流</string>
-    <string name="engine_google_api">谷歌翻译（API Key）</string>
-    <string name="engine_google_api_summary">官方 v2 API · 需要 GCP Key 并开通结算</string>
+    <string name="engine_gemini">谷歌 Gemini</string>
+    <string name="engine_gemini_summary">流式 · 有免费额度 · 需要 Google AI Studio 的 Key</string>
     <string name="settings_deepseek_key">DeepSeek API Key</string>
-    <string name="settings_deepseek_model">模型（默认 deepseek-v4-flash）</string>
     <string name="settings_deepseek_base_url">API 地址（高级）</string>
     <string name="settings_zhipu_key">智谱 GLM API Key</string>
-    <string name="settings_zhipu_model">模型（默认 glm-4-flash）</string>
     <string name="settings_zhipu_base_url">API 地址（高级）</string>
     <string name="settings_zhipu_model_hint">提示：部分新模型（glm-5.3 系列）强制开启思考，关闭时会返回错误码 1210。遇到时 App 会自动重试；改用 glm-4-flash 可完全避开。</string>
-    <string name="settings_google_key">谷歌翻译 API Key</string>
+    <string name="settings_gemini_key">Gemini API Key（Google AI Studio）</string>
     <string name="settings_microsoft_desc">使用微软免费翻译端点，无需 Key。偶有限流，失灵时请切换到 DeepSeek。</string>
-    <string name="settings_google_free_desc">调用谷歌无需 Key 的网页端点。它是非官方接口，可能随时变更或被限流——失灵时请改用「谷歌翻译（API Key）」或微软。</string>
-    <string name="settings_google_api_desc">在 Google Cloud Console 创建 API Key，并启用 Cloud Translation API；项目需绑定结算账号。</string>
+    <string name="settings_google_free_desc">调用谷歌无需 Key 的网页端点。它是非官方接口，可能随时变更或被限流——失灵时请改用「微软翻译」或「Gemini」。</string>
+    <string name="settings_gemini_base_url">API 地址（高级）</string>
+    <string name="settings_gemini_model_hint">在 Google AI Studio（aistudio.google.com）可免费申请 Key。谷歌已对新的 API 用户下架 gemini-2.5-flash，所以预设改用 3.x Flash 系列。</string>
+
+    <!-- 模型选择：预设 + 联网可用性检测 + 自定义输入 -->
+    <string name="settings_model_title">模型</string>
+    <string name="settings_model_custom">自定义…</string>
+    <string name="settings_model_custom_summary">自己填写模型名</string>
+    <string name="settings_model_custom_label">模型名</string>
+    <string name="settings_model_other">官方列表里的其他模型</string>
+    <string name="settings_model_presets_hint">内置列表会随官方下架而过时；更新的模型请用「自定义…」。</string>
+    <string name="settings_model_check">检测可用性</string>
+    <string name="settings_model_checking">检测中…</string>
+    <string name="settings_model_never_checked">尚未检测</string>
+    <!-- %1$s 是日期时间，例如「09-02 14:32」。 -->
+    <string name="settings_model_checked_at">上次检测 %1$s</string>
+    <string name="settings_model_check_hint">对每个模型发一个极小的请求。官方列表里会一直留着已经调不通的模型，所以只能靠问。</string>
+    <!-- %1$s 是服务端返回的原始报错文本（已截断）。 -->
+    <string name="settings_model_detail">服务端返回：%1$s</string>
+
+    <string name="model_status_available">可用</string>
+    <string name="model_status_retired">已下架</string>
+    <string name="model_status_bad_key">Key 被拒</string>
+    <string name="model_status_no_balance">余额不足</string>
+    <string name="model_status_rate_limited">被限流</string>
+    <string name="model_status_unknown">未确认</string>
+    <string name="model_status_unreachable">连不上</string>
     <string name="settings_ai_thinking">AI 深度思考</string>
     <string name="settings_ai_thinking_summary">关闭时字幕最快。开启后模型先推理再翻译，通常更准，但开头几个字可能要等几秒。</string>
     <string name="settings_ai_thinking_summary_na">当前引擎是纯翻译 API，没有思考模式。</string>

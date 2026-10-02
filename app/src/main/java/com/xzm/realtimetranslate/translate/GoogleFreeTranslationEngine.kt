@@ -16,8 +16,8 @@ import java.util.concurrent.TimeUnit
  * Google Translate's keyless web endpoint — no API key, no GCP project.
  *
  * This is the endpoint the browser widget talks to. It is undocumented, so it can
- * change or rate-limit without notice; [GoogleApiTranslationEngine] is the supported
- * channel and users who get 403/429 are pointed at it.
+ * change or rate-limit without notice — users who get 403/429 are pointed at the
+ * other engines instead.
  *
  * Non-streaming: the endpoint answers with the whole translation in one response,
  * which the subtitle UI handles through its "whole sentence" branch (same as
@@ -78,18 +78,18 @@ class GoogleFreeTranslationEngine : TranslationEngine {
                 if (piece is String) builder.append(piece)
             }
             if (builder.isEmpty()) throw IOException("谷歌翻译（免费）响应解析失败")
-            // Deliberately NOT unescaped: this endpoint returns plain text, so running
-            // the HTML decoder over it would corrupt source text that legitimately
-            // contains "&amp;" or "&#39;". Only the v2 API channel escapes its output.
+            // Deliberately NOT HTML-unescaped: this endpoint returns plain text, so
+            // decoding it would corrupt source text that legitimately contains
+            // "&amp;" or "&#39;" — turning those into "&" and "'" the user never typed.
             builder.toString()
         }
     }
 
     private fun errorMessage(code: Int, body: String): String = when (code) {
         429 -> "谷歌翻译（免费）已被限流（HTTP 429），请稍后再试，" +
-            "或改用「谷歌翻译（API Key）」/ 微软翻译"
+            "或改用「微软翻译」/「Gemini」"
         403 -> "谷歌翻译（免费）端点拒绝访问（HTTP 403），该免费端点可能已变更，" +
-            "建议改用「谷歌翻译（API Key）」通道"
+            "建议改用「微软翻译」或配置一个 API Key 引擎（Gemini / 智谱 / DeepSeek）"
         else -> "谷歌翻译（免费）HTTP $code: ${body.take(300)}"
     }
 

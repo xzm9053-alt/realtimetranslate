@@ -38,6 +38,8 @@ class UserSettingsRepository(private val context: Context) {
         val deepseekBaseUrl = stringPreferencesKey("deepseek_base_url")
         val zhipuModel = stringPreferencesKey("zhipu_model")
         val zhipuBaseUrl = stringPreferencesKey("zhipu_base_url")
+        val geminiModel = stringPreferencesKey("gemini_model")
+        val geminiBaseUrl = stringPreferencesKey("gemini_base_url")
         val aiDeepThinking = booleanPreferencesKey("ai_deep_thinking")
         val modelMirrorUrl = stringPreferencesKey("model_mirror_url")
         val huggingfaceToken = stringPreferencesKey("huggingface_token")
@@ -49,6 +51,9 @@ class UserSettingsRepository(private val context: Context) {
         val ocrRegionOutlineEnabled = booleanPreferencesKey("ocr_region_outline_enabled")
         val ocrRegionOutlineColor = longPreferencesKey("ocr_region_outline_color")
         val ocrRegionOutlineAlpha = floatPreferencesKey("ocr_region_outline_alpha")
+        val discoveredModels = stringPreferencesKey("discovered_models")
+        val modelAvailability = stringPreferencesKey("model_availability")
+        val modelsCheckedAt = longPreferencesKey("models_checked_at")
     }
 
     val settings: Flow<UserSettings> = context.dataStore.data.map { prefs ->
@@ -77,6 +82,8 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.deepseekBaseUrl] = next.deepseekBaseUrl
             prefs[Keys.zhipuModel] = next.zhipuModel
             prefs[Keys.zhipuBaseUrl] = next.zhipuBaseUrl
+            prefs[Keys.geminiModel] = next.geminiModel
+            prefs[Keys.geminiBaseUrl] = next.geminiBaseUrl
             prefs[Keys.aiDeepThinking] = next.aiDeepThinking
             prefs[Keys.modelMirrorUrl] = next.modelMirrorUrl
             prefs[Keys.huggingfaceToken] = next.huggingfaceToken
@@ -88,6 +95,9 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.ocrRegionOutlineEnabled] = next.ocrRegionOutlineEnabled
             prefs[Keys.ocrRegionOutlineColor] = next.ocrRegionOutlineColor
             prefs[Keys.ocrRegionOutlineAlpha] = next.ocrRegionOutlineAlpha
+            prefs[Keys.discoveredModels] = ModelCacheCodec.encodeList(next.discoveredModels)
+            prefs[Keys.modelAvailability] = ModelCacheCodec.encodeMap(next.modelAvailability)
+            prefs[Keys.modelsCheckedAt] = next.modelsCheckedAt
         }
     }
 
@@ -125,6 +135,8 @@ class UserSettingsRepository(private val context: Context) {
         deepseekBaseUrl = this[Keys.deepseekBaseUrl] ?: UserSettings.Defaults.DEEPSEEK_BASE_URL,
         zhipuModel = this[Keys.zhipuModel] ?: UserSettings.Defaults.ZHIPU_MODEL,
         zhipuBaseUrl = this[Keys.zhipuBaseUrl] ?: UserSettings.Defaults.ZHIPU_BASE_URL,
+        geminiModel = migrateGeminiModel(this[Keys.geminiModel]),
+        geminiBaseUrl = this[Keys.geminiBaseUrl] ?: UserSettings.Defaults.GEMINI_BASE_URL,
         // Absent key (existing installs) → Defaults, i.e. false. No migration needed.
         aiDeepThinking = this[Keys.aiDeepThinking] ?: UserSettings.Defaults.AI_DEEP_THINKING,
         modelMirrorUrl = this[Keys.modelMirrorUrl] ?: UserSettings.Defaults.MODEL_MIRROR_URL,
@@ -140,6 +152,9 @@ class UserSettingsRepository(private val context: Context) {
             ?: UserSettings.Defaults.OCR_OUTLINE_COLOR,
         ocrRegionOutlineAlpha = this[Keys.ocrRegionOutlineAlpha]
             ?: UserSettings.Defaults.OCR_OUTLINE_ALPHA,
+        discoveredModels = ModelCacheCodec.decodeList(this[Keys.discoveredModels]),
+        modelAvailability = ModelCacheCodec.decodeMap(this[Keys.modelAvailability]),
+        modelsCheckedAt = this[Keys.modelsCheckedAt] ?: 0L,
     )
 
     /** Migrate the pre-3-option boolean: true→BOTH, false/absent→TRANSLATION. */
@@ -148,4 +163,54 @@ class UserSettingsRepository(private val context: Context) {
             true -> SubtitleDisplayMode.BOTH
             else -> SubtitleDisplayMode.TRANSLATION
         }
+}
+
+/** Shipped as this app's Gemini default until Google retired it for new API users. */
+private const val RETIRED_GEMINI_MODEL = "gemini-2.5-flash"
+
+/**
+ * Changing a shipped default only reaches installs that never stored one — everyone
+ * else keeps whatever is on disk. Without this rewrite an existing install would stay
+ * pinned to the retired model and answer HTTP 404 forever, looking like a broken app
+ * rather than a stale default.
+ */
+internal fun migrateGeminiModel(stored: String?): String =
+    if (stored.isNullOrBlank() || stored == RETIRED_GEMINI_MODEL) {
+        UserSettings.Defaults.GEMINI_MODEL
+    } else {
+        stored
+    }
+
+/**
+ * DataStore holds primitives, so the model-check cache is stored as flat text: one id
+ * per line, and `id<TAB>status` for the availability map.
+ *
+ * Both decoders drop malformed lines instead of failing: a corrupted cache is worth
+ * losing, and losing it must never take the settings screen down with it.
+ */
+internal object ModelCacheCodec {
+
+    fun encodeList(values: List<String>): String =
+        values.filter { it.isNotBlank() }.joinToString("\n")
+
+    fun decodeList(raw: String?): List<String> =
+        raw?.split("\n")?.filter { it.isNotBlank() } ?: emptyList()
+
+    fun encodeMap(values: Map<String, String>): String =
+        values.entries
+            .filter { it.key.isNotBlank() && it.value.isNotBlank() }
+            .joinToString("\n") { "${it.key}\t${it.value}" }
+
+    fun decodeMap(raw: String?): Map<String, String> =
+        raw?.split("\n")
+            ?.mapNotNull { line ->
+                val tab = line.indexOf('\t')
+                if (tab <= 0 || tab == line.length - 1) {
+                    null
+                } else {
+                    line.substring(0, tab) to line.substring(tab + 1)
+                }
+            }
+            ?.toMap()
+            ?: emptyMap()
 }

@@ -72,14 +72,13 @@ class ApiKeyStore(context: Context) {
     }
 
     // ------------------------------------------------------------------
-    // Google Cloud Translation API key (only the official v2 channel needs it;
-    // the keyless GOOGLE_FREE engine does not).
+    // Google AI Studio (Gemini) API key. The keyless GOOGLE_FREE engine needs none.
     // ------------------------------------------------------------------
 
-    fun getGoogleKey(): String = prefs.getString(KEY_GOOGLE, "").orEmpty().trim()
+    fun getGeminiKey(): String = prefs.getString(KEY_GEMINI, "").orEmpty().trim()
 
-    fun setGoogleKey(value: String) {
-        prefs.edit().putString(KEY_GOOGLE, value.trim()).apply()
+    fun setGeminiKey(value: String) {
+        prefs.edit().putString(KEY_GEMINI, value.trim()).apply()
     }
 
     // ------------------------------------------------------------------
@@ -91,7 +90,7 @@ class ApiKeyStore(context: Context) {
     fun getKeyFor(type: TranslationEngineType): String = when (type) {
         TranslationEngineType.DEEPSEEK -> getDeepSeekKey()
         TranslationEngineType.ZHIPU -> getZhipuKey()
-        TranslationEngineType.GOOGLE_API -> getGoogleKey()
+        TranslationEngineType.GEMINI -> getGeminiKey()
         TranslationEngineType.MICROSOFT, TranslationEngineType.GOOGLE_FREE -> ""
     }
 
@@ -99,7 +98,7 @@ class ApiKeyStore(context: Context) {
         when (type) {
             TranslationEngineType.DEEPSEEK -> setDeepSeekKey(value)
             TranslationEngineType.ZHIPU -> setZhipuKey(value)
-            TranslationEngineType.GOOGLE_API -> setGoogleKey(value)
+            TranslationEngineType.GEMINI -> setGeminiKey(value)
             TranslationEngineType.MICROSOFT, TranslationEngineType.GOOGLE_FREE -> Unit
         }
     }
@@ -163,7 +162,7 @@ class ApiKeyStore(context: Context) {
         private const val KEY_API_LIST = "api_key_list"
         private const val KEY_DEEPSEEK = "deepseek_api_key"
         private const val KEY_ZHIPU = "zhipu_api_key"
-        private const val KEY_GOOGLE = "google_api_key"
+        private const val KEY_GEMINI = "gemini_api_key"
         const val MAX_KEYS = 10
     }
 }
