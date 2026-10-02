@@ -25,6 +25,13 @@ data class UserSettings(
     val translationEngine: TranslationEngineType = Defaults.TRANSLATION_ENGINE,
     val deepseekModel: String = Defaults.DEEPSEEK_MODEL,
     val deepseekBaseUrl: String = Defaults.DEEPSEEK_BASE_URL,
+    val zhipuModel: String = Defaults.ZHIPU_MODEL,
+    val zhipuBaseUrl: String = Defaults.ZHIPU_BASE_URL,
+    // Global "deep thinking" switch for AI-style engines (DeepSeek / Zhipu GLM).
+    // Off by default: thinking adds ~1.7ms per reasoning character of first-token
+    // latency, which is what made DeepSeek feel slow. No effect on the pure
+    // translation APIs (Microsoft / Google) — see TranslationEngineType.isLlm.
+    val aiDeepThinking: Boolean = Defaults.AI_DEEP_THINKING,
     val modelMirrorUrl: String = Defaults.MODEL_MIRROR_URL,
     val huggingfaceToken: String = Defaults.HF_TOKEN,
     val historyMode: HistoryMode = Defaults.HISTORY_MODE,
@@ -50,6 +57,9 @@ data class UserSettings(
         const val TARGET_LANGUAGE = "zh-Hans"
         const val DEEPSEEK_MODEL = "deepseek-v4-flash"
         const val DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+        const val ZHIPU_MODEL = "glm-4-flash"
+        const val ZHIPU_BASE_URL = "https://open.bigmodel.cn/api/paas/v4"
+        const val AI_DEEP_THINKING = false
         const val MODEL_MIRROR_URL = "https://hf-mirror.com"
         const val HF_TOKEN = ""
         val TRANSLATION_ENGINE: TranslationEngineType = TranslationEngineType.DEEPSEEK

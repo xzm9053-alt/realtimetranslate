@@ -36,6 +36,9 @@ class UserSettingsRepository(private val context: Context) {
         val translationEngine = stringPreferencesKey("translation_engine")
         val deepseekModel = stringPreferencesKey("deepseek_model")
         val deepseekBaseUrl = stringPreferencesKey("deepseek_base_url")
+        val zhipuModel = stringPreferencesKey("zhipu_model")
+        val zhipuBaseUrl = stringPreferencesKey("zhipu_base_url")
+        val aiDeepThinking = booleanPreferencesKey("ai_deep_thinking")
         val modelMirrorUrl = stringPreferencesKey("model_mirror_url")
         val huggingfaceToken = stringPreferencesKey("huggingface_token")
         val historyMode = stringPreferencesKey("history_mode")
@@ -72,6 +75,9 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.translationEngine] = next.translationEngine.name
             prefs[Keys.deepseekModel] = next.deepseekModel
             prefs[Keys.deepseekBaseUrl] = next.deepseekBaseUrl
+            prefs[Keys.zhipuModel] = next.zhipuModel
+            prefs[Keys.zhipuBaseUrl] = next.zhipuBaseUrl
+            prefs[Keys.aiDeepThinking] = next.aiDeepThinking
             prefs[Keys.modelMirrorUrl] = next.modelMirrorUrl
             prefs[Keys.huggingfaceToken] = next.huggingfaceToken
             prefs[Keys.historyMode] = next.historyMode.name
@@ -117,6 +123,10 @@ class UserSettingsRepository(private val context: Context) {
         translationEngine = TranslationEngineType.fromStorage(this[Keys.translationEngine]),
         deepseekModel = this[Keys.deepseekModel] ?: UserSettings.Defaults.DEEPSEEK_MODEL,
         deepseekBaseUrl = this[Keys.deepseekBaseUrl] ?: UserSettings.Defaults.DEEPSEEK_BASE_URL,
+        zhipuModel = this[Keys.zhipuModel] ?: UserSettings.Defaults.ZHIPU_MODEL,
+        zhipuBaseUrl = this[Keys.zhipuBaseUrl] ?: UserSettings.Defaults.ZHIPU_BASE_URL,
+        // Absent key (existing installs) → Defaults, i.e. false. No migration needed.
+        aiDeepThinking = this[Keys.aiDeepThinking] ?: UserSettings.Defaults.AI_DEEP_THINKING,
         modelMirrorUrl = this[Keys.modelMirrorUrl] ?: UserSettings.Defaults.MODEL_MIRROR_URL,
         huggingfaceToken = this[Keys.huggingfaceToken] ?: UserSettings.Defaults.HF_TOKEN,
         historyMode = HistoryMode.fromStorage(this[Keys.historyMode]),

@@ -146,6 +146,12 @@ fun SettingSwitchRow(
     summary: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    /**
+     * False greys the row out but keeps it visible. Preferred over hiding for switches
+     * that only apply to some engines: a row that silently disappears reads as a lost
+     * setting, while a greyed one reads as "not applicable right now".
+     */
+    enabled: Boolean = true,
 ) {
     Row(
         modifier = Modifier
@@ -155,7 +161,15 @@ fun SettingSwitchRow(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, fontWeight = FontWeight.Medium)
+            Text(
+                text = title,
+                fontWeight = FontWeight.Medium,
+                color = if (enabled) {
+                    Color.Unspecified
+                } else {
+                    MiuixTheme.colorScheme.disabledOnSurface
+                },
+            )
             Box(modifier = Modifier.height(2.dp))
             Text(
                 text = summary,
@@ -164,6 +178,10 @@ fun SettingSwitchRow(
             )
         }
         Box(modifier = Modifier.width(12.dp))
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+        )
     }
 }

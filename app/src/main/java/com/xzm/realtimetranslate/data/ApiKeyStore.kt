@@ -61,7 +61,52 @@ class ApiKeyStore(context: Context) {
         prefs.edit().putString(KEY_DEEPSEEK, value.trim()).apply()
     }
 
-    fun hasDeepSeekKey(): Boolean = getDeepSeekKey().isNotEmpty()
+    // ------------------------------------------------------------------
+    // Zhipu GLM API key.
+    // ------------------------------------------------------------------
+
+    fun getZhipuKey(): String = prefs.getString(KEY_ZHIPU, "").orEmpty().trim()
+
+    fun setZhipuKey(value: String) {
+        prefs.edit().putString(KEY_ZHIPU, value.trim()).apply()
+    }
+
+    // ------------------------------------------------------------------
+    // Google Cloud Translation API key (only the official v2 channel needs it;
+    // the keyless GOOGLE_FREE engine does not).
+    // ------------------------------------------------------------------
+
+    fun getGoogleKey(): String = prefs.getString(KEY_GOOGLE, "").orEmpty().trim()
+
+    fun setGoogleKey(value: String) {
+        prefs.edit().putString(KEY_GOOGLE, value.trim()).apply()
+    }
+
+    // ------------------------------------------------------------------
+    // Engine-agnostic accessors — the single place that maps an engine to its
+    // key, so call sites never hard-code an engine name.
+    // ------------------------------------------------------------------
+
+    /** This engine's key, or "" for engines that need none. */
+    fun getKeyFor(type: TranslationEngineType): String = when (type) {
+        TranslationEngineType.DEEPSEEK -> getDeepSeekKey()
+        TranslationEngineType.ZHIPU -> getZhipuKey()
+        TranslationEngineType.GOOGLE_API -> getGoogleKey()
+        TranslationEngineType.MICROSOFT, TranslationEngineType.GOOGLE_FREE -> ""
+    }
+
+    fun setKeyFor(type: TranslationEngineType, value: String) {
+        when (type) {
+            TranslationEngineType.DEEPSEEK -> setDeepSeekKey(value)
+            TranslationEngineType.ZHIPU -> setZhipuKey(value)
+            TranslationEngineType.GOOGLE_API -> setGoogleKey(value)
+            TranslationEngineType.MICROSOFT, TranslationEngineType.GOOGLE_FREE -> Unit
+        }
+    }
+
+    /** False only when the engine actually needs a key and none is stored. */
+    fun hasKeyFor(type: TranslationEngineType): Boolean =
+        !type.requiresApiKey || getKeyFor(type).isNotEmpty()
 
     /** Legacy helpers used by older call sites. */
     fun getApiKey(): String = getApiKeys().firstOrNull().orEmpty()
@@ -117,6 +162,8 @@ class ApiKeyStore(context: Context) {
         private const val KEY_API = "api_key"
         private const val KEY_API_LIST = "api_key_list"
         private const val KEY_DEEPSEEK = "deepseek_api_key"
+        private const val KEY_ZHIPU = "zhipu_api_key"
+        private const val KEY_GOOGLE = "google_api_key"
         const val MAX_KEYS = 10
     }
 }

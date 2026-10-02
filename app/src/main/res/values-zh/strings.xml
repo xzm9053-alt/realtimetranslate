@@ -62,10 +62,26 @@
     <string name="engine_deepseek_summary">流式高质量 · 需要 API Key</string>
     <string name="engine_microsoft">微软（免费）</string>
     <string name="engine_microsoft_summary">无需 Key · 按句出译文</string>
+    <string name="engine_zhipu">智谱 GLM</string>
+    <string name="engine_zhipu_summary">流式 · glm-4-flash 属免费档 · 需要 API Key</string>
+    <string name="engine_google_free">谷歌翻译（免费）</string>
+    <string name="engine_google_free_summary">无需 Key · 非官方端点，可能被限流</string>
+    <string name="engine_google_api">谷歌翻译（API Key）</string>
+    <string name="engine_google_api_summary">官方 v2 API · 需要 GCP Key 并开通结算</string>
     <string name="settings_deepseek_key">DeepSeek API Key</string>
     <string name="settings_deepseek_model">模型（默认 deepseek-v4-flash）</string>
     <string name="settings_deepseek_base_url">API 地址（高级）</string>
+    <string name="settings_zhipu_key">智谱 GLM API Key</string>
+    <string name="settings_zhipu_model">模型（默认 glm-4-flash）</string>
+    <string name="settings_zhipu_base_url">API 地址（高级）</string>
+    <string name="settings_zhipu_model_hint">提示：部分新模型（glm-5.3 系列）强制开启思考，关闭时会返回错误码 1210。遇到时 App 会自动重试；改用 glm-4-flash 可完全避开。</string>
+    <string name="settings_google_key">谷歌翻译 API Key</string>
     <string name="settings_microsoft_desc">使用微软免费翻译端点，无需 Key。偶有限流，失灵时请切换到 DeepSeek。</string>
+    <string name="settings_google_free_desc">调用谷歌无需 Key 的网页端点。它是非官方接口，可能随时变更或被限流——失灵时请改用「谷歌翻译（API Key）」或微软。</string>
+    <string name="settings_google_api_desc">在 Google Cloud Console 创建 API Key，并启用 Cloud Translation API；项目需绑定结算账号。</string>
+    <string name="settings_ai_thinking">AI 深度思考</string>
+    <string name="settings_ai_thinking_summary">关闭时字幕最快。开启后模型先推理再翻译，通常更准，但开头几个字可能要等几秒。</string>
+    <string name="settings_ai_thinking_summary_na">当前引擎是纯翻译 API，没有思考模式。</string>
     <string name="settings_show">显示</string>
     <string name="settings_hide">隐藏</string>
     <string name="settings_test_engine">保存并测试连接</string>
@@ -174,7 +190,8 @@
     <string name="lang_nl">荷兰语</string>
     <string name="lang_uk">乌克兰语</string>
 
-    <string name="msg_need_deepseek_key">请先在设置中填写 DeepSeek API Key</string>
+    <!-- %1$s 是该引擎的 Key 字段名，例如「智谱 GLM API Key」。 -->
+    <string name="msg_need_api_key">请先在设置中填写 %1$s</string>
     <string name="msg_need_permissions">需要麦克风/通知权限</string>
     <string name="msg_projection_cancelled">用户取消了录屏授权</string>
     <string name="msg_service_start_failed">启动服务失败：%1$s</string>

@@ -6,14 +6,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.xzm.realtimetranslate.LiveTranslateApp
+import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.ApiKeyStore
 import com.xzm.realtimetranslate.data.HistoryMode
 import com.xzm.realtimetranslate.data.OcrScript
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
 import com.xzm.realtimetranslate.data.UserSettingsRepository
-import com.xzm.realtimetranslate.translate.DeepSeekTranslationEngine
-import com.xzm.realtimetranslate.translate.MicrosoftFreeTranslationEngine
+import com.xzm.realtimetranslate.translate.TranslationEngineFactory
 import com.xzm.realtimetranslate.util.DownloadProgress
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -44,6 +44,24 @@ class SettingsViewModel(
         TextFieldValue(UserSettings.Defaults.DEEPSEEK_BASE_URL),
     )
     val deepSeekBaseUrl: StateFlow<TextFieldValue> = _deepSeekBaseUrl.asStateFlow()
+
+    // ---- Zhipu GLM credential + model fields (drafts) ----
+    private val _zhipuKey = MutableStateFlow(TextFieldValue(apiKeyStore.getZhipuKey()))
+    val zhipuKey: StateFlow<TextFieldValue> = _zhipuKey.asStateFlow()
+
+    private val _zhipuModel = MutableStateFlow(
+        TextFieldValue(UserSettings.Defaults.ZHIPU_MODEL),
+    )
+    val zhipuModel: StateFlow<TextFieldValue> = _zhipuModel.asStateFlow()
+
+    private val _zhipuBaseUrl = MutableStateFlow(
+        TextFieldValue(UserSettings.Defaults.ZHIPU_BASE_URL),
+    )
+    val zhipuBaseUrl: StateFlow<TextFieldValue> = _zhipuBaseUrl.asStateFlow()
+
+    // ---- Google Cloud Translation credential (draft) ----
+    private val _googleKey = MutableStateFlow(TextFieldValue(apiKeyStore.getGoogleKey()))
+    val googleKey: StateFlow<TextFieldValue> = _googleKey.asStateFlow()
 
     private val _mirrorUrl = MutableStateFlow(
         TextFieldValue(UserSettings.Defaults.MODEL_MIRROR_URL),
@@ -77,6 +95,12 @@ class SettingsViewModel(
             _deepSeekBaseUrl.value = TextFieldValue(
                 s.deepseekBaseUrl.ifBlank { UserSettings.Defaults.DEEPSEEK_BASE_URL },
             )
+            _zhipuModel.value = TextFieldValue(
+                s.zhipuModel.ifBlank { UserSettings.Defaults.ZHIPU_MODEL },
+            )
+            _zhipuBaseUrl.value = TextFieldValue(
+                s.zhipuBaseUrl.ifBlank { UserSettings.Defaults.ZHIPU_BASE_URL },
+            )
             _mirrorUrl.value = TextFieldValue(
                 s.modelMirrorUrl.ifBlank { UserSettings.Defaults.MODEL_MIRROR_URL },
             )
@@ -103,6 +127,38 @@ class SettingsViewModel(
         update { it.copy(deepseekBaseUrl = value.text.trim()) }
     }
 
+    fun setZhipuKey(value: TextFieldValue) {
+        _zhipuKey.value = value
+    }
+
+    fun updateZhipuModel(value: TextFieldValue) {
+        _zhipuModel.value = value
+        update { it.copy(zhipuModel = value.text.trim()) }
+    }
+
+    fun updateZhipuBaseUrl(value: TextFieldValue) {
+        _zhipuBaseUrl.value = value
+        update { it.copy(zhipuBaseUrl = value.text.trim()) }
+    }
+
+    fun setGoogleKey(value: TextFieldValue) {
+        _googleKey.value = value
+    }
+
+    /**
+     * Global "deep thinking" switch for AI engines. Takes effect on the next sentence —
+     * the engines re-read settings per request, so no session restart is needed.
+     */
+    fun setAiDeepThinking(enabled: Boolean) {
+        update { it.copy(aiDeepThinking = enabled) }
+    }
+
+    /**
+     * Japanese preset. Enabling writes the recommended VAD values into the sliders
+     * (they stay adjustable afterwards); disabling only releases the language lock and
+     * keeps whatever values are there. Either way it lands on the next session, since
+     * the VAD config is fixed when [AsrEngine] is constructed.
+     */
     fun updateMirrorUrl(value: TextFieldValue) {
         _mirrorUrl.value = value
         update { it.copy(modelMirrorUrl = value.text.trim()) }
@@ -143,10 +199,24 @@ class SettingsViewModel(
         }
     }
 
-    fun saveDeepSeekKey() {
-        apiKeyStore.setDeepSeekKey(_deepSeekKey.value.text.trim())
+    /** Persists the selected engine's key draft without running a connection test. */
+    fun saveApiKey() {
+        val engineType = settings.value.translationEngine
+        apiKeyStore.setKeyFor(engineType, draftKeyFor(engineType))
         _testResult.value = "✅"
     }
+
+    /**
+     * The draft text behind each engine's key field. This is the one place that still
+     * switches on the engine — the drafts are three distinct text fields, and there is
+     * no dispatch to share with [TranslationEngineFactory].
+     */
+    private fun draftKeyFor(type: TranslationEngineType): String = when (type) {
+        TranslationEngineType.DEEPSEEK -> _deepSeekKey.value.text
+        TranslationEngineType.ZHIPU -> _zhipuKey.value.text
+        TranslationEngineType.GOOGLE_API -> _googleKey.value.text
+        TranslationEngineType.MICROSOFT, TranslationEngineType.GOOGLE_FREE -> ""
+    }.trim()
 
     fun update(transform: (UserSettings) -> UserSettings) {
         viewModelScope.launch { settingsRepository.update(transform) }
@@ -189,22 +259,17 @@ class SettingsViewModel(
             _testResult.value = "测试中…"
             val s = settingsRepository.settings.first()
             val target = s.targetLanguageCode.ifBlank { "zh-Hans" }
-            val result = when (s.translationEngine) {
-                TranslationEngineType.DEEPSEEK -> {
-                    val key = _deepSeekKey.value.text.trim()
-                    if (key.isBlank()) {
-                        Result.failure(Exception("DeepSeek API Key 为空"))
-                    } else {
-                        apiKeyStore.setDeepSeekKey(key)
-                        DeepSeekTranslationEngine(
-                            apiKey = key,
-                            baseUrl = s.deepseekBaseUrl.ifBlank { "https://api.deepseek.com" },
-                            model = s.deepseekModel.ifBlank { "deepseek-v4-flash" },
-                        ).testConnection(target)
-                    }
-                }
-                TranslationEngineType.MICROSOFT ->
-                    MicrosoftFreeTranslationEngine().testConnection(target)
+            val engineType = s.translationEngine
+            // 先把输入框里的草稿 Key 落盘再测，否则用户刚粘贴的 Key 还没生效。
+            if (engineType.requiresApiKey) {
+                apiKeyStore.setKeyFor(engineType, draftKeyFor(engineType))
+            }
+            val result = if (apiKeyStore.hasKeyFor(engineType)) {
+                // 分派统一走 Factory，这里不再重复 when(engineType)。
+                TranslationEngineFactory.testConnection(s, apiKeyStore, target)
+            } else {
+                val label = app.getString(engineType.keyLabelRes!!)
+                Result.failure(Exception(app.getString(R.string.msg_need_api_key, label)))
             }
             _testResult.value = result.fold(
                 onSuccess = { "✅ $it" },

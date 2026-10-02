@@ -124,11 +124,15 @@ class SubtitleSessionService : Service() {
             currentSettings = app.settingsRepository.settings.first()
             // audioSourceMode already set from Intent EXTRA in onStartCommand.
 
-            // Engine-aware credential gate: DeepSeek needs a key; Microsoft is keyless.
-            if (currentSettings.translationEngine == TranslationEngineType.DEEPSEEK &&
-                !app.apiKeyStore.hasDeepSeekKey()
-            ) {
-                SessionBus.setStatus(SessionBus.Status.Error, "请先在设置中填写 DeepSeek API Key")
+            // Engine-aware credential gate: engines with requiresApiKey need a key,
+            // keyless ones (Microsoft / Google free) pass straight through.
+            val engineType = currentSettings.translationEngine
+            if (!app.apiKeyStore.hasKeyFor(engineType)) {
+                val label = getString(engineType.keyLabelRes!!)
+                SessionBus.setStatus(
+                    SessionBus.Status.Error,
+                    getString(R.string.msg_need_api_key, label),
+                )
                 stopSelf()
                 return@launch
             }

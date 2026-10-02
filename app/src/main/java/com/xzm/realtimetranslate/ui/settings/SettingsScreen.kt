@@ -2,6 +2,7 @@ package com.xzm.realtimetranslate.ui.settings
 
 import android.content.Intent
 import android.net.Uri
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,6 +24,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.TextFieldColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +39,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -71,6 +74,10 @@ fun SettingsScreen(
     val deepSeekKey by viewModel.deepSeekKey.collectAsStateWithLifecycle()
     val deepSeekModel by viewModel.deepSeekModel.collectAsStateWithLifecycle()
     val deepSeekBaseUrl by viewModel.deepSeekBaseUrl.collectAsStateWithLifecycle()
+    val zhipuKey by viewModel.zhipuKey.collectAsStateWithLifecycle()
+    val zhipuModel by viewModel.zhipuModel.collectAsStateWithLifecycle()
+    val zhipuBaseUrl by viewModel.zhipuBaseUrl.collectAsStateWithLifecycle()
+    val googleKey by viewModel.googleKey.collectAsStateWithLifecycle()
     val mirrorUrl by viewModel.mirrorUrl.collectAsStateWithLifecycle()
     val hfToken by viewModel.hfToken.collectAsStateWithLifecycle()
     val modelStatus by viewModel.modelStatus.collectAsStateWithLifecycle()
@@ -80,7 +87,7 @@ fun SettingsScreen(
     val testing by viewModel.testing.collectAsStateWithLifecycle()
 
     var revealKey by remember { mutableStateOf(false) }
-    val isDeepSeek = settings.translationEngine == TranslationEngineType.DEEPSEEK
+    val engineType = settings.translationEngine
     val context = LocalContext.current
 
     // Dark-mode safe field colors (explicit text / cursor colors)
@@ -129,113 +136,164 @@ fun SettingsScreen(
                 OptionRow(
                     label = stringResource(R.string.engine_deepseek),
                     summary = stringResource(R.string.engine_deepseek_summary),
-                    selected = isDeepSeek,
+                    selected = engineType == TranslationEngineType.DEEPSEEK,
                     onClick = { viewModel.setEngine(TranslationEngineType.DEEPSEEK) },
+                )
+                OptionRow(
+                    label = stringResource(R.string.engine_zhipu),
+                    summary = stringResource(R.string.engine_zhipu_summary),
+                    selected = engineType == TranslationEngineType.ZHIPU,
+                    onClick = { viewModel.setEngine(TranslationEngineType.ZHIPU) },
                 )
                 OptionRow(
                     label = stringResource(R.string.engine_microsoft),
                     summary = stringResource(R.string.engine_microsoft_summary),
-                    selected = !isDeepSeek,
+                    selected = engineType == TranslationEngineType.MICROSOFT,
                     onClick = { viewModel.setEngine(TranslationEngineType.MICROSOFT) },
+                )
+                OptionRow(
+                    label = stringResource(R.string.engine_google_free),
+                    summary = stringResource(R.string.engine_google_free_summary),
+                    selected = engineType == TranslationEngineType.GOOGLE_FREE,
+                    onClick = { viewModel.setEngine(TranslationEngineType.GOOGLE_FREE) },
+                )
+                OptionRow(
+                    label = stringResource(R.string.engine_google_api),
+                    summary = stringResource(R.string.engine_google_api_summary),
+                    selected = engineType == TranslationEngineType.GOOGLE_API,
+                    onClick = { viewModel.setEngine(TranslationEngineType.GOOGLE_API) },
                 )
             }
         }
 
         SectionCard {
-            Column(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                if (isDeepSeek) {
-                    OutlinedTextField(
-                        value = deepSeekKey,
-                        onValueChange = viewModel::setDeepSeekKey,
-                        modifier = Modifier.fillMaxWidth(),
-                        label = {
-                            androidx.compose.material3.Text(stringResource(R.string.settings_deepseek_key))
-                        },
-                        singleLine = true,
-                        visualTransformation = if (revealKey) {
-                            VisualTransformation.None
-                        } else {
-                            PasswordVisualTransformation()
-                        },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = fieldColors,
-                    )
-                    TextButton(
-                        text = stringResource(
-                            if (revealKey) R.string.settings_hide else R.string.settings_show,
-                        ),
-                        onClick = { revealKey = !revealKey },
-                    )
-                    OutlinedTextField(
-                        value = deepSeekModel,
-                        onValueChange = viewModel::updateDeepSeekModel,
-                        modifier = Modifier.fillMaxWidth(),
-                        label = {
-                            androidx.compose.material3.Text(stringResource(R.string.settings_deepseek_model))
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(16.dp),
-                        colors = fieldColors,
-                    )
-                    OutlinedTextField(
-                        value = deepSeekBaseUrl,
-                        onValueChange = viewModel::updateDeepSeekBaseUrl,
-                        modifier = Modifier.fillMaxWidth(),
-                        label = {
-                            androidx.compose.material3.Text(stringResource(R.string.settings_deepseek_base_url))
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(16.dp),
-                        colors = fieldColors,
-                    )
-                } else {
-                    Text(
-                        text = stringResource(R.string.settings_microsoft_desc),
-                        fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    )
+            Column {
+                // ---- 当前引擎的专属配置 ----
+                Column(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    when (engineType) {
+                        TranslationEngineType.DEEPSEEK -> {
+                            EngineKeyField(
+                                value = deepSeekKey,
+                                onValueChange = viewModel::setDeepSeekKey,
+                                labelRes = R.string.settings_deepseek_key,
+                                reveal = revealKey,
+                                colors = fieldColors,
+                            )
+                            RevealKeyButton(revealKey) { revealKey = !revealKey }
+                            EngineTextField(
+                                value = deepSeekModel,
+                                onValueChange = viewModel::updateDeepSeekModel,
+                                labelRes = R.string.settings_deepseek_model,
+                                colors = fieldColors,
+                            )
+                            EngineTextField(
+                                value = deepSeekBaseUrl,
+                                onValueChange = viewModel::updateDeepSeekBaseUrl,
+                                labelRes = R.string.settings_deepseek_base_url,
+                                colors = fieldColors,
+                            )
+                        }
+                        TranslationEngineType.ZHIPU -> {
+                            EngineKeyField(
+                                value = zhipuKey,
+                                onValueChange = viewModel::setZhipuKey,
+                                labelRes = R.string.settings_zhipu_key,
+                                reveal = revealKey,
+                                colors = fieldColors,
+                            )
+                            RevealKeyButton(revealKey) { revealKey = !revealKey }
+                            EngineTextField(
+                                value = zhipuModel,
+                                onValueChange = viewModel::updateZhipuModel,
+                                labelRes = R.string.settings_zhipu_model,
+                                colors = fieldColors,
+                            )
+                            EngineTextField(
+                                value = zhipuBaseUrl,
+                                onValueChange = viewModel::updateZhipuBaseUrl,
+                                labelRes = R.string.settings_zhipu_base_url,
+                                colors = fieldColors,
+                            )
+                            EngineHint(R.string.settings_zhipu_model_hint)
+                        }
+                        TranslationEngineType.GOOGLE_API -> {
+                            EngineKeyField(
+                                value = googleKey,
+                                onValueChange = viewModel::setGoogleKey,
+                                labelRes = R.string.settings_google_key,
+                                reveal = revealKey,
+                                colors = fieldColors,
+                            )
+                            RevealKeyButton(revealKey) { revealKey = !revealKey }
+                            EngineHint(R.string.settings_google_api_desc)
+                        }
+                        TranslationEngineType.MICROSOFT -> EngineHint(R.string.settings_microsoft_desc)
+                        TranslationEngineType.GOOGLE_FREE -> EngineHint(R.string.settings_google_free_desc)
+                    }
                 }
 
-                Button(
-                    onClick = {
-                        viewModel.saveDeepSeekKey()
-                        viewModel.testConnection()
-                    },
-                    enabled = !testing,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColorsPrimary(),
-                ) {
-                    Text(
-                        text = stringResource(
-                            if (testing) R.string.settings_testing else R.string.settings_test_engine,
-                        ),
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-                if (isDeepSeek) {
-                    TextButton(
-                        text = stringResource(R.string.settings_save_key_only),
-                        onClick = viewModel::saveDeepSeekKey,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                if (!testResult.isNullOrBlank()) {
-                    val resultText = testResult.orEmpty()
-                    val hasOk = resultText.contains("✅")
-                    val hasFail = resultText.contains("❌")
-                    Text(
-                        text = resultText,
-                        fontSize = 13.sp,
-                        color = when {
-                            hasOk && !hasFail -> Booth.Success
-                            hasFail && !hasOk -> Booth.Danger
-                            else -> MiuixTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                // ---- 思考开关：对所有 AI 类引擎生效，纯翻译 API 常驻置灰 ----
+                SettingSwitchRow(
+                    title = stringResource(R.string.settings_ai_thinking),
+                    summary = stringResource(
+                        if (engineType.isLlm) {
+                            R.string.settings_ai_thinking_summary
+                        } else {
+                            R.string.settings_ai_thinking_summary_na
                         },
-                    )
+                    ),
+                    checked = settings.aiDeepThinking,
+                    onCheckedChange = viewModel::setAiDeepThinking,
+                    enabled = engineType.isLlm,
+                )
+
+                // ---- 连接测试 ----
+                Column(
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Button(
+                        onClick = {
+                            viewModel.saveApiKey()
+                            viewModel.testConnection()
+                        },
+                        enabled = !testing,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColorsPrimary(),
+                    ) {
+                        Text(
+                            text = stringResource(
+                                if (testing) R.string.settings_testing else R.string.settings_test_engine,
+                            ),
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                    if (engineType.requiresApiKey) {
+                        TextButton(
+                            text = stringResource(R.string.settings_save_key_only),
+                            onClick = viewModel::saveApiKey,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    if (!testResult.isNullOrBlank()) {
+                        val resultText = testResult.orEmpty()
+                        val hasOk = resultText.contains("✅")
+                        val hasFail = resultText.contains("❌")
+                        Text(
+                            text = resultText,
+                            fontSize = 13.sp,
+                            color = when {
+                                hasOk && !hasFail -> Booth.Success
+                                hasFail && !hasOk -> Booth.Danger
+                                else -> MiuixTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -324,7 +382,9 @@ fun SettingsScreen(
         )
         SectionCard {
             Column(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                modifier = Modifier
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text(
@@ -651,6 +711,68 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(28.dp))
     }
+}
+
+@Composable
+private fun EngineTextField(
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
+    @StringRes labelRes: Int,
+    colors: TextFieldColors,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = Modifier.fillMaxWidth(),
+        label = { androidx.compose.material3.Text(stringResource(labelRes)) },
+        singleLine = true,
+        shape = RoundedCornerShape(16.dp),
+        colors = colors,
+    )
+}
+
+/** API-key field: masked unless [reveal], and restricted to ASCII. */
+@Composable
+private fun EngineKeyField(
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
+    @StringRes labelRes: Int,
+    reveal: Boolean,
+    colors: TextFieldColors,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = Modifier.fillMaxWidth(),
+        label = { androidx.compose.material3.Text(stringResource(labelRes)) },
+        singleLine = true,
+        visualTransformation = if (reveal) {
+            VisualTransformation.None
+        } else {
+            PasswordVisualTransformation()
+        },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
+        shape = RoundedCornerShape(16.dp),
+        colors = colors,
+    )
+}
+
+@Composable
+private fun RevealKeyButton(reveal: Boolean, onToggle: () -> Unit) {
+    TextButton(
+        text = stringResource(if (reveal) R.string.settings_hide else R.string.settings_show),
+        onClick = onToggle,
+    )
+}
+
+/** Small grey explanatory line under an engine's fields. */
+@Composable
+private fun EngineHint(@StringRes textRes: Int) {
+    Text(
+        text = stringResource(textRes),
+        fontSize = 13.sp,
+        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+    )
 }
 
 @Composable

@@ -236,6 +236,14 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                // 统一凭据门禁：引擎自带 requiresApiKey / keyLabelRes，调用点不再特判具体引擎。
+                // 返回 null 表示可以启动，否则返回要展示的提示文案。
+                fun missingEngineKeyMessage(): String? {
+                    val engine = settings.translationEngine
+                    if (app.apiKeyStore.hasKeyFor(engine)) return null
+                    return getString(R.string.msg_need_api_key, getString(engine.keyLabelRes!!))
+                }
+
                 fun requestStartSubtitle() {
                     try {
                         // Mutual exclusion: starting audio subtitles stops a running OCR session.
@@ -244,14 +252,9 @@ class MainActivity : ComponentActivity() {
                         ) {
                             stopOcr()
                         }
-                        // DeepSeek needs a key; Microsoft free translation is keyless.
-                        val needDeepSeek = settings.translationEngine ==
-                            TranslationEngineType.DEEPSEEK
-                        if (needDeepSeek && !app.apiKeyStore.hasDeepSeekKey()) {
-                            SessionBus.setStatus(
-                                SessionBus.Status.Error,
-                                getString(R.string.msg_need_deepseek_key),
-                            )
+                        // 需要 Key 的引擎没填 Key 就不放行；免 Key 引擎（微软 / 谷歌免费）直接过。
+                        missingEngineKeyMessage()?.let { message ->
+                            SessionBus.setStatus(SessionBus.Status.Error, message)
                             tab = 1
                             return
                         }
@@ -309,14 +312,9 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
-                        // DeepSeek needs a key; Microsoft free translation is keyless.
-                        val needDeepSeek = settings.translationEngine ==
-                            TranslationEngineType.DEEPSEEK
-                        if (needDeepSeek && !app.apiKeyStore.hasDeepSeekKey()) {
-                            ScreenOcrBus.setStatus(
-                                ScreenOcrBus.Status.Error,
-                                getString(R.string.msg_need_deepseek_key),
-                            )
+                        // 同 requestStartSubtitle：统一凭据门禁。
+                        missingEngineKeyMessage()?.let { message ->
+                            ScreenOcrBus.setStatus(ScreenOcrBus.Status.Error, message)
                             tab = 1
                             return
                         }

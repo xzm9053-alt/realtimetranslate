@@ -130,4 +130,8 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+
+    // Plain JVM unit tests for the pure translation logic (language-code mapping,
+    // HTML-entity decoding, engine capability matrix). No Android runtime involved.
+    testImplementation("junit:junit:4.13.2")
 }

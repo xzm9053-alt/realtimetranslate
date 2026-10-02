@@ -3,10 +3,8 @@ package com.xzm.realtimetranslate.live
 import android.os.SystemClock
 import android.util.Log
 import com.xzm.realtimetranslate.LiveTranslateApp
-import com.xzm.realtimetranslate.data.TranslationEngineType
+import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.translate.AsrEngine
-import com.xzm.realtimetranslate.translate.DeepSeekTranslationEngine
-import com.xzm.realtimetranslate.translate.MicrosoftFreeTranslationEngine
 import com.xzm.realtimetranslate.translate.TranslationEngine
 import com.xzm.realtimetranslate.translate.TranslationEngineFactory
 import kotlinx.coroutines.CoroutineScope
@@ -114,10 +112,9 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
             try {
                 val settings = app.settingsRepository.settings.first()
 
-                if (settings.translationEngine == TranslationEngineType.DEEPSEEK &&
-                    !app.apiKeyStore.hasDeepSeekKey()
-                ) {
-                    fail("请先在设置中填写 DeepSeek API Key")
+                val engineType = settings.translationEngine
+                if (!app.apiKeyStore.hasKeyFor(engineType)) {
+                    fail(app.getString(R.string.msg_need_api_key, app.getString(engineType.keyLabelRes!!)))
                     return@launch
                 }
 
@@ -141,9 +138,12 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
                 )
                 asrEngine = engine
 
+                // liveSettings: 引擎每次请求重读设置，模型名 / baseUrl / 思考开关
+                // 改动下一句即生效，不必重启会话。
                 translationEngine = TranslationEngineFactory.create(
                     settings = settings,
-                    apiKey = app.apiKeyStore.getDeepSeekKey(),
+                    keys = app.apiKeyStore,
+                    liveSettings = { app.settingsRepository.settings.first() },
                 )
 
                 setupComplete.set(true)
@@ -179,22 +179,13 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
         withTimeoutOrNull(timeoutMs) {
             val settings = app.settingsRepository.settings.first()
             val target = config.targetLanguageCode.ifBlank { "zh-Hans" }
-            when (settings.translationEngine) {
-                TranslationEngineType.DEEPSEEK -> {
-                    val key = app.apiKeyStore.getDeepSeekKey()
-                    if (key.isBlank()) {
-                        Result.failure(Exception("DeepSeek API Key 为空"))
-                    } else {
-                        DeepSeekTranslationEngine(
-                            apiKey = key,
-                            baseUrl = settings.deepseekBaseUrl.ifBlank { "https://api.deepseek.com" },
-                            model = settings.deepseekModel.ifBlank { "deepseek-v4-flash" },
-                        ).testConnection(target)
-                    }
-                }
-                TranslationEngineType.MICROSOFT -> {
-                    MicrosoftFreeTranslationEngine().testConnection(target)
-                }
+            val engineType = settings.translationEngine
+            if (!app.apiKeyStore.hasKeyFor(engineType)) {
+                val label = app.getString(engineType.keyLabelRes!!)
+                Result.failure(Exception(app.getString(R.string.msg_need_api_key, label)))
+            } else {
+                // 分派统一走 Factory，这里不再重复 when(engineType)。
+                TranslationEngineFactory.testConnection(settings, app.apiKeyStore, target)
             }
         } ?: Result.failure(Exception("测试超时（${timeoutMs}ms）"))
 

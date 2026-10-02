@@ -187,11 +187,15 @@ class ScreenTextSessionService : Service() {
     ) {
         currentSettings = app.settingsRepository.settings.first()
 
-        // Engine-aware credential gate: DeepSeek needs a key; Microsoft is keyless.
-        if (currentSettings.translationEngine == TranslationEngineType.DEEPSEEK &&
-            !app.apiKeyStore.hasDeepSeekKey()
-        ) {
-            ScreenOcrBus.setStatus(ScreenOcrBus.Status.Error, getString(R.string.msg_need_deepseek_key))
+        // Engine-aware credential gate: engines with requiresApiKey need a key,
+        // keyless ones (Microsoft / Google free) pass straight through.
+        val engineType = currentSettings.translationEngine
+        if (!app.apiKeyStore.hasKeyFor(engineType)) {
+            val label = getString(engineType.keyLabelRes!!)
+            ScreenOcrBus.setStatus(
+                ScreenOcrBus.Status.Error,
+                getString(R.string.msg_need_api_key, label),
+            )
             stopSelf()
             return
         }
@@ -305,9 +309,12 @@ class ScreenTextSessionService : Service() {
         ocrJob?.cancel()
         ocrJob = scope.launch {
             val app = application as LiveTranslateApp
+            // liveSettings: 引擎每次请求重读设置，模型名 / baseUrl / 思考开关改动
+            // 下一句即生效（重选区域不会重建引擎，靠这里生效）。
             val engine = TranslationEngineFactory.create(
                 settings = currentSettings,
-                apiKey = app.apiKeyStore.getDeepSeekKey(),
+                keys = app.apiKeyStore,
+                liveSettings = { app.settingsRepository.settings.first() },
             )
             // 翻译 worker：单槽（conflated）Channel = 同时最多一个翻译在飞，且翻译
             // 期间画面又换了只保留最新的那份文本。引擎再慢也冻不住上面的采集节拍，
