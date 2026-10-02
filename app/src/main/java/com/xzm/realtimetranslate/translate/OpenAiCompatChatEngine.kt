@@ -6,9 +6,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
@@ -21,6 +24,7 @@ import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.random.Random
 
 /**
  * Per-request LLM settings. Resolved through a `suspend () -> LlmRequestConfig`
@@ -118,7 +122,11 @@ abstract class OpenAiCompatChatEngine(
         // -------------------------------------------------------------------
 
         try {
-            val resp = executeWithThinkingFallback(cfg, messages, url)
+            val resp = executeWithTransientRetry(
+                maxAttempts = TRANSLATE_RETRY_ATTEMPTS,
+                baseDelayMillis = 400,
+                maxWaitMillis = 2_000,
+            ) { executeWithThinkingFallback(cfg, messages, url) }
             t1 = SystemClock.elapsedRealtime()
             resp.use {
                 if (!resp.isSuccessful) {
@@ -212,10 +220,22 @@ abstract class OpenAiCompatChatEngine(
                         ),
                     )
                 val url = cfg.baseUrl.trim().trimEnd('/') + "/chat/completions"
-                client.newCall(chatRequest(url, body, client)).execute().use { resp ->
+                val resp = executeWithTransientRetry(
+                    maxAttempts = TEST_RETRY_ATTEMPTS,
+                    baseDelayMillis = 600,
+                    maxWaitMillis = 4_000,
+                ) { client.newCall(chatRequest(url, body, client)).execute() }
+                resp.use {
                     if (!resp.isSuccessful) {
                         val err = resp.body?.string().orEmpty()
-                        throw IOException("HTTP ${resp.code}: ${err.take(300)}")
+                        // Retries are already spent by the time this is thrown, so say so
+                        // — "HTTP 503" on its own reads like the user did something wrong.
+                        val hint = if (TransientFailures.isRetryable(resp.code)) {
+                            "（服务端繁忙，已重试仍失败；稍后再试，或换个模型）"
+                        } else {
+                            ""
+                        }
+                        throw IOException("HTTP ${resp.code}$hint: ${err.take(300)}")
                     }
                     val json = JSONObject(resp.body!!.string())
                     val content = json.optJSONArray("choices")
@@ -252,9 +272,13 @@ abstract class OpenAiCompatChatEngine(
             // compatibility layer has been reported to answer 401 on /models even with a
             // working key.
             val discovered = runCatching { fetchModelIds(cfg) }.getOrDefault(emptyList())
+            // Paced: fire the whole list at once and the provider's rate limiter answers
+            // for the burst, which would be reported as the models being unavailable —
+            // the check lying in exactly the direction it exists to prevent.
+            val gate = Semaphore(PROBE_CONCURRENCY)
             val probes = coroutineScope {
                 candidates.distinct()
-                    .map { model -> async { model to probeModel(cfg, model) } }
+                    .map { model -> async { gate.withPermit { model to probeModel(cfg, model) } } }
                     .awaitAll()
                     .toMap()
             }
@@ -268,7 +292,7 @@ abstract class OpenAiCompatChatEngine(
      * that rejects it would otherwise be reported as unavailable, which is the opposite
      * of the truth.
      */
-    private fun probeModel(cfg: LlmRequestConfig, model: String): ModelProbe {
+    private suspend fun probeModel(cfg: LlmRequestConfig, model: String): ModelProbe {
         val body = JSONObject()
             .put("model", model)
             .put("stream", false)
@@ -282,7 +306,15 @@ abstract class OpenAiCompatChatEngine(
         // verdicts as well. One odd model must not cost the whole check.
         return runCatching {
             val url = cfg.baseUrl.trim().trimEnd('/') + "/chat/completions"
-            probeClient.newCall(chatRequest(url, body, probeClient)).execute().use { resp ->
+            // Retried for the same reason the check exists: an overloaded server is not a
+            // verdict about the model, and UNKNOWN is a poor answer when one more ask
+            // would settle it.
+            val resp = executeWithTransientRetry(
+                maxAttempts = PROBE_RETRY_ATTEMPTS,
+                baseDelayMillis = 400,
+                maxWaitMillis = 3_000,
+            ) { probeClient.newCall(chatRequest(url, body, probeClient)).execute() }
+            resp.use {
                 val text = resp.body?.string().orEmpty()
                 val availability = ModelAvailability.fromHttp(resp.code, text)
                 Log.i(logTag, "MODELPROBE model=$model code=${resp.code} -> $availability")
@@ -319,6 +351,46 @@ abstract class OpenAiCompatChatEngine(
                 // literal "null", which would then be offered as a model name.
                 .mapNotNull { data.optJSONObject(it)?.opt("id") as? String }
         }
+    }
+
+    /**
+     * Sends [send], retrying the failures that deserve it.
+     *
+     * A provider answering 503 "model overloaded" is asking to be called again — Google
+     * says as much in its own Gemini guidance, which prescribes exponential backoff with
+     * jitter for 429 and 5xx and says to leave 4xx alone. This app has no queue to absorb
+     * the failure: one unrecovered 503 is one sentence of a live conversation lost.
+     *
+     * If the provider names a cooldown longer than [maxWaitMillis] we stop instead of
+     * sleeping. A subtitle that waits half a minute has failed either way, and the user
+     * is better served by the real error than by a hang.
+     *
+     * Only used where nothing has been read off the response yet, so a retry can never
+     * duplicate emitted text.
+     */
+    private suspend fun executeWithTransientRetry(
+        maxAttempts: Int,
+        baseDelayMillis: Long,
+        maxWaitMillis: Long,
+        send: suspend () -> Response,
+    ): Response {
+        var delayMillis = baseDelayMillis
+        for (attempt in 1..maxAttempts.coerceAtLeast(1)) {
+            val resp = send()
+            if (!TransientFailures.isRetryable(resp.code)) return resp
+            if (attempt == maxAttempts) return resp
+            // peekBody rather than body: if we decide not to retry, the caller still has
+            // to be able to read this response.
+            val peeked = runCatching { resp.peekBody(RETRY_PEEK_BYTES).string() }.getOrDefault("")
+            val asked = TransientFailures.retryDelayMillis(peeked)
+            if (asked != null && asked > maxWaitMillis) return resp
+            Log.w(logTag, "$providerName HTTP ${resp.code} — retrying in ${delayMillis}ms")
+            resp.close()
+            // Jitter, so parallel probes do not all come back at the same instant.
+            delay(delayMillis + Random.nextLong(delayMillis / 2 + 1))
+            delayMillis *= 2
+        }
+        throw IllegalStateException("unreachable: the final attempt always returns")
     }
 
     private fun chatRequest(url: String, body: JSONObject, client: OkHttpClient): Request =
@@ -423,5 +495,23 @@ abstract class OpenAiCompatChatEngine(
 
     private companion object {
         val JSON_MEDIA_TYPE = "application/json".toMediaType()
+
+        /** Enough of an error body to find `google.rpc.RetryInfo`. */
+        const val RETRY_PEEK_BYTES = 2_048L
+
+        /**
+         * One retry for a live subtitle: the second attempt has to land inside the delay
+         * the viewer would notice anyway. Trying harder than this costs more than the
+         * sentence is worth.
+         */
+        const val TRANSLATE_RETRY_ATTEMPTS = 2
+
+        /** The user is watching this one, so it can afford a third attempt. */
+        const val TEST_RETRY_ATTEMPTS = 3
+
+        const val PROBE_RETRY_ATTEMPTS = 2
+
+        /** Keeps a whole catalogue from arriving at the provider in one burst. */
+        const val PROBE_CONCURRENCY = 4
     }
 }

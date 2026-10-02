@@ -56,6 +56,36 @@ enum class ModelAvailability {
 }
 
 /**
+ * Which HTTP failures are worth asking again.
+ *
+ * Google's own guidance for the Gemini API is to back off and retry 429 and 5xx, and to
+ * leave 4xx alone: a rejected key or a retired model does not improve by being asked
+ * twice, while "the model is overloaded" routinely does. The distinction matters more
+ * here than in a batch job — a subtitle stream has no queue to sit in, so one
+ * unrecovered 503 loses that sentence outright.
+ */
+object TransientFailures {
+
+    fun isRetryable(code: Int): Boolean = code == 408 || code == 429 || code in 500..599
+
+    /**
+     * The pause the provider asked for, in millis, or null if it did not say.
+     *
+     * Gemini's OpenAI-compatible endpoint sends no `retry-after` header; the cooldown is
+     * in the error body as `google.rpc.RetryInfo`, whose Duration is spelled like
+     * `"1.5s"`. Read with a regex rather than a JSON parser so this stays plain string
+     * work — which keeps it unit-testable without an `org.json` test dependency.
+     */
+    fun retryDelayMillis(body: String): Long? {
+        val seconds = RETRY_DELAY.find(body)?.groupValues?.get(1)?.toDoubleOrNull() ?: return null
+        if (seconds <= 0.0) return null
+        return (seconds * 1000.0).toLong()
+    }
+
+    private val RETRY_DELAY = Regex("\"retryDelay\"\\s*:\\s*\"([0-9]+(?:\\.[0-9]+)?)s\"")
+}
+
+/**
  * Result of asking a provider about one model.
  *
  * @param detail short provider message for the failures; empty when available. Kept in

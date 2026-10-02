@@ -4,6 +4,7 @@ import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -145,5 +146,48 @@ class ModelCatalogTest {
             ModelPresets.forEngine(TranslationEngineType.GEMINI),
             ModelPresets.visible(TranslationEngineType.GEMINI, emptyList()),
         )
+    }
+
+    // ---- Which failures deserve another attempt. ----
+    // The asymmetry is the point: retrying a client error wastes a round trip on a
+    // request that cannot succeed, while not retrying an overloaded server throws away
+    // a sentence that would have gone through on the next try.
+
+    @Test
+    fun `overload and rate limits are retryable`() {
+        listOf(408, 429, 500, 502, 503, 504, 599).forEach {
+            assertTrue("HTTP $it should be retryable", TransientFailures.isRetryable(it))
+        }
+    }
+
+    @Test
+    fun `client errors are not retryable`() {
+        listOf(200, 400, 401, 402, 403, 404, 422).forEach {
+            assertFalse("HTTP $it should not be retryable", TransientFailures.isRetryable(it))
+        }
+    }
+
+    // ---- Reading the cooldown a provider asks for. ----
+
+    @Test
+    fun `google retry info duration is read out of the error body`() {
+        // Gemini's compat layer sends no retry-after header; the wait is in the body.
+        val body = """
+            {"error":{"code":503,"message":"The model is overloaded.","status":"UNAVAILABLE",
+            "details":[{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"1.5s"}]}}
+        """.trimIndent()
+        assertEquals(1500L, TransientFailures.retryDelayMillis(body))
+        assertEquals(39_000L, TransientFailures.retryDelayMillis("""{"retryDelay":"39s"}"""))
+    }
+
+    @Test
+    fun `an absent or unreadable cooldown reads as no hint`() {
+        assertNull(TransientFailures.retryDelayMillis("""{"error":{"code":503}}"""))
+        assertNull(TransientFailures.retryDelayMillis(""))
+        // Bare seconds with no unit, a unit with no number, and a zero wait are all
+        // "no usable hint" rather than a guess.
+        assertNull(TransientFailures.retryDelayMillis("""{"retryDelay":"1.5"}"""))
+        assertNull(TransientFailures.retryDelayMillis("""{"retryDelay":"s"}"""))
+        assertNull(TransientFailures.retryDelayMillis("""{"retryDelay":"0s"}"""))
     }
 }
