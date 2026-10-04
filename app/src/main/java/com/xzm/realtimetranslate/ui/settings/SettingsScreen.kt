@@ -50,6 +50,7 @@ import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.HistoryMode
 import com.xzm.realtimetranslate.data.OcrScript
 import com.xzm.realtimetranslate.data.SubtitleDisplayMode
+import com.xzm.realtimetranslate.data.ThinkingOffStyle
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
 import com.xzm.realtimetranslate.translate.ModelAvailability
@@ -87,6 +88,9 @@ fun SettingsScreen(
     val geminiKey by viewModel.geminiKey.collectAsStateWithLifecycle()
     val geminiModel by viewModel.geminiModel.collectAsStateWithLifecycle()
     val geminiBaseUrl by viewModel.geminiBaseUrl.collectAsStateWithLifecycle()
+    val genericKey by viewModel.genericKey.collectAsStateWithLifecycle()
+    val genericModel by viewModel.genericModel.collectAsStateWithLifecycle()
+    val genericBaseUrl by viewModel.genericBaseUrl.collectAsStateWithLifecycle()
     val mirrorUrl by viewModel.mirrorUrl.collectAsStateWithLifecycle()
     val hfToken by viewModel.hfToken.collectAsStateWithLifecycle()
     val modelStatus by viewModel.modelStatus.collectAsStateWithLifecycle()
@@ -175,6 +179,12 @@ fun SettingsScreen(
                     summary = stringResource(R.string.engine_google_free_summary),
                     selected = engineType == TranslationEngineType.GOOGLE_FREE,
                     onClick = { viewModel.setEngine(TranslationEngineType.GOOGLE_FREE) },
+                )
+                OptionRow(
+                    label = stringResource(R.string.engine_generic),
+                    summary = stringResource(R.string.engine_generic_summary),
+                    selected = engineType == TranslationEngineType.OPENAI_COMPAT,
+                    onClick = { viewModel.setEngine(TranslationEngineType.OPENAI_COMPAT) },
                 )
             }
         }
@@ -270,6 +280,50 @@ fun SettingsScreen(
                             )
                             EngineHint(R.string.settings_gemini_model_hint)
                         }
+                        TranslationEngineType.OPENAI_COMPAT -> {
+                            EngineKeyField(
+                                value = genericKey,
+                                onValueChange = viewModel::setGenericKey,
+                                labelRes = R.string.settings_generic_key,
+                                reveal = revealKey,
+                                colors = fieldColors,
+                            )
+                            RevealKeyButton(revealKey) { revealKey = !revealKey }
+                            EngineTextField(
+                                value = genericBaseUrl,
+                                onValueChange = viewModel::updateGenericBaseUrl,
+                                labelRes = R.string.settings_generic_base_url,
+                                colors = fieldColors,
+                            )
+                            EngineHint(R.string.settings_generic_hint)
+                            EngineModelSection(
+                                engineType = engineType,
+                                model = genericModel,
+                                onModelChange = viewModel::updateGenericModel,
+                                probes = modelProbes,
+                                discovered = discoveredModels,
+                                checkedAt = modelsCheckedAt,
+                                checking = checkingModels,
+                                colors = fieldColors,
+                                onCheck = viewModel::checkModels,
+                            )
+                            // 三选一而非下拉框：项目里没有下拉组件，OptionRow 与引擎选择
+                            // 是同一套视觉，且下面每个选项都需要一行说明的分量。
+                            Text(
+                                text = stringResource(R.string.settings_generic_thinking_style),
+                                fontSize = 13.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            )
+                            ThinkingOffStyle.entries.forEach { style ->
+                                OptionRow(
+                                    label = stringResource(style.labelRes),
+                                    selected = settings.genericThinkingOffStyle == style,
+                                    horizontalPadding = 0.dp,
+                                    onClick = { viewModel.setGenericThinkingOffStyle(style) },
+                                )
+                            }
+                            EngineHint(R.string.settings_generic_thinking_hint)
+                        }
                         TranslationEngineType.MICROSOFT -> EngineHint(R.string.settings_microsoft_desc)
                         TranslationEngineType.GOOGLE_FREE -> EngineHint(R.string.settings_google_free_desc)
                     }
@@ -313,7 +367,9 @@ fun SettingsScreen(
                             fontWeight = FontWeight.SemiBold,
                         )
                     }
-                    if (engineType.requiresApiKey) {
+                    // showsApiKeyField, not requiresApiKey: the generic engine's key is
+                    // optional but still has a field to save.
+                    if (engineType.showsApiKeyField) {
                         TextButton(
                             text = stringResource(R.string.settings_save_key_only),
                             onClick = viewModel::saveApiKey,
@@ -821,7 +877,16 @@ private fun EngineModelSection(
                 modifier = Modifier.padding(top = 6.dp),
             )
         }
-        EngineHint(R.string.settings_model_presets_hint, Modifier.padding(top = 6.dp))
+        // An engine with no presets has nothing to go stale — telling its user about the
+        // built-in list would describe a list that isn't on screen.
+        EngineHint(
+            if (engineType.hasPresetModels) {
+                R.string.settings_model_presets_hint
+            } else {
+                R.string.settings_generic_model_hint
+            },
+            Modifier.padding(top = 6.dp),
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()

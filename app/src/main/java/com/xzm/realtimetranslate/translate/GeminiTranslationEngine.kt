@@ -1,7 +1,5 @@
 package com.xzm.realtimetranslate.translate
 
-import org.json.JSONObject
-
 /** Log tag kept stable — `adb logcat -s GeminiTranslationEngine:V` filters on it. */
 private const val GEMINI_LOG_TAG = "GeminiTranslationEngine"
 
@@ -14,14 +12,16 @@ private const val GEMINI_LOG_TAG = "GeminiTranslationEngine"
  * ```
  *
  * The compat layer accepts the OpenAI chat-completions shape verbatim — `messages`,
- * `stream:true`, `choices[0].delta.content` — so everything except the thinking knob
- * is inherited from [OpenAiCompatChatEngine]. Key from Google AI Studio.
+ * `stream:true`, `choices[0].delta.content` — so everything is inherited from
+ * [OpenAiCompatChatEngine]. Key from Google AI Studio.
  *
- * **The thinking knob is the reason this class exists.** The compat layer silently
+ * The only thing that differs is how it spells "don't think": the compat layer silently
  * drops parameters it doesn't recognise, so DeepSeek/Zhipu's `{"thinking":{"type":
- * "disabled"}}` would be ignored and the model would think before every sentence —
- * which for subtitles means seconds of dead air per line. Gemini spells it as a flat
- * `reasoning_effort`.
+ * "disabled"}}` would be ignored and the model would think before every sentence — which
+ * for subtitles means seconds of dead air per line. Gemini wants a flat
+ * `reasoning_effort`, declared as `thinkingOffStyle` in `geminiConfig()`. Because that
+ * field is now per-engine config rather than a method override, this class is pure
+ * wiring.
  *
  * **The knob's reach is not fully established.** Third-party reports say the Gemini 3
  * line accepts only `thinking_level` (and `thinkingBudget: 0`) and ignores
@@ -43,9 +43,4 @@ class GeminiTranslationEngine(
     config = config,
     providerName = "Gemini",
     logTag = GEMINI_LOG_TAG,
-) {
-    /** Gemini's compat layer wants a flat `reasoning_effort`, not a `thinking` object. */
-    override fun applyThinkingOff(body: JSONObject) {
-        body.put("reasoning_effort", "none")
-    }
-}
+)

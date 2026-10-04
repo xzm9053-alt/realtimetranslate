@@ -78,6 +78,16 @@
     <string name="settings_google_free_desc">Google\'s keyless web endpoint. It is undocumented, so it can change or rate-limit without notice — if it stops working, switch to the API Key channel or Microsoft.</string>
     <string name="settings_gemini_base_url">API base URL (advanced)</string>
     <string name="settings_gemini_model_hint">Get a free key at Google AI Studio (aistudio.google.com). Google retired gemini-2.5-flash for new API users, so the presets now use the 3.x Flash line.</string>
+    <string name="engine_generic">Custom API (OpenAI-compatible)</string>
+    <string name="engine_generic_summary">Any OpenAI-compatible service · key optional</string>
+    <string name="settings_generic_key">API Key (optional)</string>
+    <string name="settings_generic_base_url">Service base URL</string>
+    <string name="settings_generic_hint">Include the path prefix, e.g. https://your-relay.example.com/v1 — do not add /chat/completions (it is appended for you). Leave the key empty only for local servers that need none, such as Ollama or LM Studio.</string>
+    <string name="settings_generic_thinking_style">\"Disable thinking\" parameter</string>
+    <string name="settings_generic_thinking_none">Don\'t send</string>
+    <string name="settings_generic_thinking_object">thinking object</string>
+    <string name="settings_generic_thinking_effort">reasoning_effort</string>
+    <string name="settings_generic_thinking_hint">Pick whichever shape your provider understands. It is sent only while the AI deep-thinking switch below is off; with \"Don\'t send\" that switch has no effect on this engine.</string>
 
     <!-- Model chooser: presets + a live availability check + a free-text escape hatch. -->
     <string name="settings_model_title">Model</string>
@@ -86,6 +96,7 @@
     <string name="settings_model_custom_label">Model name</string>
     <string name="settings_model_other">Other models the provider listed</string>
     <string name="settings_model_presets_hint">This built-in list goes stale as providers retire models. Use Custom… for anything newer.</string>
+    <string name="settings_generic_model_hint">No built-in list here: Check availability pulls the provider\'s own catalogue from the base URL above, or use Custom… and type a name.</string>
     <string name="settings_model_check">Check availability</string>
     <string name="settings_model_checking">Checking…</string>
     <string name="settings_model_never_checked">Not checked yet</string>

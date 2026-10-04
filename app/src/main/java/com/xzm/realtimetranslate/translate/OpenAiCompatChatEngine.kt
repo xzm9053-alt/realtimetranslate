@@ -2,6 +2,7 @@ package com.xzm.realtimetranslate.translate
 
 import android.os.SystemClock
 import android.util.Log
+import com.xzm.realtimetranslate.data.ThinkingOffStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -37,6 +38,12 @@ data class LlmRequestConfig(
     val model: String,
     /** True = let the model think (we send no `thinking` field; the provider default applies). */
     val thinking: Boolean,
+    /**
+     * How this provider spells "don't think". Defaulted to the DeepSeek/Zhipu object so
+     * the built-in engines keep the exact body they have always sent; the generic engine
+     * overrides it from user settings, where `NONE` means "send nothing at all".
+     */
+    val thinkingOffStyle: ThinkingOffStyle = ThinkingOffStyle.THINKING_OBJECT,
 )
 
 /**
@@ -97,7 +104,7 @@ abstract class OpenAiCompatChatEngine(
         val cfg = config()
         val target = targetLabel(targetLang.ifBlank { "zh-Hans" })
         val messages = buildMessages(text, target)
-        val url = cfg.baseUrl.trim().trimEnd('/') + "/chat/completions"
+        val url = endpoint(cfg, "/chat/completions")
 
         // ---- TRANSPROF 诊断（只读埋点，不影响任何行为）----------------------
         // 每条请求打两行：req# 是发出去时的输入构成，done#/fail# 是耗时拆解。
@@ -219,7 +226,7 @@ abstract class OpenAiCompatChatEngine(
                             JSONObject().put("role", "user").put("content", "ping"),
                         ),
                     )
-                val url = cfg.baseUrl.trim().trimEnd('/') + "/chat/completions"
+                val url = endpoint(cfg, "/chat/completions")
                 val resp = executeWithTransientRetry(
                     maxAttempts = TEST_RETRY_ATTEMPTS,
                     baseDelayMillis = 600,
@@ -305,7 +312,7 @@ abstract class OpenAiCompatChatEngine(
         // one coroutineScope, so anything thrown here would cancel the other models'
         // verdicts as well. One odd model must not cost the whole check.
         return runCatching {
-            val url = cfg.baseUrl.trim().trimEnd('/') + "/chat/completions"
+            val url = endpoint(cfg, "/chat/completions")
             // Retried for the same reason the check exists: an overloaded server is not a
             // verdict about the model, and UNKNOWN is a poor answer when one more ask
             // would settle it.
@@ -339,8 +346,8 @@ abstract class OpenAiCompatChatEngine(
     /** The provider's own catalogue, OpenAI-shaped (`data[].id`). */
     private fun fetchModelIds(cfg: LlmRequestConfig): List<String> {
         val req = Request.Builder()
-            .url(cfg.baseUrl.trim().trimEnd('/') + "/models")
-            .header("Authorization", "Bearer $apiKey")
+            .url(endpoint(cfg, "/models"))
+            .bearerAuth()
             .get()
             .build()
         probeClient.newCall(req).execute().use { resp ->
@@ -393,10 +400,40 @@ abstract class OpenAiCompatChatEngine(
         throw IllegalStateException("unreachable: the final attempt always returns")
     }
 
+    /**
+     * Adds the bearer header only when a key is actually stored.
+     *
+     * The generic slot allows an empty key (Ollama and LM Studio have none), and
+     * `Authorization: Bearer ` with an empty credential is a malformed header some
+     * servers answer with 401 rather than treating as anonymous.
+     */
+    private fun Request.Builder.bearerAuth(): Request.Builder = apply {
+        if (apiKey.isNotBlank()) header("Authorization", "Bearer $apiKey")
+    }
+
+    /**
+     * The full URL for [path] under the configured base URL.
+     *
+     * The check matters for the generic engine, whose base URL has no fallback default:
+     * left empty, the composed URL is a bare path and OkHttp throws
+     * `IllegalArgumentException: Expected URL scheme 'http' or 'https'` — true, but not
+     * something a user can act on. Saying which setting is empty is.
+     */
+    private fun endpoint(cfg: LlmRequestConfig, path: String): String {
+        val url = cfg.baseUrl.trim().trimEnd('/') + path
+        if (!url.startsWith("https://") && !url.startsWith("http://")) {
+            throw IOException(
+                "$providerName 服务地址无效（当前为「${cfg.baseUrl.trim()}」）：" +
+                    "请在设置里填写以 https:// 开头的 Base URL",
+            )
+        }
+        return url
+    }
+
     private fun chatRequest(url: String, body: JSONObject, client: OkHttpClient): Request =
         Request.Builder()
             .url(url)
-            .header("Authorization", "Bearer $apiKey")
+            .bearerAuth()
             .header("Content-Type", "application/json")
             .post(body.toString().toRequestBody(JSON_MEDIA_TYPE))
             .build()
@@ -415,7 +452,12 @@ abstract class OpenAiCompatChatEngine(
         url: String,
     ): Response {
         while (true) {
-            val disableThinking = !cfg.thinking && !thinkingDisableRejected
+            // The style check matters: with NONE the request carries no thinking
+            // parameter at all, so a 400 cannot be about one. Without it the latch
+            // below would fire and resend a byte-identical request.
+            val disableThinking = !cfg.thinking &&
+                !thinkingDisableRejected &&
+                cfg.thinkingOffStyle != ThinkingOffStyle.NONE
             val body = buildBody(cfg, messages, disableThinking)
             val resp = client.newCall(chatRequest(url, body, client)).execute()
             if (resp.isSuccessful || !disableThinking || resp.code != 400) return resp
@@ -442,21 +484,27 @@ abstract class OpenAiCompatChatEngine(
         // 想完才吐译文，首字延迟 = 思考时间，可达 17.6s，而译文本身只有 24~54 字。
         // 翻译是典型的低延迟任务，关掉思考首字延迟降到几百毫秒。
         // 注意：思考开启时 temperature 是被忽略的，关掉后它才真正生效。
-        if (disableThinking) applyThinkingOff(body)
+        if (disableThinking) applyThinkingOff(body, cfg.thinkingOffStyle)
         body.put("messages", messages)
         return body
     }
 
     /**
-     * Writes this provider's "don't think" parameter into [body].
+     * Writes the provider's "don't think" parameter into [body], spelled as [style] asks.
      *
-     * Default is DeepSeek's and Zhipu's shared spelling, `{"thinking":{"type":"disabled"}}`.
-     * Providers that spell it differently override this — see [GeminiTranslationEngine],
-     * where the compatibility layer expects a flat `reasoning_effort` and would silently
-     * ignore a `thinking` object.
+     * `THINKING_OBJECT` is DeepSeek's and Zhipu's shared `{"thinking":{"type":"disabled"}}`;
+     * `REASONING_EFFORT` is the flat form Gemini's compatibility layer expects (it silently
+     * drops a `thinking` object, which is what made Gemini think before every sentence);
+     * `NONE` sends nothing, which is the only safe default for a backend this app has
+     * never seen — callers already skip this entirely for `NONE`.
      */
-    protected open fun applyThinkingOff(body: JSONObject) {
-        body.put("thinking", JSONObject().put("type", "disabled"))
+    protected open fun applyThinkingOff(body: JSONObject, style: ThinkingOffStyle) {
+        when (style) {
+            ThinkingOffStyle.THINKING_OBJECT ->
+                body.put("thinking", JSONObject().put("type", "disabled"))
+            ThinkingOffStyle.REASONING_EFFORT -> body.put("reasoning_effort", "none")
+            ThinkingOffStyle.NONE -> Unit
+        }
     }
 
     private fun buildMessages(text: String, target: String): JSONArray {

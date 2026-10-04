@@ -40,6 +40,9 @@ class UserSettingsRepository(private val context: Context) {
         val zhipuBaseUrl = stringPreferencesKey("zhipu_base_url")
         val geminiModel = stringPreferencesKey("gemini_model")
         val geminiBaseUrl = stringPreferencesKey("gemini_base_url")
+        val genericModel = stringPreferencesKey("generic_model")
+        val genericBaseUrl = stringPreferencesKey("generic_base_url")
+        val genericThinkingOffStyle = stringPreferencesKey("generic_thinking_off_style")
         val aiDeepThinking = booleanPreferencesKey("ai_deep_thinking")
         val modelMirrorUrl = stringPreferencesKey("model_mirror_url")
         val huggingfaceToken = stringPreferencesKey("huggingface_token")
@@ -84,6 +87,9 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.zhipuBaseUrl] = next.zhipuBaseUrl
             prefs[Keys.geminiModel] = next.geminiModel
             prefs[Keys.geminiBaseUrl] = next.geminiBaseUrl
+            prefs[Keys.genericModel] = next.genericModel
+            prefs[Keys.genericBaseUrl] = next.genericBaseUrl
+            prefs[Keys.genericThinkingOffStyle] = next.genericThinkingOffStyle.name
             prefs[Keys.aiDeepThinking] = next.aiDeepThinking
             prefs[Keys.modelMirrorUrl] = next.modelMirrorUrl
             prefs[Keys.huggingfaceToken] = next.huggingfaceToken
@@ -137,6 +143,9 @@ class UserSettingsRepository(private val context: Context) {
         zhipuBaseUrl = this[Keys.zhipuBaseUrl] ?: UserSettings.Defaults.ZHIPU_BASE_URL,
         geminiModel = migrateGeminiModel(this[Keys.geminiModel]),
         geminiBaseUrl = this[Keys.geminiBaseUrl] ?: UserSettings.Defaults.GEMINI_BASE_URL,
+        genericModel = this[Keys.genericModel] ?: UserSettings.Defaults.GENERIC_MODEL,
+        genericBaseUrl = this[Keys.genericBaseUrl] ?: UserSettings.Defaults.GENERIC_BASE_URL,
+        genericThinkingOffStyle = ThinkingOffStyle.fromStorage(this[Keys.genericThinkingOffStyle]),
         // Absent key (existing installs) → Defaults, i.e. false. No migration needed.
         aiDeepThinking = this[Keys.aiDeepThinking] ?: UserSettings.Defaults.AI_DEEP_THINKING,
         modelMirrorUrl = this[Keys.modelMirrorUrl] ?: UserSettings.Defaults.MODEL_MIRROR_URL,

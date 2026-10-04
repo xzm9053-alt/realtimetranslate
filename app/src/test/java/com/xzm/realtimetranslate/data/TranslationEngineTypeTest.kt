@@ -10,16 +10,34 @@ import org.junit.Test
 class TranslationEngineTypeTest {
 
     @Test
-    fun `a key label exists exactly for the engines that need a key`() {
-        // The settings screen and the credential gate both read keyLabelRes without a
-        // null check, so these two flags must never disagree.
+    fun `a key label exists exactly for the engines that show a key field`() {
+        // The settings screen reads keyLabelRes without a null check on the branch where
+        // showsApiKeyField is true, so a field without a label is a crash waiting to
+        // happen; a label without a field is dead copy.
         TranslationEngineType.entries.forEach { type ->
-            if (type.requiresApiKey) {
-                assertNotNull("$type requires a key but has no label", type.keyLabelRes)
+            if (type.showsApiKeyField) {
+                assertNotNull("$type shows a key field but has no label", type.keyLabelRes)
             } else {
-                assertNull("$type needs no key but declares a label", type.keyLabelRes)
+                assertNull("$type has no key field but declares a label", type.keyLabelRes)
             }
         }
+    }
+
+    @Test
+    fun `requiring a key implies showing the field, never the other way round`() {
+        // The gate (requiresApiKey) and the UI (showsApiKeyField) used to be one flag.
+        // They are separate now because of OPENAI_COMPAT: a local Ollama has no key to
+        // give, so a session must start without one while the field stays on screen.
+        // The implication holds in one direction only — that asymmetry is the feature.
+        TranslationEngineType.entries.forEach { type ->
+            if (type.requiresApiKey) {
+                assertTrue("$type gates on a key it never asks for", type.showsApiKeyField)
+            }
+        }
+
+        assertFalse(TranslationEngineType.OPENAI_COMPAT.requiresApiKey)
+        assertTrue(TranslationEngineType.OPENAI_COMPAT.showsApiKeyField)
+        assertEquals(ApiKeyRequirement.OPTIONAL, TranslationEngineType.OPENAI_COMPAT.apiKeyRequirement)
     }
 
     @Test
@@ -41,6 +59,12 @@ class TranslationEngineTypeTest {
         // plain translation APIs the thinking switch must stay live for it.
         assertTrue(TranslationEngineType.GEMINI.requiresApiKey)
         assertTrue(TranslationEngineType.GEMINI.isLlm)
+
+        // The user-supplied endpoint: an LLM (thinking switch live, model picker shown)
+        // whose address and model are unknown at build time, hence no presets.
+        assertFalse(TranslationEngineType.OPENAI_COMPAT.requiresApiKey)
+        assertTrue(TranslationEngineType.OPENAI_COMPAT.isLlm)
+        assertFalse(TranslationEngineType.OPENAI_COMPAT.hasPresetModels)
     }
 
     @Test

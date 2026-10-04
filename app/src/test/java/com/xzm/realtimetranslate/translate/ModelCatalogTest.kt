@@ -90,14 +90,25 @@ class ModelCatalogTest {
     // ---- The preset lists. ----
 
     @Test
-    fun `every LLM engine offers presets and no keyless engine does`() {
+    fun `presets exist exactly for the engines that ship with them`() {
+        // hasPresetModels, not isLlm: the generic engine is an LLM with nothing to ship,
+        // because its models belong to a provider this app has never heard of — its
+        // picker is filled from GET /models instead. Every other engine's flag must
+        // still agree with its list, or the picker would show an empty dropdown.
         TranslationEngineType.entries.forEach { type ->
-            if (type.isLlm) {
-                assertTrue("$type is an LLM but has no presets", ModelPresets.forEngine(type).isNotEmpty())
+            val presets = ModelPresets.forEngine(type)
+            if (type.hasPresetModels) {
+                assertTrue("$type claims presets but ships none", presets.isNotEmpty())
             } else {
-                assertTrue("$type has no model to choose but lists presets", ModelPresets.forEngine(type).isEmpty())
+                assertTrue("$type ships no presets but lists some", presets.isEmpty())
+            }
+            // A non-LLM engine has no model to choose at all.
+            if (!type.isLlm) {
+                assertTrue("$type is not an LLM but lists presets", presets.isEmpty())
             }
         }
+
+        assertTrue(ModelPresets.forEngine(TranslationEngineType.OPENAI_COMPAT).isEmpty())
     }
 
     @Test

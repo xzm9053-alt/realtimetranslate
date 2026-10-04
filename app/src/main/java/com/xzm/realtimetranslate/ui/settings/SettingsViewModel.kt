@@ -10,6 +10,7 @@ import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.ApiKeyStore
 import com.xzm.realtimetranslate.data.HistoryMode
 import com.xzm.realtimetranslate.data.OcrScript
+import com.xzm.realtimetranslate.data.ThinkingOffStyle
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
 import com.xzm.realtimetranslate.data.UserSettingsRepository
@@ -76,6 +77,18 @@ class SettingsViewModel(
     )
     val geminiBaseUrl: StateFlow<TextFieldValue> = _geminiBaseUrl.asStateFlow()
 
+    // ---- Generic OpenAI-compatible engine fields (drafts) ----
+    private val _genericKey = MutableStateFlow(TextFieldValue(apiKeyStore.getGenericKey()))
+    val genericKey: StateFlow<TextFieldValue> = _genericKey.asStateFlow()
+
+    // Blank, not a Defaults constant: this engine has no ship-time endpoint or model, and
+    // pre-filling one would show the user an address that isn't theirs.
+    private val _genericModel = MutableStateFlow(TextFieldValue(""))
+    val genericModel: StateFlow<TextFieldValue> = _genericModel.asStateFlow()
+
+    private val _genericBaseUrl = MutableStateFlow(TextFieldValue(""))
+    val genericBaseUrl: StateFlow<TextFieldValue> = _genericBaseUrl.asStateFlow()
+
     private val _mirrorUrl = MutableStateFlow(
         TextFieldValue(UserSettings.Defaults.MODEL_MIRROR_URL),
     )
@@ -135,6 +148,8 @@ class SettingsViewModel(
             _geminiBaseUrl.value = TextFieldValue(
                 s.geminiBaseUrl.ifBlank { UserSettings.Defaults.GEMINI_BASE_URL },
             )
+            _genericModel.value = TextFieldValue(s.genericModel)
+            _genericBaseUrl.value = TextFieldValue(s.genericBaseUrl)
             _mirrorUrl.value = TextFieldValue(
                 s.modelMirrorUrl.ifBlank { UserSettings.Defaults.MODEL_MIRROR_URL },
             )
@@ -194,6 +209,29 @@ class SettingsViewModel(
     fun updateGeminiBaseUrl(value: TextFieldValue) {
         _geminiBaseUrl.value = value
         update { it.copy(geminiBaseUrl = value.text.trim()) }
+    }
+
+    fun setGenericKey(value: TextFieldValue) {
+        _genericKey.value = value
+    }
+
+    fun updateGenericModel(value: TextFieldValue) {
+        _genericModel.value = value
+        update { it.copy(genericModel = value.text.trim()) }
+    }
+
+    fun updateGenericBaseUrl(value: TextFieldValue) {
+        _genericBaseUrl.value = value
+        update { it.copy(genericBaseUrl = value.text.trim()) }
+    }
+
+    /**
+     * Which spelling of "don't think" the user's endpoint understands. Defaults to
+     * [ThinkingOffStyle.NONE] — sending nothing is the only choice that cannot break a
+     * server this app has never seen.
+     */
+    fun setGenericThinkingOffStyle(style: ThinkingOffStyle) {
+        update { it.copy(genericThinkingOffStyle = style) }
     }
 
     /**
@@ -266,6 +304,7 @@ class SettingsViewModel(
         TranslationEngineType.DEEPSEEK -> _deepSeekKey.value.text
         TranslationEngineType.ZHIPU -> _zhipuKey.value.text
         TranslationEngineType.GEMINI -> _geminiKey.value.text
+        TranslationEngineType.OPENAI_COMPAT -> _genericKey.value.text
         TranslationEngineType.MICROSOFT, TranslationEngineType.GOOGLE_FREE -> ""
     }.trim()
 
@@ -274,6 +313,7 @@ class SettingsViewModel(
         TranslationEngineType.DEEPSEEK -> _deepSeekModel.value.text
         TranslationEngineType.ZHIPU -> _zhipuModel.value.text
         TranslationEngineType.GEMINI -> _geminiModel.value.text
+        TranslationEngineType.OPENAI_COMPAT -> _genericModel.value.text
         TranslationEngineType.MICROSOFT, TranslationEngineType.GOOGLE_FREE -> ""
     }.trim()
 
@@ -289,7 +329,9 @@ class SettingsViewModel(
         if (_checkingModels.value) return
         val engineType = settings.value.translationEngine
         val candidates = modelsToProbe(engineType)
-        if (candidates.isEmpty()) return
+        // 空候选对纯翻译引擎是白跑一趟，但对通用引擎恰恰是最该跑的时候：它没有预设、
+        // 模型框初始为空，只有问一次服务端才能真正填满选择器。
+        if (candidates.isEmpty() && !engineType.isLlm) return
         if (!apiKeyStore.hasKeyFor(engineType)) {
             val label = app.getString(engineType.keyLabelRes!!)
             _testResult.value = "❌ " + app.getString(R.string.msg_need_api_key, label)
@@ -378,7 +420,9 @@ class SettingsViewModel(
             val target = s.targetLanguageCode.ifBlank { "zh-Hans" }
             val engineType = s.translationEngine
             // 先把输入框里的草稿 Key 落盘再测，否则用户刚粘贴的 Key 还没生效。
-            if (engineType.requiresApiKey) {
+            // 判据必须是 showsApiKeyField 而不是 requiresApiKey：通用引擎的 Key 是
+            // 可选的，用 requiresApiKey 会漏掉它，让测试拿旧的空 Key 去连。
+            if (engineType.showsApiKeyField) {
                 apiKeyStore.setKeyFor(engineType, draftKeyFor(engineType))
             }
             val result = if (apiKeyStore.hasKeyFor(engineType)) {

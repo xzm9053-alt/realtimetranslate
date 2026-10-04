@@ -78,6 +78,16 @@
     <string name="settings_google_free_desc">调用谷歌无需 Key 的网页端点。它是非官方接口，可能随时变更或被限流——失灵时请改用「微软翻译」或「Gemini」。</string>
     <string name="settings_gemini_base_url">API 地址（高级）</string>
     <string name="settings_gemini_model_hint">在 Google AI Studio（aistudio.google.com）可免费申请 Key。谷歌已对新的 API 用户下架 gemini-2.5-flash，所以预设改用 3.x Flash 系列。</string>
+    <string name="engine_generic">自定义 API（OpenAI 兼容）</string>
+    <string name="engine_generic_summary">任意 OpenAI 兼容服务 · Key 可选</string>
+    <string name="settings_generic_key">API Key（可留空）</string>
+    <string name="settings_generic_base_url">服务地址（Base URL）</string>
+    <string name="settings_generic_hint">要带上路径前缀，例如 https://你的中转站域名/v1；不要带 /chat/completions（程序会自动补）。只有本地无鉴权服务（Ollama、LM Studio）才留空 Key。</string>
+    <string name="settings_generic_thinking_style">「关闭思考」参数格式</string>
+    <string name="settings_generic_thinking_none">不发送</string>
+    <string name="settings_generic_thinking_object">thinking 对象</string>
+    <string name="settings_generic_thinking_effort">reasoning_effort</string>
+    <string name="settings_generic_thinking_hint">按服务端支持的格式选。仅在下面「AI 深度思考」关闭时发送；选「不发送」时该开关对本引擎不起作用。</string>
 
     <!-- 模型选择：预设 + 联网可用性检测 + 自定义输入 -->
     <string name="settings_model_title">模型</string>
@@ -86,6 +96,7 @@
     <string name="settings_model_custom_label">模型名</string>
     <string name="settings_model_other">官方列表里的其他模型</string>
     <string name="settings_model_presets_hint">内置列表会随官方下架而过时；更新的模型请用「自定义…」。</string>
+    <string name="settings_generic_model_hint">没有内置列表：点「检测可用性」会从上面的服务地址拉取服务端模型列表；也可以直接点「自定义…」自己填模型名。</string>
     <string name="settings_model_check">检测可用性</string>
     <string name="settings_model_checking">检测中…</string>
     <string name="settings_model_never_checked">尚未检测</string>

@@ -82,6 +82,17 @@ class ApiKeyStore(context: Context) {
     }
 
     // ------------------------------------------------------------------
+    // Generic (user-supplied OpenAI-compatible endpoint) key. Optional: local servers
+    // such as Ollama have no key at all, so an empty value is a legitimate state.
+    // ------------------------------------------------------------------
+
+    fun getGenericKey(): String = prefs.getString(KEY_GENERIC, "").orEmpty().trim()
+
+    fun setGenericKey(value: String) {
+        prefs.edit().putString(KEY_GENERIC, value.trim()).apply()
+    }
+
+    // ------------------------------------------------------------------
     // Engine-agnostic accessors — the single place that maps an engine to its
     // key, so call sites never hard-code an engine name.
     // ------------------------------------------------------------------
@@ -91,6 +102,7 @@ class ApiKeyStore(context: Context) {
         TranslationEngineType.DEEPSEEK -> getDeepSeekKey()
         TranslationEngineType.ZHIPU -> getZhipuKey()
         TranslationEngineType.GEMINI -> getGeminiKey()
+        TranslationEngineType.OPENAI_COMPAT -> getGenericKey()
         TranslationEngineType.MICROSOFT, TranslationEngineType.GOOGLE_FREE -> ""
     }
 
@@ -99,11 +111,18 @@ class ApiKeyStore(context: Context) {
             TranslationEngineType.DEEPSEEK -> setDeepSeekKey(value)
             TranslationEngineType.ZHIPU -> setZhipuKey(value)
             TranslationEngineType.GEMINI -> setGeminiKey(value)
+            TranslationEngineType.OPENAI_COMPAT -> setGenericKey(value)
             TranslationEngineType.MICROSOFT, TranslationEngineType.GOOGLE_FREE -> Unit
         }
     }
 
-    /** False only when the engine actually needs a key and none is stored. */
+    /**
+     * False only when the engine actually needs a key and none is stored.
+     *
+     * Callers dereference `keyLabelRes!!` on the false branch, so this must never
+     * return false for an engine whose requirement is not [ApiKeyRequirement.REQUIRED]
+     * — otherwise they would NPE instead of showing a message.
+     */
     fun hasKeyFor(type: TranslationEngineType): Boolean =
         !type.requiresApiKey || getKeyFor(type).isNotEmpty()
 
@@ -163,6 +182,7 @@ class ApiKeyStore(context: Context) {
         private const val KEY_DEEPSEEK = "deepseek_api_key"
         private const val KEY_ZHIPU = "zhipu_api_key"
         private const val KEY_GEMINI = "gemini_api_key"
+        private const val KEY_GENERIC = "generic_api_key"
         const val MAX_KEYS = 10
     }
 }

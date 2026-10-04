@@ -29,6 +29,13 @@ data class UserSettings(
     val zhipuBaseUrl: String = Defaults.ZHIPU_BASE_URL,
     val geminiModel: String = Defaults.GEMINI_MODEL,
     val geminiBaseUrl: String = Defaults.GEMINI_BASE_URL,
+    // Generic OpenAI-compatible engine. Unlike the built-in engines there is no
+    // ship-time default to fall back on, so blank means "not configured yet" and the
+    // request fails with a readable error rather than silently pointing somewhere else.
+    val genericBaseUrl: String = Defaults.GENERIC_BASE_URL,
+    val genericModel: String = Defaults.GENERIC_MODEL,
+    // How this engine spells "don't think" — unknowable in advance, so the user picks.
+    val genericThinkingOffStyle: ThinkingOffStyle = Defaults.GENERIC_THINKING_OFF_STYLE,
     // Global "deep thinking" switch for AI-style engines (DeepSeek / Zhipu GLM).
     // Off by default: thinking adds ~1.7ms per reasoning character of first-token
     // latency, which is what made DeepSeek feel slow. No effect on the pure
@@ -74,6 +81,10 @@ data class UserSettings(
         // migrateGeminiModel and ModelPresets.
         const val GEMINI_MODEL = "gemini-3.8-flash"
         const val GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
+        // Generic engine: the user supplies both, and neither has a sensible default.
+        const val GENERIC_BASE_URL = ""
+        const val GENERIC_MODEL = ""
+        val GENERIC_THINKING_OFF_STYLE: ThinkingOffStyle = ThinkingOffStyle.NONE
         const val AI_DEEP_THINKING = false
         const val MODEL_MIRROR_URL = "https://hf-mirror.com"
         const val HF_TOKEN = ""
