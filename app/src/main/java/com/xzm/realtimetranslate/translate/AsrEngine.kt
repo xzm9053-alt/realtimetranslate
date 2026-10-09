@@ -1,6 +1,6 @@
 package com.xzm.realtimetranslate.translate
 
-import android.util.Log
+import com.xzm.realtimetranslate.util.AppLog as Log
 import com.k2fsa.sherpa.onnx.OfflineModelConfig
 import com.k2fsa.sherpa.onnx.OfflineRecognizer
 import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig

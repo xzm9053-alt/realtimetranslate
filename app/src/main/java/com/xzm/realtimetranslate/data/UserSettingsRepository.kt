@@ -57,6 +57,7 @@ class UserSettingsRepository(private val context: Context) {
         val discoveredModels = stringPreferencesKey("discovered_models")
         val modelAvailability = stringPreferencesKey("model_availability")
         val modelsCheckedAt = longPreferencesKey("models_checked_at")
+        val diagnosticLogContent = booleanPreferencesKey("diagnostic_log_content")
     }
 
     val settings: Flow<UserSettings> = context.dataStore.data.map { prefs ->
@@ -104,6 +105,7 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.discoveredModels] = ModelCacheCodec.encodeList(next.discoveredModels)
             prefs[Keys.modelAvailability] = ModelCacheCodec.encodeMap(next.modelAvailability)
             prefs[Keys.modelsCheckedAt] = next.modelsCheckedAt
+            prefs[Keys.diagnosticLogContent] = next.diagnosticLogContent
         }
     }
 
@@ -164,6 +166,8 @@ class UserSettingsRepository(private val context: Context) {
         discoveredModels = ModelCacheCodec.decodeList(this[Keys.discoveredModels]),
         modelAvailability = ModelCacheCodec.decodeMap(this[Keys.modelAvailability]),
         modelsCheckedAt = this[Keys.modelsCheckedAt] ?: 0L,
+        diagnosticLogContent = this[Keys.diagnosticLogContent]
+            ?: UserSettings.Defaults.DIAGNOSTIC_LOG_CONTENT,
     )
 
     /** Migrate the pre-3-option boolean: true→BOTH, false/absent→TRANSLATION. */

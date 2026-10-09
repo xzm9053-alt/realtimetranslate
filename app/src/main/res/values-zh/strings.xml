@@ -231,4 +231,28 @@
     <string name="msg_service_start_failed">启动服务失败：%1$s</string>
     <string name="msg_start_failed">启动失败：%1$s</string>
     <string name="msg_requesting_projection">请求录屏权限…</string>
+
+    <!-- 日志与诊断 -->
+    <string name="settings_logs">日志与诊断</string>
+    <string name="settings_logs_desc">日志只保存在应用私有目录。遇到问题点「分享诊断报告」发给我即可。</string>
+    <string name="settings_diagnostic_content">记录翻译原文/译文</string>
+    <string name="settings_diagnostic_content_summary">把翻译的原文与译文写进另一个日志文件。默认关闭 —— 只有当问题是「翻译不对」时才需要打开；转发报告前记得先关掉或清空。</string>
+    <string name="settings_share_diagnostics">分享诊断报告</string>
+    <string name="settings_save_diagnostics">保存诊断报告</string>
+    <string name="settings_view_logs">查看日志</string>
+    <string name="settings_clear_logs">清空日志</string>
+    <string name="settings_crash_detected">上次运行发生了崩溃。把诊断报告发给我可以帮助定位。</string>
+    <string name="settings_logs_size">日志大小：%1$s</string>
+    <string name="settings_logs_title">日志</string>
+    <string name="settings_logs_empty">暂无日志。</string>
+    <string name="settings_logs_errors_only">只看错误</string>
+    <string name="settings_logs_refresh">刷新</string>
+    <string name="settings_logs_back">返回</string>
+    <string name="settings_logs_read_failed">日志文件读取失败。</string>
+    <string name="settings_share_chooser_title">分享诊断报告</string>
+    <string name="settings_share_empty">暂时没有可分享的内容。</string>
+    <string name="settings_diag_share_ok">诊断报告已保存到 %1$s</string>
+    <string name="settings_diag_share_failed">导出失败：%1$s</string>
+    <string name="settings_logs_cleared">日志已清空</string>
+    <string name="settings_crash_test">触发一次测试崩溃</string>
 </resources>

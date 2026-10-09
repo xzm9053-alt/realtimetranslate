@@ -9,7 +9,7 @@ import android.media.Image
 import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.os.Handler
-import android.util.Log
+import com.xzm.realtimetranslate.util.AppLog as Log
 
 /**
  * Captures the full screen via MediaProjection → a 1:1 full-resolution

@@ -2,7 +2,7 @@ package com.xzm.realtimetranslate.data
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.util.Log
+import com.xzm.realtimetranslate.util.AppLog as Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import org.json.JSONArray

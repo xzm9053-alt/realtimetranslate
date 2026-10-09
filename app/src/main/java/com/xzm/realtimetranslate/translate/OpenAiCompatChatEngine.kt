@@ -1,7 +1,8 @@
 package com.xzm.realtimetranslate.translate
 
 import android.os.SystemClock
-import android.util.Log
+import com.xzm.realtimetranslate.util.AppLog as Log
+import com.xzm.realtimetranslate.util.LogSanitizer
 import com.xzm.realtimetranslate.data.ThinkingOffStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -138,7 +139,11 @@ abstract class OpenAiCompatChatEngine(
             resp.use {
                 if (!resp.isSuccessful) {
                     val err = resp.body?.string().orEmpty()
-                    throw IOException("$providerName HTTP ${resp.code}: ${err.take(400)}")
+                    // This message is both shown to the user and persisted, so it goes
+                    // through the sanitizer and stays short.
+                    throw IOException(
+                        "$providerName HTTP ${resp.code}: ${LogSanitizer.sanitize(err, 200)}"
+                    )
                 }
                 val source = resp.body?.source() ?: throw IOException("$providerName 响应为空")
                 val builder = StringBuilder()
@@ -242,7 +247,9 @@ abstract class OpenAiCompatChatEngine(
                         } else {
                             ""
                         }
-                        throw IOException("HTTP ${resp.code}$hint: ${err.take(300)}")
+                        throw IOException(
+                            "HTTP ${resp.code}$hint: ${LogSanitizer.sanitize(err, 200)}"
+                        )
                     }
                     val json = JSONObject(resp.body!!.string())
                     val content = json.optJSONArray("choices")

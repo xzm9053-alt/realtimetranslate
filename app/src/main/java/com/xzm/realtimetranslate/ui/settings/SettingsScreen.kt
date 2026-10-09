@@ -26,9 +26,12 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.TextFieldColors
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -78,6 +81,15 @@ fun SettingsScreen(
     viewModel: SettingsViewModel,
     onOpenOverlayPermission: () -> Unit,
 ) {
+    // The log viewer replaces this screen rather than becoming a tab: MainActivity's
+    // `when(page)` falls through to the history screen for anything unrecognised, so
+    // adding a value there is a silent mis-navigation waiting to happen.
+    var showLogs by rememberSaveable { mutableStateOf(false) }
+    if (showLogs) {
+        LogViewerScreen(onBack = { showLogs = false }, modifier = modifier)
+        return
+    }
+
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val deepSeekKey by viewModel.deepSeekKey.collectAsStateWithLifecycle()
     val deepSeekModel by viewModel.deepSeekModel.collectAsStateWithLifecycle()
@@ -106,6 +118,14 @@ fun SettingsScreen(
     var revealKey by remember { mutableStateOf(false) }
     val engineType = settings.translationEngine
     val context = LocalContext.current
+
+    val diagMessage by viewModel.diagMessage.collectAsStateWithLifecycle()
+    val logSizeBytes by viewModel.logSizeBytes.collectAsStateWithLifecycle()
+    val lastRunCrashed by viewModel.lastRunCrashed.collectAsStateWithLifecycle()
+    // Version is the natural place for a hidden gesture: nobody taps a version number by
+    // accident five times, and it costs no screen space.
+    var versionTaps by rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) { viewModel.refreshDiagnostics() }
 
     // Dark-mode safe field colors (explicit text / cursor colors)
     val scheme = MiuixTheme.colorScheme
@@ -769,6 +789,73 @@ fun SettingsScreen(
         }
 
         SmallTitle(
+            text = stringResource(R.string.settings_logs),
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
+        SectionCard {
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                if (lastRunCrashed) {
+                    Text(
+                        text = stringResource(R.string.settings_crash_detected),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFFD32F2F),
+                    )
+                }
+                Text(
+                    text = stringResource(R.string.settings_logs_desc),
+                    fontSize = 13.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                )
+                SettingSwitchRow(
+                    title = stringResource(R.string.settings_diagnostic_content),
+                    summary = stringResource(R.string.settings_diagnostic_content_summary),
+                    checked = settings.diagnosticLogContent,
+                    onCheckedChange = { v ->
+                        viewModel.update { it.copy(diagnosticLogContent = v) }
+                    },
+                )
+                TextButton(
+                    text = stringResource(R.string.settings_share_diagnostics),
+                    onClick = viewModel::shareDiagnostics,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                TextButton(
+                    text = stringResource(R.string.settings_save_diagnostics),
+                    onClick = viewModel::saveDiagnostics,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        text = stringResource(R.string.settings_view_logs),
+                        onClick = { showLogs = true },
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(
+                        text = stringResource(R.string.settings_clear_logs),
+                        onClick = viewModel::clearLogs,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Text(
+                    text = stringResource(R.string.settings_logs_size, formatBytes(logSizeBytes)),
+                    fontSize = 12.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                )
+                if (!diagMessage.isNullOrBlank()) {
+                    Text(
+                        text = diagMessage.orEmpty(),
+                        fontSize = 12.sp,
+                        color = Booth.Accent,
+                    )
+                }
+            }
+        }
+
+        SmallTitle(
             text = stringResource(R.string.settings_about),
             modifier = Modifier.padding(horizontal = 24.dp),
         )
@@ -801,7 +888,19 @@ fun SettingsScreen(
                     text = stringResource(R.string.settings_version, BuildConfig.VERSION_NAME),
                     fontSize = 13.sp,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier.clickable { versionTaps++ },
                 )
+                if (versionTaps >= CRASH_TEST_TAPS) {
+                    // The only way to verify crash capture: `adb shell am crash` and a
+                    // plain kill both bypass the default uncaught-exception handler.
+                    TextButton(
+                        text = stringResource(R.string.settings_crash_test),
+                        onClick = {
+                            Thread { throw RuntimeException("diagnostic test crash") }.start()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
         }
 
@@ -1157,4 +1256,17 @@ private fun ColorSwatchRow(
             }
         }
     }
+}
+
+/** Taps on the version number that reveal the test-crash button. */
+private const val CRASH_TEST_TAPS = 5
+
+/**
+ * Log size for the settings row. Binary units, because that is what the 512 KB rotation
+ * cap in [com.xzm.realtimetranslate.util.AppLog] is expressed in.
+ */
+private fun formatBytes(bytes: Long): String = when {
+    bytes < 1024L -> "$bytes B"
+    bytes < 1024L * 1024 -> "%.1f KB".format(Locale.US, bytes / 1024.0)
+    else -> "%.1f MB".format(Locale.US, bytes / (1024.0 * 1024.0))
 }

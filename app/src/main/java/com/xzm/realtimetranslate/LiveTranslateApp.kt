@@ -7,6 +7,8 @@ import android.os.Build
 import com.xzm.realtimetranslate.data.ApiKeyStore
 import com.xzm.realtimetranslate.data.HistoryRepository
 import com.xzm.realtimetranslate.data.UserSettingsRepository
+import com.xzm.realtimetranslate.util.AppLog
+import com.xzm.realtimetranslate.util.CrashReporter
 import com.xzm.realtimetranslate.util.ModelDownloader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +30,10 @@ class LiveTranslateApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Must be the very first thing: repositories below already log from their
+        // constructors, and anything logged before this only reaches logcat.
+        AppLog.install(this)
+        CrashReporter.install(this)
         settingsRepository = UserSettingsRepository(this)
         apiKeyStore = ApiKeyStore(this)
         modelManager = ModelDownloader(this)
@@ -36,6 +42,11 @@ class LiveTranslateApp : Application() {
         // ready by the time the user starts a session. connect() also blocks on
         // the same idempotent seed as a fallback.
         appScope.launch { runCatching { modelManager.seedFromAssetsIfNeeded() } }
+        // Content logging is a setting, but the logger is a process-wide singleton — the
+        // flow is the only thing that can turn it on and off while the app runs.
+        appScope.launch {
+            settingsRepository.settings.collect { AppLog.contentEnabled = it.diagnosticLogContent }
+        }
         createNotificationChannels()
     }
 

@@ -14,7 +14,7 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.text.method.ScrollingMovementMethod
-import android.util.Log
+import com.xzm.realtimetranslate.util.AppLog as Log
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent

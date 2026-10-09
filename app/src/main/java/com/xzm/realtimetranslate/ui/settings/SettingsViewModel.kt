@@ -18,7 +18,11 @@ import com.xzm.realtimetranslate.translate.ModelAvailability
 import com.xzm.realtimetranslate.translate.ModelPresets
 import com.xzm.realtimetranslate.translate.ModelProbe
 import com.xzm.realtimetranslate.translate.TranslationEngineFactory
+import com.xzm.realtimetranslate.util.AppLog
+import com.xzm.realtimetranslate.util.CrashReporter
 import com.xzm.realtimetranslate.util.DownloadProgress
+import com.xzm.realtimetranslate.util.LogSharing
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -26,6 +30,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class SettingsViewModel(
     private val app: LiveTranslateApp,
@@ -449,6 +454,71 @@ class SettingsViewModel(
             p.senseVoiceModel.isFile || p.tokens.isFile || p.sileroVad.isFile ->
                 "⚠️ 模型不完整，请重新下载修复"
             else -> "未就绪，可在下方下载"
+        }
+    }
+
+    // ------------------------------------------------------------ logs & diagnostics
+
+    private val _diagMessage = MutableStateFlow<String?>(null)
+    val diagMessage: StateFlow<String?> = _diagMessage.asStateFlow()
+
+    /** Total bytes on disk, refreshed whenever the section is entered or logs change. */
+    private val _logSizeBytes = MutableStateFlow(0L)
+    val logSizeBytes: StateFlow<Long> = _logSizeBytes.asStateFlow()
+
+    /** True when the previous run died of an uncaught exception — worth a red banner. */
+    private val _lastRunCrashed = MutableStateFlow(false)
+    val lastRunCrashed: StateFlow<Boolean> = _lastRunCrashed.asStateFlow()
+
+    fun refreshDiagnostics() {
+        viewModelScope.launch {
+            _logSizeBytes.value = withContext(Dispatchers.IO) { AppLog.totalBytes() }
+            _lastRunCrashed.value = CrashReporter.hasRecentCrash(app)
+        }
+    }
+
+    /**
+     * Builds the report and hands it to the share sheet. Report assembly touches the log
+     * files, so it stays off the main thread; the chooser itself must be started from a
+     * context, which is why it is the only part that runs back here.
+     */
+    fun shareDiagnostics() {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { LogSharing.buildReport(app, settingsRepository.settings.first()) }
+            }
+            result.fold(
+                onSuccess = { file ->
+                    _diagMessage.value = null
+                    runCatching { LogSharing.share(app, file) }
+                        .onFailure { _diagMessage.value = app.getString(R.string.settings_share_empty) }
+                },
+                onFailure = { _diagMessage.value = app.getString(R.string.settings_diag_share_failed, it.message ?: "") },
+            )
+            refreshDiagnostics()
+        }
+    }
+
+    fun saveDiagnostics() {
+        viewModelScope.launch {
+            _diagMessage.value = null
+            val result = withContext(Dispatchers.IO) {
+                runCatching { LogSharing.buildReport(app, settingsRepository.settings.first()) }
+                    .mapCatching { LogSharing.save(app, it).getOrThrow() }
+            }
+            _diagMessage.value = result.fold(
+                onSuccess = { app.getString(R.string.settings_diag_share_ok, it) },
+                onFailure = { app.getString(R.string.settings_diag_share_failed, it.message ?: "") },
+            )
+            refreshDiagnostics()
+        }
+    }
+
+    fun clearLogs() {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { AppLog.clear() }
+            _diagMessage.value = app.getString(R.string.settings_logs_cleared)
+            refreshDiagnostics()
         }
     }
 }

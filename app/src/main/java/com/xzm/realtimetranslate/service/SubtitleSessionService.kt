@@ -11,7 +11,7 @@ import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
-import android.util.Log
+import com.xzm.realtimetranslate.util.AppLog as Log
 import androidx.core.app.NotificationCompat
 import com.xzm.realtimetranslate.LiveTranslateApp
 import com.xzm.realtimetranslate.R

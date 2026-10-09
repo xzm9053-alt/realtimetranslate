@@ -1,7 +1,8 @@
 package com.xzm.realtimetranslate.live
 
 import android.os.SystemClock
-import android.util.Log
+import com.xzm.realtimetranslate.util.AppLog
+import com.xzm.realtimetranslate.util.AppLog as Log
 import com.xzm.realtimetranslate.LiveTranslateApp
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.translate.AsrEngine
@@ -222,6 +223,7 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
                 val target = config.targetLanguageCode.ifBlank { "zh-Hans" }
                 val tTranslate = SystemClock.elapsedRealtime()
                 var outChars = 0
+                var outText = ""
                 try {
                     engine.translate(
                         text = trimmed,
@@ -230,11 +232,18 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
                     ).collect { fragment ->
                         if (intentionalClose.get()) return@collect
                         outChars = fragment.length
+                        outText = fragment
                         _events.emit(LiveEvent.OutputTranscript(fragment, languageCode = null))
                     }
                 } catch (t: Throwable) {
                     Log.e(TAG, "translate failed", t)
                     _events.emit(LiveEvent.Error("翻译失败：${t.message}"))
+                }
+                // The pair that answers "the translation is wrong" — the recognized
+                // sentence next to what came back. Opt-in only, and it goes to the
+                // separate content log, never to app.log.
+                if (AppLog.contentEnabled && outText.isNotBlank()) {
+                    AppLog.content(TAG, "voice ${trimmed.take(500)} → ${outText.take(500)}")
                 }
                 Log.i(
                     TAG,

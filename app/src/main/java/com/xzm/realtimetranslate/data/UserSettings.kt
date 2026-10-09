@@ -63,6 +63,10 @@ data class UserSettings(
     val modelAvailability: Map<String, String> = emptyMap(),
     /** Epoch millis of that check; 0 = never run. */
     val modelsCheckedAt: Long = 0L,
+    // Writes the original and translated text into a separate log file. Off by
+    // default: it is the user's own content, and the diagnostic report is meant to be
+    // forwarded to the author.
+    val diagnosticLogContent: Boolean = Defaults.DIAGNOSTIC_LOG_CONTENT,
 ) {
     object Defaults {
         // Kept for schema compatibility; the engine now reads DeepSeek settings directly.
@@ -117,6 +121,7 @@ data class UserSettings(
         const val OCR_OUTLINE_ENABLED = true
         const val OCR_OUTLINE_COLOR = 0xFF2E7CF6
         const val OCR_OUTLINE_ALPHA = 0.5f
+        const val DIAGNOSTIC_LOG_CONTENT = false
     }
 }
 

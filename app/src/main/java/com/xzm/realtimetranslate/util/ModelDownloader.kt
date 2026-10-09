@@ -1,7 +1,7 @@
 package com.xzm.realtimetranslate.util
 
 import android.content.Context
-import android.util.Log
+import com.xzm.realtimetranslate.util.AppLog as Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow

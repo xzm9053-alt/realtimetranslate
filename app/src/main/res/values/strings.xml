@@ -231,4 +231,28 @@
     <string name="msg_service_start_failed">Failed to start service: %1$s</string>
     <string name="msg_start_failed">Start failed: %1$s</string>
     <string name="msg_requesting_projection">Requesting screen capture…</string>
+
+    <!-- Logs & diagnostics -->
+    <string name="settings_logs">Logs &amp; diagnostics</string>
+    <string name="settings_logs_desc">Logs stay in the app\'s private storage. Tap share to send the report to the developer.</string>
+    <string name="settings_diagnostic_content">Record original and translated text</string>
+    <string name="settings_diagnostic_content_summary">Writes the text you translate into a separate log. Off by default — turn it on only if the problem is a wrong translation, and remember to remove it before forwarding the report.</string>
+    <string name="settings_share_diagnostics">Share diagnostic report</string>
+    <string name="settings_save_diagnostics">Save diagnostic report</string>
+    <string name="settings_view_logs">View logs</string>
+    <string name="settings_clear_logs">Clear logs</string>
+    <string name="settings_crash_detected">The app crashed last time it ran. Sharing the diagnostic report will help get it fixed.</string>
+    <string name="settings_logs_size">Log size: %1$s</string>
+    <string name="settings_logs_title">Logs</string>
+    <string name="settings_logs_empty">No logs yet.</string>
+    <string name="settings_logs_errors_only">Errors only</string>
+    <string name="settings_logs_refresh">Refresh</string>
+    <string name="settings_logs_back">Back</string>
+    <string name="settings_logs_read_failed">Could not read the log file.</string>
+    <string name="settings_share_chooser_title">Share diagnostic report</string>
+    <string name="settings_share_empty">Nothing to share yet.</string>
+    <string name="settings_diag_share_ok">Diagnostic report saved to %1$s</string>
+    <string name="settings_diag_share_failed">Export failed: %1$s</string>
+    <string name="settings_logs_cleared">Logs cleared</string>
+    <string name="settings_crash_test">Trigger a test crash</string>
 </resources>

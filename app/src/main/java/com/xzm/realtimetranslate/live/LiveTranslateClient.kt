@@ -1,7 +1,9 @@
 package com.xzm.realtimetranslate.live
 
 import android.util.Base64
-import android.util.Log
+import com.xzm.realtimetranslate.util.AppLog
+import com.xzm.realtimetranslate.util.AppLog as Log
+import com.xzm.realtimetranslate.util.LogSanitizer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -122,8 +124,8 @@ class LiveTranslateClient {
         }
 
         val url = buildUrl(config.endpoint, key)
-        Log.i(TAG, "Connecting (key redacted): ${redactUrl(url)}")
-        emitDebug("连接中… ${redactUrl(url)}")
+        Log.i(TAG, "Connecting (key redacted): ${LogSanitizer.redactUrl(url)}")
+        emitDebug("连接中… ${LogSanitizer.redactUrl(url)}")
 
         // Do NOT set Content-Type on the WS handshake — some stacks mishandle it.
         val request = Request.Builder().url(url).build()
@@ -135,7 +137,9 @@ class LiveTranslateClient {
                     Log.i(TAG, "WebSocket open code=${response.code}")
                     emitDebug("WebSocket 已打开，发送 setup…")
                     val setup = buildSetupMessage(config)
-                    Log.i(TAG, "setup payload: $setup")
+                    // The payload itself is a wall of nested JSON; the fields worth
+                    // reading when a session misbehaves are these two.
+                    Log.i(TAG, "setup model=${config.modelId} target=${config.targetLanguageCode} chars=${setup.length}")
                     val ok = webSocket.send(setup)
                     if (!ok) {
                         fail("发送 setup 失败（socket 未就绪）")
@@ -158,9 +162,14 @@ class LiveTranslateClient {
                     val msg = buildString {
                         append(t.message ?: t.javaClass.simpleName)
                         if (code != null) append(" (HTTP $code)")
-                        if (!body.isNullOrBlank()) append(" · $body")
                     }
+                    // The server's error body is logged on its own, sanitized and bounded,
+                    // rather than spliced into `msg` — that string is both persisted and
+                    // shown to the user.
                     Log.e(TAG, "WebSocket failure: $msg", t)
+                    if (!body.isNullOrBlank()) {
+                        Log.d(TAG, "WebSocket error body: ${LogSanitizer.sanitize(body, 500)}")
+                    }
                     fail(msg)
                 }
 
@@ -286,7 +295,13 @@ class LiveTranslateClient {
 
     private fun handleMessage(text: String) {
         if (text.isBlank()) return
-        Log.d(TAG, "← ${text.take(500)}")
+        // The frame carries the transcript itself. Only opted-in sessions persist it, and
+        // even then it goes to the separate content log.
+        if (AppLog.contentEnabled) {
+            AppLog.content(TAG, "← ${text.take(500)}")
+        } else {
+            Log.d(TAG, "← frame ${text.length}B")
+        }
         try {
             val root = JSONObject(text)
 
@@ -420,9 +435,6 @@ class LiveTranslateClient {
         val separator = if (base.contains("?")) "&" else "?"
         return "$base${separator}key=$apiKey"
     }
-
-    private fun redactUrl(url: String): String =
-        url.replace(Regex("""([?&]key=)[^&]+"""), "$1***")
 
     private fun JSONObject.optStringOrNull(name: String): String? {
         if (!has(name) || isNull(name)) return null

@@ -14,7 +14,8 @@ import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
-import android.util.Log
+import com.xzm.realtimetranslate.util.AppLog
+import com.xzm.realtimetranslate.util.AppLog as Log
 import android.view.Surface
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
@@ -403,6 +404,7 @@ class ScreenTextSessionService : Service() {
         val overlay = overlay ?: return
         overlay.updateTranscripts(input = text, output = null)
         ScreenOcrBus.setPreview(input = text)
+        var outText = ""
         try {
             engine.translate(
                 text = text,
@@ -410,8 +412,14 @@ class ScreenTextSessionService : Service() {
                 targetLang = currentSettings.targetLanguageCode,
             ).collect { fragment ->
                 if (stopped) return@collect
+                outText = fragment
                 overlay.updateTranscripts(input = text, output = fragment)
                 ScreenOcrBus.setPreview(input = text, output = fragment)
+            }
+            // OCR's answer to "the translation is wrong": what was recognized off the
+            // screen next to what came back. Opt-in, and only into the content log.
+            if (AppLog.contentEnabled && outText.isNotBlank()) {
+                AppLog.content(TAG, "ocr ${text.take(500)} → ${outText.take(500)}")
             }
         } catch (t: CancellationException) {
             // 停会话/换区域导致的取消。必须原样上抛：否则会被下面那个

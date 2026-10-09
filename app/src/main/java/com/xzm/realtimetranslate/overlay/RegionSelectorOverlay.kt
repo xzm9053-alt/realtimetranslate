@@ -8,7 +8,7 @@ import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.os.Build
-import android.util.Log
+import com.xzm.realtimetranslate.util.AppLog as Log
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
