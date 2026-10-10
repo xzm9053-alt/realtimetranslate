@@ -22,6 +22,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -51,14 +55,13 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.xzm.realtimetranslate.BuildConfig
 import com.xzm.realtimetranslate.R
-import com.xzm.realtimetranslate.data.FreeTranslationProviders
+import com.xzm.realtimetranslate.data.ApiKeyProviders
 import com.xzm.realtimetranslate.data.HistoryMode
 import com.xzm.realtimetranslate.data.OcrScript
 import com.xzm.realtimetranslate.data.SubtitleDisplayMode
 import com.xzm.realtimetranslate.data.ThinkingOffStyle
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
-import com.xzm.realtimetranslate.data.isActiveIn
 import com.xzm.realtimetranslate.translate.ModelAvailability
 import com.xzm.realtimetranslate.translate.ModelProbe
 import com.xzm.realtimetranslate.translate.ModelPresets
@@ -128,7 +131,7 @@ fun SettingsScreen(
     // Version is the natural place for a hidden gesture: nobody taps a version number by
     // accident five times, and it costs no screen space.
     var versionTaps by rememberSaveable { mutableIntStateOf(0) }
-    var showFreeGuide by rememberSaveable { mutableStateOf(false) }
+    var showApiKeyGuide by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) { viewModel.refreshDiagnostics() }
 
     // Dark-mode safe field colors (explicit text / cursor colors)
@@ -159,80 +162,6 @@ fun SettingsScreen(
             title = stringResource(R.string.settings_title),
             subtitle = stringResource(R.string.settings_subtitle),
         )
-
-        // Free AI translation, promoted above the engine list on purpose: the free tiers
-        // all run on engines further down, and a user who never gets past this card would
-        // reasonably conclude the app has no free AI option. Everything here is a
-        // preset over engines that already ship — no engine is added or changed.
-        SmallTitle(
-            text = stringResource(R.string.settings_free_title),
-            modifier = Modifier.padding(horizontal = 24.dp),
-        )
-        SectionCard {
-            Column(
-                modifier = Modifier.padding(vertical = 6.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_free_desc),
-                    fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
-                FreeTranslationProviders.all.forEach { provider ->
-                    OptionRow(
-                        label = stringResource(provider.nameRes),
-                        summary = stringResource(provider.quotaRes),
-                        // The ✓ marks the provider that is live right now, which is also
-                        // the whole feedback for a tap: the fields below visibly fill in.
-                        selected = provider.isActiveIn(settings),
-                        onClick = { viewModel.applyFreeProvider(provider) },
-                    )
-                }
-                TextButton(
-                    text = stringResource(
-                        if (showFreeGuide) {
-                            R.string.settings_free_guide_hide
-                        } else {
-                            R.string.settings_free_guide_show
-                        },
-                    ),
-                    onClick = { showFreeGuide = !showFreeGuide },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                if (showFreeGuide) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Text(
-                            text = stringResource(R.string.settings_free_guide_steps),
-                            fontSize = 13.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        )
-                        // One button per site, not per provider: both SiliconFlow models
-                        // are created from the same console page.
-                        FreeTranslationProviders.consolePages.forEach { page ->
-                            TextButton(
-                                text = stringResource(
-                                    R.string.settings_free_console_open,
-                                    stringResource(page.consoleNameRes),
-                                ),
-                                onClick = { openUrl(context, page.consoleUrl) },
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        }
-                    }
-                }
-                EngineHint(
-                    textRes = R.string.settings_free_nokey,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
-                EngineHint(
-                    textRes = R.string.settings_free_privacy,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
-            }
-        }
 
         SmallTitle(
             text = stringResource(R.string.settings_engine),
@@ -486,6 +415,84 @@ fun SettingsScreen(
                                 hasFail && !hasOk -> Booth.Danger
                                 else -> MiuixTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                             },
+                        )
+                    }
+                }
+            }
+        }
+
+        // 「怎么申请 API Key」：平时收成一个小长方块，点开才铺开四家申请入口。
+        //
+        // 摆在引擎区**之后**是刻意的：先让用户挑引擎，再告诉他去哪拿 Key，顺序才对得上。
+        // 反过来（摆在引擎列表之前）会让人以为这个 App 只有那几家免费服务商，而实际上
+        // 免费档全都跑在下面这些引擎上——缺的从来只是「去哪拿 Key」这一句话。
+        SectionCard {
+            Column {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showApiKeyGuide = !showApiKeyGuide }
+                        .padding(horizontal = 16.dp, vertical = 15.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_apikey_guide),
+                        color = Booth.Accent,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Icon(
+                        imageVector = if (showApiKeyGuide) {
+                            Icons.Outlined.ExpandLess
+                        } else {
+                            Icons.Outlined.ExpandMore
+                        },
+                        contentDescription = null,
+                        tint = Booth.Accent,
+                    )
+                }
+                if (showApiKeyGuide) {
+                    Column(
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp)
+                            .padding(bottom = 10.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.settings_apikey_desc),
+                            fontSize = 13.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                        ApiKeyProviders.all.forEach { provider ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = stringResource(provider.nameRes),
+                                        color = MiuixTheme.colorScheme.onSurface,
+                                    )
+                                    Text(
+                                        text = stringResource(provider.costRes),
+                                        fontSize = 13.sp,
+                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    )
+                                }
+                                TextButton(
+                                    text = stringResource(R.string.settings_apikey_open),
+                                    onClick = { openUrl(context, provider.consoleUrl) },
+                                )
+                            }
+                        }
+                        EngineHint(
+                            textRes = R.string.settings_apikey_nokey,
+                            modifier = Modifier.padding(top = 12.dp),
+                        )
+                        EngineHint(
+                            textRes = R.string.settings_apikey_privacy,
+                            modifier = Modifier.padding(top = 8.dp),
                         )
                     }
                 }

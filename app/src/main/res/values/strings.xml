@@ -92,22 +92,19 @@
     <!-- Free AI translation guide. Every free tier here runs on an engine the app already
          has, so a preset only fills in "engine + endpoint + model" and the user brings
          their own key. -->
-    <string name="settings_free_title">Free AI translation</string>
-    <string name="settings_free_desc">You don\'t have to pay to translate with AI. Tap a provider below and the engine, endpoint and model are filled in for you — all you add is an API key.</string>
-    <string name="free_provider_zhipu">Zhipu GLM · glm-4-flash</string>
-    <string name="free_provider_zhipu_quota">Free forever, no token cap · nothing to set up but the key</string>
-    <string name="free_provider_hunyuan">SiliconFlow · Hunyuan-MT-7B</string>
-    <string name="free_provider_hunyuan_quota">Free (time-limited) · built for translation, 33 languages</string>
-    <string name="free_provider_qwen">SiliconFlow · Qwen3-8B</string>
-    <string name="free_provider_qwen_quota">Free · general-purpose, to fall back on if Hunyuan misbehaves</string>
-    <string name="free_console_zhipu">Zhipu Open Platform</string>
-    <string name="free_console_siliconflow">SiliconFlow</string>
-    <string name="settings_free_guide_show">How do I get an API key?</string>
-    <string name="settings_free_guide_hide">Hide the steps</string>
-    <string name="settings_free_guide_steps">1. Open the sign-up page below and register — both providers require real-name verification.\n2. Create an API key and copy it.\n3. Come back, tap the provider above, and paste the key into the \"API Key\" field that appears underneath.</string>
-    <string name="settings_free_console_open">Open %1$s</string>
-    <string name="settings_free_nokey">Rather not register at all? Pick Microsoft or Google Translate from the list below — neither needs a key.</string>
-    <string name="settings_free_privacy">Free tiers are rate-limited, and the text being translated is sent to whichever provider you pick.</string>
+    <string name="settings_apikey_guide">How to get an API key</string>
+    <string name="settings_apikey_desc">AI translation needs an API key. Pick a provider below, get one, then paste it into the field above.</string>
+    <string name="settings_apikey_open">Get one</string>
+    <string name="settings_apikey_nokey">Rather not register at all? Microsoft Translate and Google Translate above need no key — just pick one.</string>
+    <string name="settings_apikey_privacy">Free tiers are rate-limited, and the text being translated is sent to whichever provider you pick.</string>
+    <string name="apikey_zhipu">Zhipu GLM</string>
+    <string name="apikey_zhipu_cost">Free · forever, no token cap</string>
+    <string name="apikey_siliconflow">SiliconFlow</string>
+    <string name="apikey_siliconflow_cost">Free · built for translation, 33 languages</string>
+    <string name="apikey_gemini">Google AI Studio</string>
+    <string name="apikey_gemini_cost">Free tier available · for the Gemini engine</string>
+    <string name="apikey_deepseek">DeepSeek</string>
+    <string name="apikey_deepseek_cost">Paid · pay as you go, top up first</string>
 
     <!-- Model chooser: presets + a live availability check + a free-text escape hatch. -->
     <string name="settings_model_title">Model</string>

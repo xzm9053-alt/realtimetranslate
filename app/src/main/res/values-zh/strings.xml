@@ -91,22 +91,19 @@
 
     <!-- 免费 AI 翻译引导。这里的免费档全部跑在已有引擎上，一键配置只替用户填好
          「引擎 + 地址 + 模型」，Key 还是要用户自己去申请。 -->
-    <string name="settings_free_title">免费 AI 翻译</string>
-    <string name="settings_free_desc">不用付费也能用 AI 翻译。点一下下面的服务商，会自动帮你选好引擎、填好地址和模型，你只需要再粘一个 API Key。</string>
-    <string name="free_provider_zhipu">智谱 GLM · glm-4-flash</string>
-    <string name="free_provider_zhipu_quota">永久免费不限量 · 除了填 Key 什么都不用配</string>
-    <string name="free_provider_hunyuan">硅基流动 · 腾讯混元翻译</string>
-    <string name="free_provider_hunyuan_quota">免费（限时）· 翻译专用模型，支持 33 种语言</string>
-    <string name="free_provider_qwen">硅基流动 · Qwen3-8B</string>
-    <string name="free_provider_qwen_quota">免费 · 通用模型，混元效果不好时用它兜底</string>
-    <string name="free_console_zhipu">智谱开放平台</string>
-    <string name="free_console_siliconflow">硅基流动</string>
-    <string name="settings_free_guide_show">怎么申请 API Key？</string>
-    <string name="settings_free_guide_hide">收起步骤</string>
-    <string name="settings_free_guide_steps">① 点下面的按钮打开申请页并注册——两家都需要实名认证。\n② 创建一个 API Key 并复制。\n③ 回到本页，点上面的服务商，把 Key 粘到下面出现的「API Key」输入框里。</string>
-    <string name="settings_free_console_open">打开%1$s</string>
-    <string name="settings_free_nokey">完全不想注册？直接用下面列表里的「微软」或「谷歌翻译」，都不需要 Key。</string>
-    <string name="settings_free_privacy">免费额度都有速率限制；待翻译的文本会发送给你选中的服务商。</string>
+    <string name="settings_apikey_guide">怎么申请 API Key</string>
+    <string name="settings_apikey_desc">AI 翻译需要一个 API Key。下面挑一家去申请，拿到后粘到上面的输入框里。</string>
+    <string name="settings_apikey_open">去申请</string>
+    <string name="settings_apikey_nokey">完全不想注册？上面的「微软翻译」和「谷歌翻译」都不需要 Key，选了就能用。</string>
+    <string name="settings_apikey_privacy">免费额度都有速率限制；待翻译的文本会发送给你选中的服务商。</string>
+    <string name="apikey_zhipu">智谱 GLM</string>
+    <string name="apikey_zhipu_cost">免费 · 永久不限量</string>
+    <string name="apikey_siliconflow">硅基流动</string>
+    <string name="apikey_siliconflow_cost">免费 · 翻译专用模型，支持 33 种语言</string>
+    <string name="apikey_gemini">Google AI Studio</string>
+    <string name="apikey_gemini_cost">有免费额度 · Gemini 引擎用</string>
+    <string name="apikey_deepseek">DeepSeek</string>
+    <string name="apikey_deepseek_cost">付费 · 按量计费，先充值再用</string>
 
     <!-- 模型选择：预设 + 联网可用性检测 + 自定义输入 -->
     <string name="settings_model_title">模型</string>
