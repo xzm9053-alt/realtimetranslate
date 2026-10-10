@@ -89,6 +89,25 @@
     <string name="settings_generic_thinking_effort">reasoning_effort</string>
     <string name="settings_generic_thinking_hint">按服务端支持的格式选。仅在下面「AI 深度思考」关闭时发送；选「不发送」时该开关对本引擎不起作用。</string>
 
+    <!-- 免费 AI 翻译引导。这里的免费档全部跑在已有引擎上，一键配置只替用户填好
+         「引擎 + 地址 + 模型」，Key 还是要用户自己去申请。 -->
+    <string name="settings_free_title">免费 AI 翻译</string>
+    <string name="settings_free_desc">不用付费也能用 AI 翻译。点一下下面的服务商，会自动帮你选好引擎、填好地址和模型，你只需要再粘一个 API Key。</string>
+    <string name="free_provider_zhipu">智谱 GLM · glm-4-flash</string>
+    <string name="free_provider_zhipu_quota">永久免费不限量 · 除了填 Key 什么都不用配</string>
+    <string name="free_provider_hunyuan">硅基流动 · 腾讯混元翻译</string>
+    <string name="free_provider_hunyuan_quota">免费（限时）· 翻译专用模型，支持 33 种语言</string>
+    <string name="free_provider_qwen">硅基流动 · Qwen3-8B</string>
+    <string name="free_provider_qwen_quota">免费 · 通用模型，混元效果不好时用它兜底</string>
+    <string name="free_console_zhipu">智谱开放平台</string>
+    <string name="free_console_siliconflow">硅基流动</string>
+    <string name="settings_free_guide_show">怎么申请 API Key？</string>
+    <string name="settings_free_guide_hide">收起步骤</string>
+    <string name="settings_free_guide_steps">① 点下面的按钮打开申请页并注册——两家都需要实名认证。\n② 创建一个 API Key 并复制。\n③ 回到本页，点上面的服务商，把 Key 粘到下面出现的「API Key」输入框里。</string>
+    <string name="settings_free_console_open">打开%1$s</string>
+    <string name="settings_free_nokey">完全不想注册？直接用下面列表里的「微软」或「谷歌翻译」，都不需要 Key。</string>
+    <string name="settings_free_privacy">免费额度都有速率限制；待翻译的文本会发送给你选中的服务商。</string>
+
     <!-- 模型选择：预设 + 联网可用性检测 + 自定义输入 -->
     <string name="settings_model_title">模型</string>
     <string name="settings_model_custom">自定义…</string>
@@ -134,6 +153,8 @@
     <string name="settings_vad_desc">切句灵敏度：停顿多久算一句、一句话最多说多久。下次启动会话生效。</string>
     <string name="settings_vad_pause_value">停顿切段 %1$.1f 秒</string>
     <string name="settings_vad_max_value">单句最长 %1$.1f 秒</string>
+    <string name="settings_partial_title">边说边出（草稿字幕）</string>
+    <string name="settings_partial_summary">话还没说完就先显示前半句，说完再整句替换成更准的。看着更跟手；代价是更费电，且每句多一两次翻译请求。下次开始翻译时生效。</string>
 
     <string name="settings_appearance">字幕外观</string>
     <string name="settings_font_size">字体大小 %1$d sp · 系统默认字体</string>

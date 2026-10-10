@@ -47,6 +47,10 @@ data class UserSettings(
     val historyLimit: Int = Defaults.HISTORY_LIMIT,
     val vadMinSilenceSec: Float = Defaults.VAD_MIN_SILENCE_SEC,
     val vadMaxSpeechSec: Float = Defaults.VAD_MAX_SPEECH_SEC,
+    // 「边说边出」：句子还没说完就先上草稿字幕，说完再整句替换。
+    // 默认开：这是本 App 在"实时感"上最明显的一步，代价是本地多跑几次识别
+    // （纯 CPU，不花钱、不联网）+ 每句多一两次翻译请求（见 RealtimeTranslationClient）。
+    val partialTranscripts: Boolean = Defaults.PARTIAL_TRANSCRIPTS,
     // Screen-region OCR recognizer script (ML Kit bundled models).
     val ocrScript: OcrScript = Defaults.OCR_SCRIPT,
     // Screen-OCR capture-area outline: a subtle box kept on screen after the
@@ -113,6 +117,7 @@ data class UserSettings(
         // Silero VAD 切句参数（秒）。
         const val VAD_MIN_SILENCE_SEC = 0.2f
         const val VAD_MAX_SPEECH_SEC = 2f
+        const val PARTIAL_TRANSCRIPTS = true
         // Default OCR script for screen-region text recognition. AUTO runs the
         // Latin + Japanese recognizers and picks the better result (English/Japanese
         // screens), matching the default "auto" source language.

@@ -89,6 +89,26 @@
     <string name="settings_generic_thinking_effort">reasoning_effort</string>
     <string name="settings_generic_thinking_hint">Pick whichever shape your provider understands. It is sent only while the AI deep-thinking switch below is off; with \"Don\'t send\" that switch has no effect on this engine.</string>
 
+    <!-- Free AI translation guide. Every free tier here runs on an engine the app already
+         has, so a preset only fills in "engine + endpoint + model" and the user brings
+         their own key. -->
+    <string name="settings_free_title">Free AI translation</string>
+    <string name="settings_free_desc">You don\'t have to pay to translate with AI. Tap a provider below and the engine, endpoint and model are filled in for you — all you add is an API key.</string>
+    <string name="free_provider_zhipu">Zhipu GLM · glm-4-flash</string>
+    <string name="free_provider_zhipu_quota">Free forever, no token cap · nothing to set up but the key</string>
+    <string name="free_provider_hunyuan">SiliconFlow · Hunyuan-MT-7B</string>
+    <string name="free_provider_hunyuan_quota">Free (time-limited) · built for translation, 33 languages</string>
+    <string name="free_provider_qwen">SiliconFlow · Qwen3-8B</string>
+    <string name="free_provider_qwen_quota">Free · general-purpose, to fall back on if Hunyuan misbehaves</string>
+    <string name="free_console_zhipu">Zhipu Open Platform</string>
+    <string name="free_console_siliconflow">SiliconFlow</string>
+    <string name="settings_free_guide_show">How do I get an API key?</string>
+    <string name="settings_free_guide_hide">Hide the steps</string>
+    <string name="settings_free_guide_steps">1. Open the sign-up page below and register — both providers require real-name verification.\n2. Create an API key and copy it.\n3. Come back, tap the provider above, and paste the key into the \"API Key\" field that appears underneath.</string>
+    <string name="settings_free_console_open">Open %1$s</string>
+    <string name="settings_free_nokey">Rather not register at all? Pick Microsoft or Google Translate from the list below — neither needs a key.</string>
+    <string name="settings_free_privacy">Free tiers are rate-limited, and the text being translated is sent to whichever provider you pick.</string>
+
     <!-- Model chooser: presets + a live availability check + a free-text escape hatch. -->
     <string name="settings_model_title">Model</string>
     <string name="settings_model_custom">Custom…</string>
@@ -134,6 +154,8 @@
     <string name="settings_vad_desc">How pauses and sentence length split speech into subtitles. Applies on your next session.</string>
     <string name="settings_vad_pause_value">Cut after pause %1$.1f s</string>
     <string name="settings_vad_max_value">Max sentence %1$.1f s</string>
+    <string name="settings_partial_title">Stream while speaking (draft subtitles)</string>
+    <string name="settings_partial_summary">Shows the first part of a sentence while it is still being spoken, then replaces the line with a more accurate whole-sentence translation. Feels more live; costs more battery and one or two extra translation requests per sentence. Applies on your next session.</string>
 
     <string name="settings_appearance">Subtitle appearance</string>
     <string name="settings_font_size">Font size %1$d sp · system default font</string>

@@ -36,7 +36,8 @@ object SettingsSummary {
         append("languages: source=${settings.sourceLanguageCode} target=${settings.targetLanguageCode}\n")
         append("audioSource: ${settings.audioSourceMode.name}\n")
         append(
-            "vad: minSilence=${sec(settings.vadMinSilenceSec)} maxSpeech=${sec(settings.vadMaxSpeechSec)}\n"
+            "vad: minSilence=${sec(settings.vadMinSilenceSec)} maxSpeech=${sec(settings.vadMaxSpeechSec)} " +
+                "partial=${settings.partialTranscripts}\n"
         )
         append("ocrScript: ${settings.ocrScript.name} outline=${settings.ocrRegionOutlineEnabled}\n")
         append("history: ${settings.historyMode.name} limit=${settings.historyLimit}\n")

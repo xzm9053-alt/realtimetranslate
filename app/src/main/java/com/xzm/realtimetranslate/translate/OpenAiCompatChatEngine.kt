@@ -101,7 +101,23 @@ abstract class OpenAiCompatChatEngine(
     @Volatile
     private var thinkingDisableRejected = false
 
-    override fun translate(text: String, sourceLang: String, targetLang: String): Flow<String> = flow {
+    override fun translate(text: String, sourceLang: String, targetLang: String): Flow<String> =
+        translateInternal(text, sourceLang, targetLang, draft = false)
+
+    /**
+     * 草稿翻译：和正式翻译走完全同一条链路（同样的提示词、同样的上下文），
+     * 唯一区别是**不把这一句写进会话历史**——它是半句话，写进去会污染下一句的上下文。
+     * 结果由调用方在整句定稿时丢弃。
+     */
+    override fun translateDraft(text: String, sourceLang: String, targetLang: String): Flow<String> =
+        translateInternal(text, sourceLang, targetLang, draft = true)
+
+    private fun translateInternal(
+        text: String,
+        sourceLang: String,
+        targetLang: String,
+        draft: Boolean,
+    ): Flow<String> = flow {
         val cfg = config()
         val target = targetLabel(targetLang.ifBlank { "zh-Hans" })
         val messages = buildMessages(text, target)
@@ -110,6 +126,10 @@ abstract class OpenAiCompatChatEngine(
         // ---- TRANSPROF 诊断（只读埋点，不影响任何行为）----------------------
         // 每条请求打两行：req# 是发出去时的输入构成，done#/fail# 是耗时拆解。
         // 关键数是 ttf（首字延迟）：LLM 的自回归延迟主要体现在这里和 total。
+        // 草稿请求单独标 draft-，免得把草稿的首字延迟当成正式翻译的。
+        val kind = if (draft) "draft-req" else "req"
+        val doneKind = if (draft) "draft-done" else "done"
+        val failKind = if (draft) "draft-fail" else "fail"
         val seq = reqSeq.incrementAndGet()
         val t0 = SystemClock.elapsedRealtime()
         var promptChars = 0
@@ -118,8 +138,8 @@ abstract class OpenAiCompatChatEngine(
         }
         Log.i(
             logTag,
-            "TRANSPROF req#$seq model=${cfg.model} host=${url.toHttpUrlOrNull()?.host ?: "?"} " +
-                "in=${text.length} hist=${history.size} promptChars=$promptChars",
+            "TRANSPROF $kind#$seq model=${cfg.model} host=${url.toHttpUrlOrNull()?.host ?: "?"} " +
+                "in=${text.length} hist=${historySize()} promptChars=$promptChars",
         )
         var t1 = 0L
         var ttf = -1L
@@ -185,7 +205,7 @@ abstract class OpenAiCompatChatEngine(
                 outChars = builder.length
                 Log.i(
                     logTag,
-                    "TRANSPROF done#$seq code=${resp.code} proto=${resp.protocol} " +
+                    "TRANSPROF $doneKind#$seq code=${resp.code} proto=${resp.protocol} " +
                         "hdr=${t1 - t0} ttf=$ttf total=${SystemClock.elapsedRealtime() - t0} " +
                         "out=$outChars reason=$reasonChars end=$end " +
                         "finish=${finishReason.ifEmpty { "none" }}",
@@ -194,13 +214,19 @@ abstract class OpenAiCompatChatEngine(
                     throw IOException("$providerName 未返回任何内容（请检查模型名与 Key 权限）")
                 }
                 // 本句翻译完成，写入历史供下一句参考；超窗移除最旧。失败路径不会走到这里。
-                history.addLast(text to builder.toString())
-                if (history.size > historyWindow) history.removeFirst()
+                // 草稿不写：半句话进上下文只会把下一句带偏。加锁是因为草稿请求和正式请求
+                // 会并发跑，而 ArrayDeque 并发读写会抛 ConcurrentModificationException。
+                if (!draft) {
+                    synchronized(history) {
+                        history.addLast(text to builder.toString())
+                        if (history.size > historyWindow) history.removeFirst()
+                    }
+                }
             }
         } catch (t: Throwable) {
             Log.w(
                 logTag,
-                "TRANSPROF fail#$seq after=${SystemClock.elapsedRealtime() - t0} " +
+                "TRANSPROF $failKind#$seq after=${SystemClock.elapsedRealtime() - t0} " +
                     "hdr=${if (t1 > 0) t1 - t0 else -1} ttf=$ttf out=$outChars end=$end " +
                     "err=${t.javaClass.simpleName}: ${t.message}",
             )
@@ -527,13 +553,18 @@ abstract class OpenAiCompatChatEngine(
                     ),
             )
         // 上下文：把最近几轮（原文→译文）作为对话历史带入，翻译时参考前文（人称、指代、省略等）。
-        for ((src, dst) in history) {
+        // 先取快照：草稿翻译会并发读，正式翻译会并发写。
+        for ((src, dst) in historySnapshot()) {
             messages.put(JSONObject().put("role", "user").put("content", src))
             messages.put(JSONObject().put("role", "assistant").put("content", dst))
         }
         messages.put(JSONObject().put("role", "user").put("content", text))
         return messages
     }
+
+    private fun historySnapshot(): List<Pair<String, String>> = synchronized(history) { history.toList() }
+
+    private fun historySize(): Int = synchronized(history) { history.size }
 
     private fun targetLabel(code: String): String = when (code) {
         "zh-Hans" -> "Simplified Chinese (简体中文)"

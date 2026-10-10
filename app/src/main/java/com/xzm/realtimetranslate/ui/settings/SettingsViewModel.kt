@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.xzm.realtimetranslate.LiveTranslateApp
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.ApiKeyStore
+import com.xzm.realtimetranslate.data.FreeProvider
 import com.xzm.realtimetranslate.data.HistoryMode
 import com.xzm.realtimetranslate.data.OcrScript
 import com.xzm.realtimetranslate.data.ThinkingOffStyle
@@ -265,6 +266,35 @@ class SettingsViewModel(
 
     fun setEngine(type: TranslationEngineType) {
         update { it.copy(translationEngine = type) }
+    }
+
+    /**
+     * One-tap setup for a free provider: switch to the engine it runs on and fill in
+     * whatever the preset supplies. A blank field in [provider] means "leave it alone",
+     * which is how the Zhipu preset avoids copying an endpoint the engine already
+     * defaults to.
+     *
+     * The two writes have to happen together and through the draft setters, because every
+     * text field on this screen exists twice: a [TextFieldValue] draft in this ViewModel
+     * and the persisted [UserSettings]. Writing only one of them shows the new value while
+     * the next request still sends the old one.
+     *
+     * The API key is deliberately untouched — each provider needs its own, and silently
+     * copying the current engine's key onto a different provider's endpoint would send it
+     * somewhere it was never issued for.
+     */
+    fun applyFreeProvider(provider: FreeProvider) {
+        setEngine(provider.engine)
+        val model = provider.model.takeIf { it.isNotBlank() }?.let { TextFieldValue(it, TextRange(it.length)) }
+        val url = provider.baseUrl.takeIf { it.isNotBlank() }?.let { TextFieldValue(it, TextRange(it.length)) }
+        when (provider.engine) {
+            TranslationEngineType.OPENAI_COMPAT -> {
+                if (url != null) updateGenericBaseUrl(url)
+                if (model != null) updateGenericModel(model)
+            }
+            TranslationEngineType.ZHIPU -> if (model != null) updateZhipuModel(model)
+            else -> Unit
+        }
     }
 
     fun setOcrScript(script: OcrScript) {

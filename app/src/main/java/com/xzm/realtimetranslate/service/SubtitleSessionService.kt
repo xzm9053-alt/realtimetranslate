@@ -60,6 +60,11 @@ class SubtitleSessionService : Service() {
     // 显示滚动历史（已定格句子）+ 当前流式翻译句。新句开始时上一句定格进历史，而非被清屏。
     private var outputHistory = StringBuilder()
     private var outputCurrent = StringBuilder()
+    // 「边说边出」的草稿：只贴在当前这一行的尾巴上，随时可丢——它属于一句还没说完的话，
+    // 定稿一到就整体作废。绝不能并进 accumulatedInput / outputCurrent / full*，
+    // 否则草稿会被当成正文累积下来（导出、历史里全是半句话的重复）。
+    private var inputPartial = ""
+    private var outputPartial = ""
     private var fullInput = StringBuilder()
     private var fullOutput = StringBuilder()
 
@@ -113,6 +118,8 @@ class SubtitleSessionService : Service() {
         accumulatedInput.clear()
         outputHistory.clear()
         outputCurrent.clear()
+        inputPartial = ""
+        outputPartial = ""
         fullInput.clear()
         fullOutput.clear()
         captureStarted = false
@@ -191,13 +198,23 @@ class SubtitleSessionService : Service() {
                             startCapturePipeline(client)
                         }
                         is RealtimeTranslationClient.LiveEvent.InputTranscript -> {
+                            inputPartial = "" // 定稿取代草稿
                             appendTranscript(accumulatedInput, event.text)
                             appendFull(fullInput, event.text)
                             val text = accumulatedInput.toString()
                             overlay?.updateTranscripts(input = text, output = null)
                             SessionBus.setPreview(input = text)
                         }
+                        // 草稿原文：只接在累积原文后面显示，不进任何持久缓冲。
+                        // 下一句的草稿会整体替换它，定稿事件则把它清掉。
+                        is RealtimeTranslationClient.LiveEvent.InputPartial -> {
+                            inputPartial = event.text
+                            val text = accumulatedInput.toString() + inputPartial
+                            overlay?.updateTranscripts(input = text, output = null)
+                            SessionBus.setPreview(input = text)
+                        }
                         is RealtimeTranslationClient.LiveEvent.OutputTranscript -> {
+                            outputPartial = "" // 定稿取代草稿
                             appendOutputCurrent(event.text)
                             appendFull(fullOutput, event.text)
                             val text = buildString {
@@ -207,9 +224,23 @@ class SubtitleSessionService : Service() {
                             overlay?.updateTranscripts(input = null, output = text)
                             SessionBus.setPreview(output = text)
                         }
+                        // 草稿译文：排在已定格的历史和当前句之后。它整条都可丢弃——
+                        // 正式翻译一开始（OutputReset）就没了。
+                        is RealtimeTranslationClient.LiveEvent.OutputPartial -> {
+                            outputPartial = event.text
+                            val text = buildString {
+                                append(outputHistory)
+                                append(outputCurrent)
+                                append(outputPartial)
+                            }
+                            overlay?.updateTranscripts(input = null, output = text)
+                            SessionBus.setPreview(output = text)
+                        }
                         // 新句开始：当前句定格进滚动历史（不清屏）。流式重写只改当前行、
                         // 不会逐段追加成上一句的重复堆叠。fullOutput 仍保持累积供导出。
+                        // 草稿译文也在这里作废：这一行现在归正式翻译了。
                         is RealtimeTranslationClient.LiveEvent.OutputReset -> {
+                            outputPartial = ""
                             finalizeOutputCurrent()
                         }
                         // 译音播放已移除，音频块事件直接忽略。

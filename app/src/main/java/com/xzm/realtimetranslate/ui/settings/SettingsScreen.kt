@@ -1,5 +1,6 @@
 package com.xzm.realtimetranslate.ui.settings
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.annotation.StringRes
@@ -50,12 +51,14 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.xzm.realtimetranslate.BuildConfig
 import com.xzm.realtimetranslate.R
+import com.xzm.realtimetranslate.data.FreeTranslationProviders
 import com.xzm.realtimetranslate.data.HistoryMode
 import com.xzm.realtimetranslate.data.OcrScript
 import com.xzm.realtimetranslate.data.SubtitleDisplayMode
 import com.xzm.realtimetranslate.data.ThinkingOffStyle
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
+import com.xzm.realtimetranslate.data.isActiveIn
 import com.xzm.realtimetranslate.translate.ModelAvailability
 import com.xzm.realtimetranslate.translate.ModelProbe
 import com.xzm.realtimetranslate.translate.ModelPresets
@@ -125,6 +128,7 @@ fun SettingsScreen(
     // Version is the natural place for a hidden gesture: nobody taps a version number by
     // accident five times, and it costs no screen space.
     var versionTaps by rememberSaveable { mutableIntStateOf(0) }
+    var showFreeGuide by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) { viewModel.refreshDiagnostics() }
 
     // Dark-mode safe field colors (explicit text / cursor colors)
@@ -155,6 +159,80 @@ fun SettingsScreen(
             title = stringResource(R.string.settings_title),
             subtitle = stringResource(R.string.settings_subtitle),
         )
+
+        // Free AI translation, promoted above the engine list on purpose: the free tiers
+        // all run on engines further down, and a user who never gets past this card would
+        // reasonably conclude the app has no free AI option. Everything here is a
+        // preset over engines that already ship — no engine is added or changed.
+        SmallTitle(
+            text = stringResource(R.string.settings_free_title),
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
+        SectionCard {
+            Column(
+                modifier = Modifier.padding(vertical = 6.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_free_desc),
+                    fontSize = 13.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+                FreeTranslationProviders.all.forEach { provider ->
+                    OptionRow(
+                        label = stringResource(provider.nameRes),
+                        summary = stringResource(provider.quotaRes),
+                        // The ✓ marks the provider that is live right now, which is also
+                        // the whole feedback for a tap: the fields below visibly fill in.
+                        selected = provider.isActiveIn(settings),
+                        onClick = { viewModel.applyFreeProvider(provider) },
+                    )
+                }
+                TextButton(
+                    text = stringResource(
+                        if (showFreeGuide) {
+                            R.string.settings_free_guide_hide
+                        } else {
+                            R.string.settings_free_guide_show
+                        },
+                    ),
+                    onClick = { showFreeGuide = !showFreeGuide },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (showFreeGuide) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.settings_free_guide_steps),
+                            fontSize = 13.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                        // One button per site, not per provider: both SiliconFlow models
+                        // are created from the same console page.
+                        FreeTranslationProviders.consolePages.forEach { page ->
+                            TextButton(
+                                text = stringResource(
+                                    R.string.settings_free_console_open,
+                                    stringResource(page.consoleNameRes),
+                                ),
+                                onClick = { openUrl(context, page.consoleUrl) },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                }
+                EngineHint(
+                    textRes = R.string.settings_free_nokey,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+                EngineHint(
+                    textRes = R.string.settings_free_privacy,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
+        }
 
         SmallTitle(
             text = stringResource(R.string.settings_engine),
@@ -534,6 +612,16 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
+            // 「边说边出」跟切句参数是一回事的两面：切得越长，草稿字幕能提前显示的
+            // 就越多，所以放在同一张卡里——用户一眼能看出两个滑杆是在权衡同一件事。
+            SettingSwitchRow(
+                title = stringResource(R.string.settings_partial_title),
+                summary = stringResource(R.string.settings_partial_summary),
+                checked = settings.partialTranscripts,
+                onCheckedChange = { v ->
+                    viewModel.update { it.copy(partialTranscripts = v) }
+                },
+            )
         }
 
         SmallTitle(
@@ -1159,6 +1247,17 @@ private fun RevealKeyButton(reveal: Boolean, onToggle: () -> Unit) {
         text = stringResource(if (reveal) R.string.settings_hide else R.string.settings_show),
         onClick = onToggle,
     )
+}
+
+/**
+ * Opens an external page (a provider's sign-up page). Best-effort: a device with no
+ * browser, or a locked-down one that refuses the intent, simply does nothing rather than
+ * crashing the settings screen.
+ */
+private fun openUrl(context: Context, url: String) {
+    runCatching {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    }
 }
 
 /** Small grey explanatory line under an engine's fields. */
