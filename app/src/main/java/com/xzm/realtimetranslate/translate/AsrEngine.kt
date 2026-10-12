@@ -14,6 +14,7 @@ import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Local speech recognition: Silero VAD splits the 16 kHz mono PCM16 stream into
@@ -96,6 +97,8 @@ class AsrEngine(
     /** 草稿识别同一时刻只允许一个在跑；跑完才允许下一个进队列。 */
     private val partialInFlight = AtomicBoolean(false)
     private var lastPartialAtMs = 0L
+    /** 草稿世代计数器：定稿一旦触发立即递增，使队列中积压的旧草稿任务瞬间自毁，抢先让路给定稿。 */
+    private val partialEpoch = AtomicLong(0L)
 
     /**
      * 草稿识别和定稿识别共用这一个单线程 executor，这是刻意的：
@@ -135,7 +138,9 @@ class AsrEngine(
                 val segment = vad.front()
                 vad.pop()
                 popped = true
-                // 这句定稿了：草稿缓冲和"已经稳下来"的判断一起清零，从下一句重新攒。
+                // 这句定稿了：旧草稿任务瞬间失效自毁，草稿缓冲和"已经稳下来"的判断一起清零。
+                partialEpoch.incrementAndGet()
+                partialInFlight.set(false)
                 pendingSize = 0
                 stablePrefix.reset()
                 val samples = segment.samples
@@ -199,15 +204,17 @@ class AsrEngine(
         if (now - lastPartialAtMs < interval) return
         if (!partialInFlight.compareAndSet(false, true)) return
         lastPartialAtMs = now
+        val epoch = partialEpoch.get()
         val snapshot = pending.copyOf(pendingSize)
-        recognitionExecutor.execute { runPartial(snapshot) }
+        recognitionExecutor.execute { runPartial(snapshot, epoch) }
     }
 
-    private fun runPartial(samples: FloatArray) {
+    private fun runPartial(samples: FloatArray, epoch: Long) {
         try {
-            if (closed.get()) return
+            if (closed.get() || partialEpoch.get() != epoch) return
             val callback = onPartial ?: return
             val text = transcribe(samples) ?: return
+            if (partialEpoch.get() != epoch) return
             // 两次结果都对上的那一段才算数；没变长就不必打扰下游。
             val stable = stablePrefix.accept(text) ?: return
             callback(stable)

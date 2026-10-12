@@ -114,9 +114,9 @@ data class UserSettings(
         const val HISTORY_LIMIT = 20
         const val HISTORY_LIMIT_MIN = 5
         const val HISTORY_LIMIT_MAX = 200
-        // Silero VAD 切句参数（秒）。
-        const val VAD_MIN_SILENCE_SEC = 0.2f
-        const val VAD_MAX_SPEECH_SEC = 2f
+        // Silero VAD 切句参数（秒）：默认静音放宽至 0.4s（贴合口语换气停顿），单句上限放宽至 4.5s 保证长句语义完整。
+        const val VAD_MIN_SILENCE_SEC = 0.4f
+        const val VAD_MAX_SPEECH_SEC = 4.5f
         const val PARTIAL_TRANSCRIPTS = true
         // Default OCR script for screen-region text recognition. AUTO runs the
         // Latin + Japanese recognizers and picks the better result (English/Japanese
