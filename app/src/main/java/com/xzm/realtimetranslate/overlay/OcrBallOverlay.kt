@@ -1,6 +1,8 @@
 package com.xzm.realtimetranslate.overlay
 
 import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ComponentCallbacks
 import android.content.Context
 import android.content.res.Configuration
@@ -23,6 +25,7 @@ import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.TextView
+import android.widget.Toast
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.UserSettings
 import com.xzm.realtimetranslate.util.realScreenMetrics
@@ -310,9 +313,31 @@ class OcrBallOverlay(
             setTextSize(TypedValue.COMPLEX_UNIT_SP, clampedFontSp(settings.fontSizeSp))
             setTextColor(settings.translationTextColor.toInt())
             text = ""
-            setPadding(0, 0, (24 * density).roundToInt(), 0)
+            setPadding(0, 0, (56 * density).roundToInt(), 0)
         }
         popupText = tv
+
+        val copy = TextView(context).apply {
+            text = "📋"
+            textSize = 12f
+            gravity = Gravity.CENTER
+            contentDescription = "复制译文"
+            setOnClickListener {
+                val textToCopy = shownOutput.ifBlank { shownInput }
+                if (textToCopy.isNotBlank()) {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("OCR Translation", textToCopy))
+                    Toast.makeText(context, "已复制译文", Toast.LENGTH_SHORT).show()
+                }
+            }
+            layoutParams = FrameLayout.LayoutParams(
+                (26 * density).roundToInt(),
+                (26 * density).roundToInt(),
+                Gravity.TOP or Gravity.END,
+            ).apply {
+                marginEnd = (28 * density).roundToInt()
+            }
+        }
 
         val close = TextView(context).apply {
             text = "✕"
@@ -343,6 +368,7 @@ class OcrBallOverlay(
                     FrameLayout.LayoutParams.WRAP_CONTENT,
                 ),
             )
+            addView(copy)
             addView(close)
         }
         popupWindowView = card

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -730,6 +731,76 @@ fun SettingsScreen(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                // 所见即所得实时字幕预览卡片
+                Text(
+                    text = "实时效果预览",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            Color(
+                                red = 0.08f,
+                                green = 0.08f,
+                                blue = 0.10f,
+                                alpha = settings.backgroundAlpha.coerceIn(0.1f, 1f)
+                            )
+                        )
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        // 抓手条示意
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .width(36.dp)
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(Color.White.copy(alpha = 0.45f)),
+                        )
+
+                        Spacer(modifier = Modifier.height(2.dp))
+
+                        if (settings.displayMode != SubtitleDisplayMode.TRANSLATION) {
+                            Text(
+                                text = "Good morning, everyone. Welcome to the conference.",
+                                fontSize = settings.fontSizeSp.sp,
+                                color = Color(settings.sourceTextColor),
+                                lineHeight = (settings.fontSizeSp * 1.3f).sp,
+                                fontWeight = FontWeight.Normal,
+                            )
+                        }
+
+                        if (settings.displayMode == SubtitleDisplayMode.BOTH) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(1.dp)
+                                    .background(Color.White.copy(alpha = 0.15f))
+                            )
+                        }
+
+                        if (settings.displayMode != SubtitleDisplayMode.SOURCE) {
+                            Text(
+                                text = "大家早上好，欢迎参加本次大会。",
+                                fontSize = settings.fontSizeSp.sp,
+                                color = Color(settings.translationTextColor),
+                                lineHeight = (settings.fontSizeSp * 1.3f).sp,
+                                fontWeight = FontWeight.Medium,
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
+
                 Text(
                     text = stringResource(R.string.settings_font_size, settings.fontSizeSp.toInt()),
                     fontSize = 13.sp,

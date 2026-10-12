@@ -4,6 +4,8 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ComponentCallbacks
 import android.content.Context
 import android.content.res.Configuration
@@ -13,6 +15,12 @@ import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import com.xzm.realtimetranslate.util.AppLog as Log
 import android.util.TypedValue
 import android.view.Gravity
@@ -25,8 +33,10 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import com.xzm.realtimetranslate.data.SubtitleDisplayMode
 import com.xzm.realtimetranslate.data.UserSettings
+import com.xzm.realtimetranslate.service.SessionBus
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -66,6 +76,13 @@ class SubtitleOverlayController(
     private var rootPadB = 0
     private var isCollapsed = false
     private var isAnimating = false
+
+    // ---- 快捷操作栏与穿透锁定 ----
+    private var actionBar: LinearLayout? = null
+    private var unlockPillView: View? = null
+    private var isTouchThroughLocked = false
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val autoHideActionBarRunnable = Runnable { hideActionBar() }
     /** 折叠态球吸附边：LEFT / RIGHT（半球贴边）或 FLOAT（完整圆浮动）。 */
     private var ballSide = BallView.SIDE_RIGHT
     private var savedX = 0
@@ -156,6 +173,7 @@ class SubtitleOverlayController(
         settings = value
         applySettingsToViews()
         applyLayoutMode()
+        updateActionBarModeText()
         if (displayModeChanged || fontChanged) {
             // Layout geometry of lines changes — re-baseline counters
             lastInputLineCount = 0
@@ -174,6 +192,8 @@ class SubtitleOverlayController(
 
     fun hide() {
         unregisterCallbacks()
+        hideUnlockPill()
+        mainHandler.removeCallbacksAndMessages(null)
         val view = rootView ?: return
         runCatching { windowManager.removeView(view) }
         rootView = null
@@ -188,9 +208,11 @@ class SubtitleOverlayController(
         ballView = null
         resizeHandle = null
         rootBackground = null
+        actionBar = null
         // 重置折叠状态，防止残留状态污染下次会话。
         isCollapsed = false
         isAnimating = false
+        isTouchThroughLocked = false
         ballSide = BallView.SIDE_RIGHT
     }
 
@@ -340,6 +362,10 @@ class SubtitleOverlayController(
         grabberRow.addView(grabberBar)
         grabberRow.setOnTouchListener(MoveTouchListener())
         column.addView(grabberRow)
+
+        val actBar = buildActionBar(density)
+        actionBar = actBar
+        column.addView(actBar)
 
         // ---- Source pane (BOTH / SOURCE only) ----
         val sourceSection = LinearLayout(context).apply {
@@ -604,6 +630,228 @@ class SubtitleOverlayController(
     private fun ballSizePx(): Int =
         (BALL_SIZE_DP * context.resources.displayMetrics.density).roundToInt()
 
+    private fun triggerHaptic() {
+        runCatching {
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                vm?.defaultVibrator ?: (context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)
+            } else {
+                @Suppress("DEPRECATION")
+                context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            }
+            if (vibrator?.hasVibrator() == true) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    vibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(15)
+                }
+            }
+        }
+    }
+
+    private fun buildActionBar(density: Float): LinearLayout {
+        return LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            visibility = View.GONE
+            val padH = (6 * density).roundToInt()
+            val padV = (3 * density).roundToInt()
+            setPadding(padH, padV, padH, padV)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = (4 * density).roundToInt()
+            }
+            background = GradientDrawable().apply {
+                cornerRadius = 8 * density
+                setColor(Color.argb(190, 25, 27, 33))
+            }
+
+            fun createActionBtn(label: String, tag: String? = null, onClick: () -> Unit): TextView {
+                return TextView(context).apply {
+                    this.text = label
+                    if (tag != null) this.tag = tag
+                    setTextColor(Color.WHITE)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                    gravity = Gravity.CENTER
+                    val btnPadH = (8 * density).roundToInt()
+                    val btnPadV = (4 * density).roundToInt()
+                    setPadding(btnPadH, btnPadV, btnPadH, btnPadV)
+                    background = GradientDrawable().apply {
+                        cornerRadius = 6 * density
+                        setColor(Color.argb(80, 255, 255, 255))
+                    }
+                    layoutParams = LinearLayout.LayoutParams(
+                        0,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        1f
+                    ).apply {
+                        marginEnd = (4 * density).roundToInt()
+                    }
+                    setOnClickListener { onClick() }
+                }
+            }
+
+            addView(createActionBtn("📋 复制") { copyTranslationToClipboard() })
+            val modeLabel = when (settings.displayMode) {
+                SubtitleDisplayMode.BOTH -> "双语"
+                SubtitleDisplayMode.TRANSLATION -> "仅译文"
+                SubtitleDisplayMode.SOURCE -> "仅原文"
+            }
+            addView(createActionBtn(modeLabel, tag = "btn_mode") { cycleDisplayMode() })
+            addView(createActionBtn("🔒 穿透") { setTouchThroughLock(true) })
+            val exitBtn = createActionBtn("✕ 关闭") {
+                triggerHaptic()
+                SessionBus.tryStop()
+                hide()
+            }.apply {
+                (layoutParams as LinearLayout.LayoutParams).marginEnd = 0
+            }
+            addView(exitBtn)
+        }
+    }
+
+    private fun showActionBar() {
+        val bar = actionBar ?: return
+        bar.visibility = View.VISIBLE
+        bar.alpha = 0f
+        bar.animate().alpha(1f).setDuration(180).start()
+        resetAutoHideActionBar()
+    }
+
+    private fun hideActionBar() {
+        val bar = actionBar ?: return
+        mainHandler.removeCallbacks(autoHideActionBarRunnable)
+        bar.animate().alpha(0f).setDuration(180).withEndAction {
+            bar.visibility = View.GONE
+        }.start()
+    }
+
+    private fun toggleActionBar() {
+        val bar = actionBar ?: return
+        triggerHaptic()
+        if (bar.visibility == View.VISIBLE) {
+            hideActionBar()
+        } else {
+            showActionBar()
+        }
+    }
+
+    private fun resetAutoHideActionBar() {
+        mainHandler.removeCallbacks(autoHideActionBarRunnable)
+        mainHandler.postDelayed(autoHideActionBarRunnable, 4000L)
+    }
+
+    private fun copyTranslationToClipboard() {
+        triggerHaptic()
+        val textToCopy = outputText.ifBlank { inputText }
+        if (textToCopy.isBlank()) {
+            Toast.makeText(context, "暂无字幕内容可复制", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = ClipData.newPlainText("Subtitle Translation", textToCopy)
+        clipboard.setPrimaryClip(clip)
+        Toast.makeText(context, "已复制最新字幕", Toast.LENGTH_SHORT).show()
+        resetAutoHideActionBar()
+    }
+
+    private fun cycleDisplayMode() {
+        triggerHaptic()
+        val nextMode = when (settings.displayMode) {
+            SubtitleDisplayMode.BOTH -> SubtitleDisplayMode.TRANSLATION
+            SubtitleDisplayMode.TRANSLATION -> SubtitleDisplayMode.SOURCE
+            SubtitleDisplayMode.SOURCE -> SubtitleDisplayMode.BOTH
+        }
+        updateSettings(settings.copy(displayMode = nextMode))
+        resetAutoHideActionBar()
+    }
+
+    private fun updateActionBarModeText() {
+        val modeBtn = actionBar?.findViewWithTag<TextView>("btn_mode") ?: return
+        modeBtn.text = when (settings.displayMode) {
+            SubtitleDisplayMode.BOTH -> "双语"
+            SubtitleDisplayMode.TRANSLATION -> "仅译文"
+            SubtitleDisplayMode.SOURCE -> "仅原文"
+        }
+    }
+
+    private fun setTouchThroughLock(locked: Boolean) {
+        val params = layoutParams ?: return
+        val root = rootView ?: return
+        isTouchThroughLocked = locked
+        triggerHaptic()
+        if (locked) {
+            hideActionBar()
+            params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            runCatching { windowManager.updateViewLayout(root, params) }
+            showUnlockPill()
+            Toast.makeText(context, "悬浮窗已开启触控穿透，长按右侧解锁胶囊恢复", Toast.LENGTH_SHORT).show()
+        } else {
+            params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+            runCatching { windowManager.updateViewLayout(root, params) }
+            hideUnlockPill()
+            Toast.makeText(context, "触控穿透已解除", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun showUnlockPill() {
+        if (unlockPillView != null) return
+        val density = context.resources.displayMetrics.density
+        val pillSize = (40 * density).roundToInt()
+        val pill = FrameLayout(context).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.argb(220, 46, 124, 246))
+            }
+            val iconText = TextView(context).apply {
+                text = "🔓"
+                textSize = 18f
+                gravity = Gravity.CENTER
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            }
+            addView(iconText)
+            setOnLongClickListener {
+                setTouchThroughLock(false)
+                true
+            }
+            setOnClickListener {
+                Toast.makeText(context, "长按解锁字幕悬浮窗", Toast.LENGTH_SHORT).show()
+            }
+        }
+        val pillParams = WindowManager.LayoutParams(
+            pillSize,
+            pillSize,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_PHONE
+            },
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.END
+            x = (12 * density).roundToInt()
+            y = (screenMetrics().second / 3)
+        }
+        runCatching {
+            windowManager.addView(pill, pillParams)
+            unlockPillView = pill
+        }
+    }
+
+    private fun hideUnlockPill() {
+        val pill = unlockPillView ?: return
+        runCatching { windowManager.removeView(pill) }
+        unlockPillView = null
+    }
+
     /**
      * 拖动松手时判定贴边：窗口左边缘贴边→折叠到左；右边缘贴边→折叠到右。
      * 返回是否已触发折叠（触发则上层不再 persist，避免小球几何覆盖窗口位置）。
@@ -637,6 +885,7 @@ class SubtitleOverlayController(
         savedH = params.height
         ballSide = side
         isAnimating = true
+        triggerHaptic()
 
         // 摘下窗口背景与 padding，折叠期间由小球（半球）接管。
         rootBackground = root.background
@@ -708,6 +957,7 @@ class SubtitleOverlayController(
         if (!isCollapsed || isAnimating) return
 
         isAnimating = true
+        triggerHaptic()
 
         val (screenW, screenH, _) = screenMetrics()
         val targetW = clampWidth(savedW, screenW)
@@ -770,8 +1020,11 @@ class SubtitleOverlayController(
     }
 
     private inner class MoveTouchListener : View.OnTouchListener {
+        private var startX = 0f
+        private var startY = 0f
         private var lastX = 0f
         private var lastY = 0f
+        private var startTime = 0L
 
         @SuppressLint("ClickableViewAccessibility")
         override fun onTouch(v: View, event: MotionEvent): Boolean {
@@ -781,8 +1034,11 @@ class SubtitleOverlayController(
                 when (event.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
                         clampAndApply(persist = false, reason = "move-down")
+                        startX = event.rawX
+                        startY = event.rawY
                         lastX = event.rawX
                         lastY = event.rawY
+                        startTime = SystemClock.uptimeMillis()
                         true
                     }
                     MotionEvent.ACTION_MOVE -> {
@@ -808,9 +1064,11 @@ class SubtitleOverlayController(
                         true
                     }
                     MotionEvent.ACTION_UP -> {
-                        // 贴边则折叠成小球；否则正常落位。折叠时窗口几何已在 MOVE 中持久化，
-                        // 不在此 persist，避免小球几何覆盖窗口位置。
-                        if (!maybeFold()) {
+                        val dist = kotlin.math.hypot(event.rawX - startX, event.rawY - startY)
+                        val duration = SystemClock.uptimeMillis() - startTime
+                        if (dist < touchSlopPx && duration < 350) {
+                            toggleActionBar()
+                        } else if (!maybeFold()) {
                             clampAndApply(persist = true, reason = "move-up")
                         }
                         true
@@ -1006,6 +1264,9 @@ class SubtitleOverlayController(
         }
         params.y = safeCoerce(params.y, 0, max(0, screenH - size))
         ballView?.side = ballSide
+        if (ballSide == BallView.SIDE_LEFT || ballSide == BallView.SIDE_RIGHT) {
+            triggerHaptic()
+        }
         runCatching { windowManager.updateViewLayout(root, params) }
             .onFailure { Log.e(TAG, "ball park failed", it) }
     }

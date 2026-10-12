@@ -22,6 +22,8 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Settings
@@ -73,7 +75,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             AppTheme {
                 val scope = rememberCoroutineScope()
-                var tab by remember { mutableIntStateOf(0) }
+                val pagerState = rememberPagerState(pageCount = { 3 })
 
                 val subtitleVm: SubtitleViewModel = viewModel(
                     factory = SubtitleViewModelFactory(
@@ -255,7 +257,7 @@ class MainActivity : ComponentActivity() {
                         // 需要 Key 的引擎没填 Key 就不放行；免 Key 引擎（微软 / 谷歌免费）直接过。
                         missingEngineKeyMessage()?.let { message ->
                             SessionBus.setStatus(SessionBus.Status.Error, message)
-                            tab = 1
+                            scope.launch { pagerState.animateScrollToPage(1) }
                             return
                         }
                         val mode = settings.audioSourceMode
@@ -315,7 +317,7 @@ class MainActivity : ComponentActivity() {
                         // 同 requestStartSubtitle：统一凭据门禁。
                         missingEngineKeyMessage()?.let { message ->
                             ScreenOcrBus.setStatus(ScreenOcrBus.Status.Error, message)
-                            tab = 1
+                            scope.launch { pagerState.animateScrollToPage(1) }
                             return
                         }
                         val needed = buildList {
@@ -351,43 +353,31 @@ class MainActivity : ComponentActivity() {
                     bottomBar = {
                         NavigationBar(mode = NavigationBarDisplayMode.IconAndText) {
                             NavigationBarItem(
-                                selected = tab == 0,
-                                onClick = { tab = 0 },
+                                selected = pagerState.currentPage == 0,
+                                onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
                                 icon = Icons.Outlined.Subtitles,
                                 label = stringResource(R.string.tab_subtitle),
                             )
                             NavigationBarItem(
-                                selected = tab == 1,
-                                onClick = { tab = 1 },
+                                selected = pagerState.currentPage == 1,
+                                onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
                                 icon = Icons.Outlined.Settings,
                                 label = stringResource(R.string.tab_settings),
                             )
                             NavigationBarItem(
-                                selected = tab == 2,
-                                onClick = { tab = 2 },
+                                selected = pagerState.currentPage == 2,
+                                onClick = { scope.launch { pagerState.animateScrollToPage(2) } },
                                 icon = Icons.Outlined.History,
                                 label = stringResource(R.string.tab_history),
                             )
                         }
                     },
                 ) { padding ->
-                    AnimatedContent(
-                        targetState = tab,
+                    HorizontalPager(
+                        state = pagerState,
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(padding),
-                        transitionSpec = {
-                            val forward = targetState > initialState
-                            val duration = 260
-                            if (forward) {
-                                slideInHorizontally(tween(duration)) { it } togetherWith
-                                    slideOutHorizontally(tween(duration)) { -it }
-                            } else {
-                                slideInHorizontally(tween(duration)) { -it } togetherWith
-                                    slideOutHorizontally(tween(duration)) { it }
-                            }
-                        },
-                        label = "main-tab",
                     ) { page ->
                         when (page) {
                             0 -> SubtitleScreen(

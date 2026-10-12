@@ -75,6 +75,8 @@ object SessionBus {
         _commands.emit(Command.Stop)
     }
 
+    fun tryStop(): Boolean = _commands.tryEmit(Command.Stop)
+
     fun reset() {
         _state.value = UiState()
     }
