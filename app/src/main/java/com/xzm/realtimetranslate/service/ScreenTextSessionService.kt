@@ -21,6 +21,8 @@ import android.view.WindowManager
 import androidx.core.app.NotificationCompat
 import com.xzm.realtimetranslate.LiveTranslateApp
 import com.xzm.realtimetranslate.R
+import com.xzm.realtimetranslate.data.HistoryEntry
+import com.xzm.realtimetranslate.data.HistoryMode
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
 import com.xzm.realtimetranslate.ocr.ScreenTextCapturer
@@ -109,6 +111,8 @@ class ScreenTextSessionService : Service() {
     @Volatile
     private var stopped = false
 
+    private val ocrRecords = mutableListOf<Pair<String, String>>()
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -186,6 +190,7 @@ class ScreenTextSessionService : Service() {
         data: Intent,
         app: LiveTranslateApp,
     ) {
+        synchronized(ocrRecords) { ocrRecords.clear() }
         currentSettings = app.settingsRepository.settings.first()
 
         // Engine-aware credential gate: engines with requiresApiKey need a key,
@@ -421,6 +426,13 @@ class ScreenTextSessionService : Service() {
             if (AppLog.contentEnabled && outText.isNotBlank()) {
                 AppLog.content(TAG, "ocr ${text.take(500)} → ${outText.take(500)}")
             }
+            if (outText.isNotBlank()) {
+                synchronized(ocrRecords) {
+                    if (ocrRecords.isEmpty() || ocrRecords.last().first != text || ocrRecords.last().second != outText) {
+                        ocrRecords.add(text to outText)
+                    }
+                }
+            }
         } catch (t: CancellationException) {
             // 停会话/换区域导致的取消。必须原样上抛：否则会被下面那个
             // catch (Throwable) 当成翻译失败，把「翻译失败」画到气泡上。
@@ -545,6 +557,17 @@ class ScreenTextSessionService : Service() {
         if (stopped) return
         stopped = true
         ScreenOcrBus.setStatus(ScreenOcrBus.Status.Stopped, message)
+        val historyList = synchronized(ocrRecords) { ocrRecords.toList() }
+        if (historyList.isNotEmpty()) {
+            val inFull = historyList.joinToString("\n\n") { it.first }
+            val outFull = historyList.joinToString("\n\n") { it.second }
+            val app = application as LiveTranslateApp
+            app.historyRepository.append(
+                HistoryEntry(System.currentTimeMillis(), inFull, outFull),
+                maxEntries = if (currentSettings.historyMode == HistoryMode.SAVE_ALL) null
+                else currentSettings.historyLimit,
+            )
+        }
         ocrJob?.cancel()
         ocrJob = null
         ocr?.close()

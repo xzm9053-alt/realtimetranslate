@@ -193,7 +193,8 @@ class ScreenTextOcr {
                 sb.append(line.text.trim())
             }
         }
-        return sb.toString().trim()
+        val raw = sb.toString().trim()
+        return OcrTextProcessor.cleanAndJoinLines(raw)
     }
 
     companion object {

@@ -15,6 +15,9 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.text.method.ScrollingMovementMethod
 import com.xzm.realtimetranslate.util.AppLog as Log
 import android.util.TypedValue
@@ -223,6 +226,35 @@ class OcrBallOverlay(
         runCatching { windowManager.updateViewLayout(root, params) }
     }
 
+    private fun triggerSnapHaptic() {
+        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+            vm?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        }
+        vibrator?.let {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                it.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
+            } else {
+                @Suppress("DEPRECATION")
+                it.vibrate(20L)
+            }
+        }
+    }
+
+    private fun toggleRegionOutline() {
+        val region = lastRegion ?: return
+        if (outlineWindowView != null) {
+            hideRegionOutline()
+            Toast.makeText(context, "已隐藏取词框（长按悬浮球可恢复）", Toast.LENGTH_SHORT).show()
+        } else {
+            showRegionOutline(region)
+            Toast.makeText(context, "已显示取词框", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     private inner class BallTouch : View.OnTouchListener {
         private var downX = 0f
@@ -230,6 +262,15 @@ class OcrBallOverlay(
         private var dragging = false
         private var grabDx = 0f
         private var grabDy = 0f
+        private var longPressTriggered = false
+
+        private val longPressRunnable = Runnable {
+            if (!dragging) {
+                longPressTriggered = true
+                toggleRegionOutline()
+                triggerSnapHaptic()
+            }
+        }
 
         override fun onTouch(v: View, event: MotionEvent): Boolean {
             if (ballWindowView == null) return false
@@ -239,8 +280,10 @@ class OcrBallOverlay(
                         downX = event.rawX
                         downY = event.rawY
                         dragging = false
+                        longPressTriggered = false
                         grabDx = event.rawX - centerX
                         grabDy = event.rawY - centerY
+                        v.postDelayed(longPressRunnable, 500L)
                         true
                     }
                     MotionEvent.ACTION_MOVE -> {
@@ -249,6 +292,7 @@ class OcrBallOverlay(
                                 abs(event.rawY - downY) > touchSlopPx)
                         ) {
                             dragging = true
+                            v.removeCallbacks(longPressRunnable)
                             // Pull it off the edge — the full circle reveals itself.
                             side = BallView.SIDE_FLOAT
                             applyGeometry()
@@ -262,13 +306,18 @@ class OcrBallOverlay(
                         true
                     }
                     MotionEvent.ACTION_UP -> {
-                        if (!dragging) {
+                        v.removeCallbacks(longPressRunnable)
+                        if (longPressTriggered) {
+                            true
+                        } else if (!dragging) {
                             runCatching { onTap() }
+                            true
                         } else {
                             val (screenW, _, _) = screenMetrics()
                             val size = sizePx()
                             centerX = (event.rawX - grabDx).roundToInt()
                             centerY = (event.rawY - grabDy).roundToInt()
+                            val prevSide = side
                             side = when {
                                 centerX <= size * 3 / 4 -> BallView.SIDE_LEFT
                                 centerX >= screenW - size * 3 / 4 -> BallView.SIDE_RIGHT
@@ -277,11 +326,15 @@ class OcrBallOverlay(
                             if (side == BallView.SIDE_LEFT) centerX = 0
                             if (side == BallView.SIDE_RIGHT) centerX = screenW
                             applyGeometry()
+                            if (side != BallView.SIDE_FLOAT && side != prevSide) {
+                                triggerSnapHaptic()
+                            }
                             movePopup()
+                            true
                         }
-                        true
                     }
                     MotionEvent.ACTION_CANCEL -> {
+                        v.removeCallbacks(longPressRunnable)
                         dragging = false
                         true
                     }
