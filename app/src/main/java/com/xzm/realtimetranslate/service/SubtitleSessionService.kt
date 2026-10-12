@@ -56,17 +56,9 @@ class SubtitleSessionService : Service() {
     private var audioSourceMode: AudioSourceMode = AudioSourceMode.MEDIA
     private var captureStarted = false
 
-    private var accumulatedInput = StringBuilder()
-    // 显示滚动历史（已定格句子）+ 当前流式翻译句。新句开始时上一句定格进历史，而非被清屏。
-    private var outputHistory = StringBuilder()
-    private var outputCurrent = StringBuilder()
-    // 「边说边出」的草稿：只贴在当前这一行的尾巴上，随时可丢——它属于一句还没说完的话，
-    // 定稿一到就整体作废。绝不能并进 accumulatedInput / outputCurrent / full*，
-    // 否则草稿会被当成正文累积下来（导出、历史里全是半句话的重复）。
-    private var inputPartial = ""
-    private var outputPartial = ""
-    private var fullInput = StringBuilder()
-    private var fullOutput = StringBuilder()
+    // 纯 Kotlin 流式双语文本缓冲状态机：接管增量拼接、累计重写、草稿世代隔离、CJK 智能排版与滚动截断
+    private val inputBuffer = TextStreamBuffer(maxHistoryChars = 800)
+    private val outputBuffer = TextStreamBuffer(maxHistoryChars = MAX_OUTPUT_HISTORY_CHARS)
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -115,13 +107,10 @@ class SubtitleSessionService : Service() {
     private fun startSession(resultCode: Int?, data: Intent?) {
         SessionBus.setStatus(SessionBus.Status.Starting, "正在启动…")
         SessionBus.clearExport()
-        accumulatedInput.clear()
-        outputHistory.clear()
-        outputCurrent.clear()
-        inputPartial = ""
-        outputPartial = ""
-        fullInput.clear()
-        fullOutput.clear()
+        inputBuffer.reset()
+        outputBuffer.reset()
+        inputBuffer.startNewEpoch()
+        outputBuffer.startNewEpoch()
         captureStarted = false
         startAsForeground()
 
@@ -198,50 +187,38 @@ class SubtitleSessionService : Service() {
                             startCapturePipeline(client)
                         }
                         is RealtimeTranslationClient.LiveEvent.InputTranscript -> {
-                            inputPartial = "" // 定稿取代草稿
-                            appendTranscript(accumulatedInput, event.text)
-                            appendFull(fullInput, event.text)
-                            val text = accumulatedInput.toString()
+                            inputBuffer.appendFinal(inputBuffer.currentEpoch, event.text)
+                            inputBuffer.startNewEpoch()
+                            val text = inputBuffer.getDisplayText()
                             overlay?.updateTranscripts(input = text, output = null)
                             SessionBus.setPreview(input = text)
                         }
                         // 草稿原文：只接在累积原文后面显示，不进任何持久缓冲。
                         // 下一句的草稿会整体替换它，定稿事件则把它清掉。
                         is RealtimeTranslationClient.LiveEvent.InputPartial -> {
-                            inputPartial = event.text
-                            val text = accumulatedInput.toString() + inputPartial
+                            inputBuffer.updateDraft(inputBuffer.currentEpoch, event.text)
+                            val text = inputBuffer.getDisplayText()
                             overlay?.updateTranscripts(input = text, output = null)
                             SessionBus.setPreview(input = text)
                         }
                         is RealtimeTranslationClient.LiveEvent.OutputTranscript -> {
-                            outputPartial = "" // 定稿取代草稿
-                            appendOutputCurrent(event.text)
-                            appendFull(fullOutput, event.text)
-                            val text = buildString {
-                                append(outputHistory)
-                                append(outputCurrent)
-                            }
+                            outputBuffer.appendFinal(outputBuffer.currentEpoch, event.text)
+                            val text = outputBuffer.getDisplayText()
                             overlay?.updateTranscripts(input = null, output = text)
                             SessionBus.setPreview(output = text)
                         }
                         // 草稿译文：排在已定格的历史和当前句之后。它整条都可丢弃——
                         // 正式翻译一开始（OutputReset）就没了。
                         is RealtimeTranslationClient.LiveEvent.OutputPartial -> {
-                            outputPartial = event.text
-                            val text = buildString {
-                                append(outputHistory)
-                                append(outputCurrent)
-                                append(outputPartial)
-                            }
+                            outputBuffer.updateDraft(outputBuffer.currentEpoch, event.text)
+                            val text = outputBuffer.getDisplayText()
                             overlay?.updateTranscripts(input = null, output = text)
                             SessionBus.setPreview(output = text)
                         }
-                        // 新句开始：当前句定格进滚动历史（不清屏）。流式重写只改当前行、
-                        // 不会逐段追加成上一句的重复堆叠。fullOutput 仍保持累积供导出。
-                        // 草稿译文也在这里作废：这一行现在归正式翻译了。
+                        // 新句开始：开启新世代，当前句定格进滚动历史（不清屏）。流式重写只改当前行、
+                        // 不会逐段追加成上一句的重复堆叠。导出文本仍保持完整累积。
                         is RealtimeTranslationClient.LiveEvent.OutputReset -> {
-                            outputPartial = ""
-                            finalizeOutputCurrent()
+                            outputBuffer.startNewEpoch()
                         }
                         // 译音播放已移除，音频块事件直接忽略。
                         is RealtimeTranslationClient.LiveEvent.AudioChunk -> Unit
@@ -312,79 +289,6 @@ class SubtitleSessionService : Service() {
         }
     }
 
-    private fun appendTranscript(buffer: StringBuilder, chunk: String) {
-        if (chunk.length >= buffer.length && chunk.startsWith(buffer.toString())) {
-            buffer.clear()
-            buffer.append(chunk)
-        } else if (buffer.endsWith(chunk)) {
-            // ignore
-        } else {
-            if (buffer.isNotEmpty() && !buffer.last().isWhitespace() && chunk.isNotEmpty() &&
-                !chunk.first().isWhitespace()
-            ) {
-                buffer.append(' ')
-            }
-            buffer.append(chunk)
-        }
-        if (buffer.length > 800) {
-            buffer.delete(0, buffer.length - 800)
-        }
-    }
-
-    /** 追加/改写当前流式翻译句。DeepSeek 整句累计重写→替换当前行（不堆叠）；微软整句→追加。 */
-    private fun appendOutputCurrent(chunk: String) {
-        val cur = outputCurrent
-        when {
-            cur.isNotEmpty() && chunk.length >= cur.length && chunk.startsWith(cur.toString()) ->
-                // 本句累计重写：只替换当前行，避免逐段追加成上一句的重复堆叠。
-                cur.replace(0, cur.length, chunk)
-            cur.endsWith(chunk) -> Unit // 尾部重叠，忽略
-            else -> {
-                if (cur.isNotEmpty() && !cur.last().isWhitespace() &&
-                    chunk.isNotEmpty() && !chunk.first().isWhitespace()
-                ) cur.append(' ')
-                cur.append(chunk)
-            }
-        }
-        if (cur.length > MAX_OUTPUT_CURRENT_CHARS) finalizeOutputCurrent()
-    }
-
-    /** 新句开始：把当前句定格进滚动历史（空格分隔），超长历史从最前裁剪。不清屏。 */
-    private fun finalizeOutputCurrent() {
-        if (outputCurrent.isEmpty()) return
-        if (outputHistory.isNotEmpty() && !outputHistory.last().isWhitespace() &&
-            !outputCurrent.first().isWhitespace()
-        ) outputHistory.append(' ')
-        outputHistory.append(outputCurrent)
-        outputCurrent.clear()
-        trimOutputHistory()
-    }
-
-    private fun trimOutputHistory() {
-        val overflow = outputHistory.length - MAX_OUTPUT_HISTORY_CHARS
-        if (overflow > 0) outputHistory.delete(0, overflow)
-    }
-
-    private fun appendFull(buffer: StringBuilder, chunk: String) {
-        // Prefer cumulative server rewrites when present
-        if (chunk.length >= buffer.length && buffer.isNotEmpty() && chunk.startsWith(buffer.toString())) {
-            buffer.clear()
-            buffer.append(chunk)
-            return
-        }
-        if (buffer.endsWith(chunk)) return
-        if (buffer.isNotEmpty() && !buffer.last().isWhitespace() && chunk.isNotEmpty() &&
-            !chunk.first().isWhitespace()
-        ) {
-            buffer.append(' ')
-        }
-        buffer.append(chunk)
-        // Cap export size ~200k chars
-        if (buffer.length > 200_000) {
-            buffer.delete(0, buffer.length - 200_000)
-        }
-    }
-
     private fun startAsForeground() {
         val stopIntent = Intent(this, SubtitleSessionService::class.java).setAction(ACTION_STOP)
         val stopPi = PendingIntent.getService(
@@ -430,8 +334,8 @@ class SubtitleSessionService : Service() {
     }
 
     private fun stopEverything(message: String) {
-        val inFull = fullInput.toString()
-        val outFull = fullOutput.toString()
+        val inFull = inputBuffer.getFullExportText()
+        val outFull = outputBuffer.getFullExportText()
         if (inFull.isNotBlank() || outFull.isNotBlank()) {
             SessionBus.markSessionFinished(inFull, outFull, message)
             // Fire-and-forget via the repository's process-scoped IO scope:
@@ -486,7 +390,6 @@ class SubtitleSessionService : Service() {
     companion object {
         private const val TAG = "SubtitleSessionService"
         private const val NOTIFICATION_ID = 42
-        private const val MAX_OUTPUT_CURRENT_CHARS = 500
         private const val MAX_OUTPUT_HISTORY_CHARS = 2000
         const val ACTION_START = "com.xzm.realtimetranslate.action.START_SUBTITLE"
         const val ACTION_STOP = "com.xzm.realtimetranslate.action.STOP_SUBTITLE"
