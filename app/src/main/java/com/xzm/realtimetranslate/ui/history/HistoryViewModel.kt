@@ -55,6 +55,12 @@ class HistoryViewModel(
         }
     }
 
+    fun deleteEntry(stoppedAtEpochMs: Long) {
+        viewModelScope.launch {
+            repository.delete(stoppedAtEpochMs)
+        }
+    }
+
     fun clearAll() {
         viewModelScope.launch {
             repository.clearAll()

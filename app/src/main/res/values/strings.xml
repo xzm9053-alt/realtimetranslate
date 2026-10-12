@@ -47,6 +47,11 @@
     <string name="history_collapse">Collapse</string>
     <string name="history_copied">Copied to clipboard</string>
     <string name="history_save_txt">Save as .txt</string>
+    <string name="history_delete">Delete</string>
+    <string name="history_clear_confirm_title">Clear all history?</string>
+    <string name="history_clear_confirm_message">All saved translation records will be permanently removed.</string>
+    <string name="dialog_confirm_clear">Clear</string>
+    <string name="dialog_cancel">Cancel</string>
 
     <string name="status_idle">Idle</string>
     <string name="status_starting">Starting</string>

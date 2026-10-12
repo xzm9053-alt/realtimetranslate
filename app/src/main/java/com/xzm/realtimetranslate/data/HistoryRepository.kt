@@ -68,6 +68,15 @@ class HistoryRepository(private val context: Context) {
     private fun capped(entries: List<HistoryEntry>, maxEntries: Int?): List<HistoryEntry> =
         if (maxEntries == null) entries else entries.take(maxEntries)
 
+    suspend fun delete(stoppedAtEpochMs: Long) {
+        withContext(Dispatchers.IO) {
+            mutex.withLock {
+                _entries.value = _entries.value.filterNot { it.stoppedAtEpochMs == stoppedAtEpochMs }
+                persist(_entries.value)
+            }
+        }
+    }
+
     suspend fun clearAll() {
         withContext(Dispatchers.IO) {
             mutex.withLock {

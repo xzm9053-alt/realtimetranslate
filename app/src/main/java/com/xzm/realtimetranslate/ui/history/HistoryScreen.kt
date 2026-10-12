@@ -15,9 +15,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,6 +33,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -56,6 +59,41 @@ fun HistoryScreen(
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     var expandedId by remember { mutableStateOf<Long?>(null) }
+    var showClearConfirmDialog by remember { mutableStateOf(false) }
+
+    if (showClearConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirmDialog = false },
+            title = {
+                Text(
+                    text = stringResource(R.string.history_clear_confirm_title),
+                    fontWeight = FontWeight.SemiBold,
+                )
+            },
+            text = {
+                Text(
+                    text = stringResource(R.string.history_clear_confirm_message),
+                    fontSize = 14.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    text = stringResource(R.string.dialog_confirm_clear),
+                    onClick = {
+                        showClearConfirmDialog = false
+                        viewModel.clearAll()
+                    },
+                )
+            },
+            dismissButton = {
+                TextButton(
+                    text = stringResource(R.string.dialog_cancel),
+                    onClick = { showClearConfirmDialog = false },
+                )
+            },
+        )
+    }
 
     Column(
         modifier = modifier
@@ -81,7 +119,7 @@ fun HistoryScreen(
             )
             TextButton(
                 text = stringResource(R.string.history_clear_all),
-                onClick = viewModel::clearAll,
+                onClick = { showClearConfirmDialog = true },
             )
         }
 
@@ -131,6 +169,7 @@ fun HistoryScreen(
                             }
                         },
                         onSave = { viewModel.saveEntryAsText(entry) },
+                        onDelete = { viewModel.deleteEntry(entry.stoppedAtEpochMs) },
                     )
                 }
             }
@@ -146,6 +185,7 @@ private fun HistoryEntryCard(
     onToggle: () -> Unit,
     onCopy: (String) -> Unit,
     onSave: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     SectionCard {
         Column(modifier = Modifier.animateContentSize()) {
@@ -171,6 +211,19 @@ private fun HistoryEntryCard(
                         fontSize = 12.sp,
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     )
+                    if (!expanded) {
+                        val preview = entry.outputFull.ifBlank { entry.inputFull }.trim()
+                        if (preview.isNotBlank()) {
+                            Box(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = preview,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            )
+                        }
+                    }
                 }
                 Text(
                     text = stringResource(
@@ -197,11 +250,21 @@ private fun HistoryEntryCard(
                         text = entry.outputFull,
                         onCopy = onCopy,
                     )
-                    TextButton(
-                        text = stringResource(R.string.history_save_txt),
-                        onClick = onSave,
-                        modifier = Modifier.align(Alignment.End),
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        TextButton(
+                            text = stringResource(R.string.history_delete),
+                            onClick = onDelete,
+                        )
+                        Box(modifier = Modifier.width(8.dp))
+                        TextButton(
+                            text = stringResource(R.string.history_save_txt),
+                            onClick = onSave,
+                        )
+                    }
                 }
             }
         }
