@@ -11,6 +11,9 @@
 
 # Local config / secrets
 local.properties
+.env
+cos_config.json
+version.json
 *.jks
 *.keystore
 .idea/

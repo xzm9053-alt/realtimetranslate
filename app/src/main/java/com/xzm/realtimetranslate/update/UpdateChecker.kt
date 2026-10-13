@@ -65,7 +65,7 @@ class UpdateChecker(
          * 默认更新配置 CDN 地址。
          * 作者可在对象存储中直接维护 translate/version.json。
          */
-        const val DEFAULT_UPDATE_URL = "https://live-translate-update-1250000000.cos.ap-shanghai.myqcloud.com/translate/version.json"
+        const val DEFAULT_UPDATE_URL = "https://aaatranslator-1505472964.cos.ap-beijing.myqcloud.com/translate/version.json"
 
         private val defaultOkHttpClient = OkHttpClient.Builder()
             .connectTimeout(3, TimeUnit.SECONDS)

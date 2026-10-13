@@ -45,10 +45,19 @@ def main():
     print(content)
 
     if args.upload:
+        env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+        if os.path.exists(env_path):
+            with open(env_path, "r", encoding="utf-8") as ef:
+                for line in ef:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        os.environ.setdefault(k.strip(), v.strip())
+
         secret_id = os.environ.get("TENCENT_COS_SECRET_ID")
         secret_key = os.environ.get("TENCENT_COS_SECRET_KEY")
-        bucket = os.environ.get("TENCENT_COS_BUCKET")
-        region = os.environ.get("TENCENT_COS_REGION", "ap-shanghai")
+        bucket = os.environ.get("TENCENT_COS_BUCKET", "aaatranslator-1505472964")
+        region = os.environ.get("TENCENT_COS_REGION", "ap-beijing")
 
         if not (secret_id and secret_key and bucket):
             print("⚠️ 未检测到 TENCENT_COS_SECRET_ID/SECRET_KEY/BUCKET 环境变量，已保留本地文件，请手动上传至存储桶。")
