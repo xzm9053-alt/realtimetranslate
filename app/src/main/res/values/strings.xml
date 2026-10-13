@@ -279,4 +279,13 @@
     <string name="settings_diag_share_failed">Export failed: %1$s</string>
     <string name="settings_logs_cleared">Logs cleared</string>
     <string name="settings_crash_test">Trigger a test crash</string>
+
+    <!-- App update strings -->
+    <string name="update_check_title">Check for updates</string>
+    <string name="update_checking">Checking for updates…</string>
+    <string name="update_already_latest">Already on the latest version</string>
+    <string name="update_check_failed">Failed to check for updates, please try again later</string>
+    <string name="update_action_watch_video">Watch new video</string>
+    <string name="update_action_later">Remind me later</string>
+    <string name="update_new_version">Latest version: %1$s</string>
 </resources>
