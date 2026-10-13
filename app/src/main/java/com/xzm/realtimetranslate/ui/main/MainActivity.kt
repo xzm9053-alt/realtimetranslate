@@ -7,8 +7,10 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Rect
 import android.media.projection.MediaProjectionManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import com.xzm.realtimetranslate.BuildConfig
 import com.xzm.realtimetranslate.util.AppLog as Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -28,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Subtitles
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +51,7 @@ import com.xzm.realtimetranslate.service.ScreenOcrBus
 import com.xzm.realtimetranslate.service.ScreenTextSessionService
 import com.xzm.realtimetranslate.service.SessionBus
 import com.xzm.realtimetranslate.service.SubtitleSessionService
+import com.xzm.realtimetranslate.ui.components.UpdateDialog
 import com.xzm.realtimetranslate.ui.history.HistoryScreen
 import com.xzm.realtimetranslate.ui.history.HistoryViewModel
 import com.xzm.realtimetranslate.ui.history.HistoryViewModelFactory
@@ -58,6 +62,9 @@ import com.xzm.realtimetranslate.ui.subtitle.SubtitleScreen
 import com.xzm.realtimetranslate.ui.subtitle.SubtitleViewModel
 import com.xzm.realtimetranslate.ui.subtitle.SubtitleViewModelFactory
 import com.xzm.realtimetranslate.ui.theme.AppTheme
+import com.xzm.realtimetranslate.update.RemoteUpdateInfo
+import com.xzm.realtimetranslate.update.UpdateChecker
+import com.xzm.realtimetranslate.update.UpdateCheckResult
 import com.xzm.realtimetranslate.util.PermissionUtils
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.NavigationBar
@@ -99,6 +106,30 @@ class MainActivity : ComponentActivity() {
                 var pendingStart by remember { mutableStateOf(false) }
                 var pendingOcrStart by remember { mutableStateOf(false) }
                 var pendingOcrRegion by remember { mutableStateOf<Rect?>(null) }
+                var updateInfoToPrompt by remember { mutableStateOf<RemoteUpdateInfo?>(null) }
+
+                fun openVideoUrl(url: String) {
+                    val targetUrl = url.ifBlank { "https://space.bilibili.com/1366321010" }
+                    runCatching {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(intent)
+                    }.onFailure { e ->
+                        Log.w(TAG, "Failed to open video url: $targetUrl", e)
+                    }
+                }
+
+                // 启动时在后台静默检查一次更新
+                LaunchedEffect(Unit) {
+                    val result = UpdateChecker().checkForUpdate(
+                        UpdateChecker.DEFAULT_UPDATE_URL,
+                        BuildConfig.VERSION_CODE,
+                    )
+                    if (result is UpdateCheckResult.HasUpdate) {
+                        updateInfoToPrompt = result.info
+                    }
+                }
 
                 val ocrProjectionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.StartActivityForResult(),
@@ -417,6 +448,7 @@ class MainActivity : ComponentActivity() {
                                         PermissionUtils.overlaySettingsIntent(this@MainActivity),
                                     )
                                 },
+                                onPromptUpdate = { updateInfoToPrompt = it },
                             )
                             else -> HistoryScreen(
                                 modifier = Modifier.fillMaxSize(),
@@ -424,6 +456,17 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     }
+                }
+
+                updateInfoToPrompt?.let { info ->
+                    UpdateDialog(
+                        info = info,
+                        onDismiss = { updateInfoToPrompt = null },
+                        onGoToVideo = { url ->
+                            updateInfoToPrompt = null
+                            openVideoUrl(url)
+                        },
+                    )
                 }
             }
         }

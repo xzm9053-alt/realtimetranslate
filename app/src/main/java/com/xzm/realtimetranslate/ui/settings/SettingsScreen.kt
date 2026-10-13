@@ -81,12 +81,19 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
+import android.widget.Toast
+import androidx.compose.runtime.rememberCoroutineScope
+import com.xzm.realtimetranslate.update.RemoteUpdateInfo
+import com.xzm.realtimetranslate.update.UpdateChecker
+import com.xzm.realtimetranslate.update.UpdateCheckResult
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel,
     onOpenOverlayPermission: () -> Unit,
+    onPromptUpdate: (RemoteUpdateInfo) -> Unit = {},
 ) {
     // The log viewer replaces this screen rather than becoming a tab: MainActivity's
     // `when(page)` falls through to the history screen for anything unrecognised, so
@@ -129,6 +136,8 @@ fun SettingsScreen(
     val diagMessage by viewModel.diagMessage.collectAsStateWithLifecycle()
     val logSizeBytes by viewModel.logSizeBytes.collectAsStateWithLifecycle()
     val lastRunCrashed by viewModel.lastRunCrashed.collectAsStateWithLifecycle()
+    val coroutineScope = rememberCoroutineScope()
+    var isCheckingUpdate by remember { mutableStateOf(false) }
     // Version is the natural place for a hidden gesture: nobody taps a version number by
     // accident five times, and it costs no screen space.
     var versionTaps by rememberSaveable { mutableIntStateOf(0) }
@@ -1056,6 +1065,57 @@ fun SettingsScreen(
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     modifier = Modifier.clickable { versionTaps++ },
                 )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = !isCheckingUpdate) {
+                            isCheckingUpdate = true
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.update_checking),
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                            coroutineScope.launch {
+                                val result = UpdateChecker().checkForUpdate(
+                                    UpdateChecker.DEFAULT_UPDATE_URL,
+                                    BuildConfig.VERSION_CODE,
+                                )
+                                isCheckingUpdate = false
+                                when (result) {
+                                    is UpdateCheckResult.HasUpdate -> onPromptUpdate(result.info)
+                                    is UpdateCheckResult.AlreadyLatest -> {
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.update_already_latest),
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
+                                    }
+                                    is UpdateCheckResult.Failed -> {
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.update_check_failed),
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
+                                    }
+                                }
+                            }
+                        },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.update_check_title),
+                        fontSize = 13.sp,
+                        color = MiuixTheme.colorScheme.primary,
+                    )
+                    if (isCheckingUpdate) {
+                        Text(
+                            text = stringResource(R.string.update_checking),
+                            fontSize = 12.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                    }
+                }
                 if (versionTaps >= CRASH_TEST_TAPS) {
                     // The only way to verify crash capture: `adb shell am crash` and a
                     // plain kill both bypass the default uncaught-exception handler.
