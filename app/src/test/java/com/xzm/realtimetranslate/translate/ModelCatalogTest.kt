@@ -87,6 +87,17 @@ class ModelCatalogTest {
         assertFalse(ModelListFilter.isChatModel(""))
     }
 
+    @Test
+    fun `translation and realtime translation models are preserved`() {
+        // 诸如 qwen3.8-livetranslate-flash-realtime 等同传/翻译模型，虽然带有 realtime，但因为有 translate 关键字，绝不能被当作非对话模型误杀
+        assertTrue(ModelListFilter.isChatModel("qwen3.8-livetranslate-flash-realtime"))
+        assertTrue(ModelListFilter.isChatModel("qwen3.8livetranslate-realtime"))
+        assertTrue(ModelListFilter.isChatModel("qwen3-livetranslate-flash"))
+        assertTrue(ModelListFilter.isChatModel("qwen-mt-turbo"))
+        assertTrue(ModelListFilter.isChatModel("qwen-mt-plus"))
+        assertTrue(ModelListFilter.isChatModel("qwen-plus"))
+    }
+
     // ---- The preset lists. ----
 
     @Test

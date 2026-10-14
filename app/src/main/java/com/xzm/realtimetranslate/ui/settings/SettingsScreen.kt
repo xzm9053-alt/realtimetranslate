@@ -3,6 +3,7 @@ package com.xzm.realtimetranslate.ui.settings
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -64,6 +65,7 @@ import com.xzm.realtimetranslate.data.ThinkingOffStyle
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
 import com.xzm.realtimetranslate.translate.ModelAvailability
+import com.xzm.realtimetranslate.translate.ModelListFilter
 import com.xzm.realtimetranslate.translate.ModelProbe
 import com.xzm.realtimetranslate.translate.ModelPresets
 import com.xzm.realtimetranslate.ui.components.PageTitle
@@ -161,6 +163,32 @@ fun SettingsScreen(
         unfocusedPlaceholderColor = scheme.onSurfaceVariantSummary,
     )
 
+    var activeModelPickerEngine by rememberSaveable { mutableStateOf<TranslationEngineType?>(null) }
+    val pickingEngine = activeModelPickerEngine
+    if (pickingEngine != null) {
+        val (currentModelVal, updateModelFn) = when (pickingEngine) {
+            TranslationEngineType.DEEPSEEK -> deepSeekModel to viewModel::updateDeepSeekModel
+            TranslationEngineType.ZHIPU -> zhipuModel to viewModel::updateZhipuModel
+            TranslationEngineType.GEMINI -> geminiModel to viewModel::updateGeminiModel
+            TranslationEngineType.OPENAI_COMPAT -> genericModel to viewModel::updateGenericModel
+            else -> TextFieldValue("") to { _: TextFieldValue -> }
+        }
+        ModelPickerSubScreen(
+            engineType = pickingEngine,
+            model = currentModelVal,
+            onModelChange = updateModelFn,
+            probes = modelProbes,
+            discovered = discoveredModels,
+            checkedAt = modelsCheckedAt,
+            checking = checkingModels,
+            colors = fieldColors,
+            onCheck = viewModel::checkModels,
+            onBack = { activeModelPickerEngine = null },
+            modifier = modifier,
+        )
+        return
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -243,16 +271,9 @@ fun SettingsScreen(
                                 colors = fieldColors,
                             )
                             RevealKeyButton(revealKey) { revealKey = !revealKey }
-                            EngineModelSection(
-                                engineType = engineType,
-                                model = deepSeekModel,
-                                onModelChange = viewModel::updateDeepSeekModel,
-                                probes = modelProbes,
-                                discovered = discoveredModels,
-                                checkedAt = modelsCheckedAt,
-                                checking = checkingModels,
-                                colors = fieldColors,
-                                onCheck = viewModel::checkModels,
+                            ModelPickerEntryRow(
+                                model = deepSeekModel.text,
+                                onClick = { activeModelPickerEngine = engineType },
                             )
                             EngineTextField(
                                 value = deepSeekBaseUrl,
@@ -270,16 +291,9 @@ fun SettingsScreen(
                                 colors = fieldColors,
                             )
                             RevealKeyButton(revealKey) { revealKey = !revealKey }
-                            EngineModelSection(
-                                engineType = engineType,
-                                model = zhipuModel,
-                                onModelChange = viewModel::updateZhipuModel,
-                                probes = modelProbes,
-                                discovered = discoveredModels,
-                                checkedAt = modelsCheckedAt,
-                                checking = checkingModels,
-                                colors = fieldColors,
-                                onCheck = viewModel::checkModels,
+                            ModelPickerEntryRow(
+                                model = zhipuModel.text,
+                                onClick = { activeModelPickerEngine = engineType },
                             )
                             EngineTextField(
                                 value = zhipuBaseUrl,
@@ -298,16 +312,9 @@ fun SettingsScreen(
                                 colors = fieldColors,
                             )
                             RevealKeyButton(revealKey) { revealKey = !revealKey }
-                            EngineModelSection(
-                                engineType = engineType,
-                                model = geminiModel,
-                                onModelChange = viewModel::updateGeminiModel,
-                                probes = modelProbes,
-                                discovered = discoveredModels,
-                                checkedAt = modelsCheckedAt,
-                                checking = checkingModels,
-                                colors = fieldColors,
-                                onCheck = viewModel::checkModels,
+                            ModelPickerEntryRow(
+                                model = geminiModel.text,
+                                onClick = { activeModelPickerEngine = engineType },
                             )
                             EngineTextField(
                                 value = geminiBaseUrl,
@@ -333,16 +340,9 @@ fun SettingsScreen(
                                 colors = fieldColors,
                             )
                             EngineHint(R.string.settings_generic_hint)
-                            EngineModelSection(
-                                engineType = engineType,
-                                model = genericModel,
-                                onModelChange = viewModel::updateGenericModel,
-                                probes = modelProbes,
-                                discovered = discoveredModels,
-                                checkedAt = modelsCheckedAt,
-                                checking = checkingModels,
-                                colors = fieldColors,
-                                onCheck = viewModel::checkModels,
+                            ModelPickerEntryRow(
+                                model = genericModel.text,
+                                onClick = { activeModelPickerEngine = engineType },
                             )
                             // 三选一而非下拉框：项目里没有下拉组件，OptionRow 与引擎选择
                             // 是同一套视觉，且下面每个选项都需要一行说明的分量。
@@ -1135,14 +1135,50 @@ fun SettingsScreen(
 }
 
 /**
- * Model chooser for one AI engine: the built-in presets, then anything the provider
- * reported that we did not know about, then 「自定义…」 which reveals the free-text field.
- *
- * The field also shows by itself whenever the stored model is not one of the rows — a
- * model this list has never heard of is exactly what that field is for.
+ * 单行模型入口：主设置页展示当前选中的模型，点击后跳转至模型选择二级页面。
  */
 @Composable
-private fun EngineModelSection(
+private fun ModelPickerEntryRow(
+    model: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.settings_model_title),
+                fontSize = 13.sp,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = model.ifBlank { stringResource(R.string.settings_model_select_action) },
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                color = if (model.isNotBlank()) MiuixTheme.colorScheme.onSurface else Booth.Accent,
+            )
+        }
+        Icon(
+            imageVector = Icons.Outlined.ExpandMore,
+            contentDescription = null,
+            tint = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.6f),
+        )
+    }
+}
+
+/**
+ * 模型选择二级页面：包含搜索过滤、推荐预设、服务商返回列表（可折叠）、自定义模型以及连通性/可用性检测。
+ *
+ * 解决接入包含海量模型的服务商（如阿里云百炼）时设置主页被大量模型铺满、难以翻阅的问题。
+ */
+@Composable
+private fun ModelPickerSubScreen(
     engineType: TranslationEngineType,
     model: TextFieldValue,
     onModelChange: (TextFieldValue) -> Unit,
@@ -1152,109 +1188,255 @@ private fun EngineModelSection(
     checking: Boolean,
     colors: TextFieldColors,
     onCheck: () -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val presetCount = ModelPresets.forEngine(engineType).size
-    val models = ModelPresets.visible(engineType, discovered)
-    val current = model.text.trim()
-    // Keyed on the engine so switching engines starts from the preset view again.
-    var customMode by remember(engineType) { mutableStateOf(false) }
-    val showCustomField = customMode || current !in models
+    BackHandler(enabled = true) { onBack() }
 
-    Column {
-        Text(
-            text = stringResource(R.string.settings_model_title),
-            fontSize = 13.sp,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            modifier = Modifier.padding(bottom = 2.dp),
-        )
-        models.forEachIndexed { index, id ->
-            if (index == presetCount && presetCount < models.size) {
-                Text(
-                    text = stringResource(R.string.settings_model_other),
-                    fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),
-                )
-            }
-            ModelRow(
-                model = id,
-                selected = !customMode && id == current,
-                availability = probes[id]?.availability,
-                onClick = {
-                    customMode = false
-                    onModelChange(TextFieldValue(id))
-                },
-            )
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var discoveredExpanded by rememberSaveable { mutableStateOf(false) }
+    var customMode by rememberSaveable(engineType) { mutableStateOf(false) }
+
+    val presets = remember(engineType) {
+        if (engineType == TranslationEngineType.OPENAI_COMPAT) {
+            ModelPresets.RECOMMENDED_COMPAT_MODELS
+        } else {
+            ModelPresets.forEngine(engineType)
         }
-        OptionRow(
-            label = stringResource(R.string.settings_model_custom),
-            summary = stringResource(R.string.settings_model_custom_summary),
-            selected = showCustomField,
-            horizontalPadding = 0.dp,
-            onClick = { customMode = true },
+    }
+
+    val current = model.text.trim()
+    val query = searchQuery.trim()
+
+    // 过滤推荐预设模型
+    val filteredPresets = remember(presets, query) {
+        if (query.isEmpty()) presets
+        else presets.filter { it.contains(query, ignoreCase = true) }
+    }
+
+    // 过滤服务商拉取的模型（排除已在预设中的模型，并过滤掉非 chat 类的模型）
+    val allDiscovered = remember(engineType, discovered, presets) {
+        discovered
+            .filter { it.isNotBlank() && it !in presets && ModelListFilter.isChatModel(it) }
+            .distinct()
+            .sorted()
+    }
+    val filteredDiscovered = remember(allDiscovered, query) {
+        if (query.isEmpty()) allDiscovered
+        else allDiscovered.filter { it.contains(query, ignoreCase = true) }
+    }
+
+    val showCustomField = customMode || (current.isNotBlank() && current !in presets && current !in allDiscovered)
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        PageTitle(
+            title = stringResource(R.string.settings_model_picker_title),
+            subtitle = stringResource(
+                when (engineType) {
+                    TranslationEngineType.DEEPSEEK -> R.string.engine_deepseek
+                    TranslationEngineType.ZHIPU -> R.string.engine_zhipu
+                    TranslationEngineType.GEMINI -> R.string.engine_gemini
+                    TranslationEngineType.OPENAI_COMPAT -> R.string.engine_generic
+                    else -> R.string.settings_engine
+                }
+            ),
         )
-        if (showCustomField) {
-            EngineTextField(
-                value = model,
-                onValueChange = onModelChange,
-                labelRes = R.string.settings_model_custom_label,
-                colors = colors,
-                modifier = Modifier.padding(top = 6.dp),
-            )
-        }
-        // An engine with no presets has nothing to go stale — telling its user about the
-        // built-in list would describe a list that isn't on screen.
-        EngineHint(
-            if (engineType.hasPresetModels) {
-                R.string.settings_model_presets_hint
-            } else {
-                R.string.settings_generic_model_hint
-            },
-            Modifier.padding(top = 6.dp),
-        )
+
+        // 顶部导航与检测操作栏
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 10.dp),
+                .padding(horizontal = 16.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            // The button both greys out and changes its label while running, so a double
-            // tap cannot start a second round of requests.
             TextButton(
-                text = stringResource(
-                    if (checking) R.string.settings_model_checking else R.string.settings_model_check,
-                ),
-                onClick = { if (!checking) onCheck() },
-                enabled = !checking,
+                text = stringResource(R.string.settings_logs_back),
+                onClick = onBack,
             )
-            Spacer(modifier = Modifier.weight(1f))
-            Text(
-                text = if (checkedAt > 0L) {
-                    stringResource(R.string.settings_model_checked_at, formatCheckedAt(checkedAt))
-                } else {
-                    stringResource(R.string.settings_model_never_checked)
-                },
-                fontSize = 12.sp,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (checkedAt > 0L) {
+                    Text(
+                        text = stringResource(R.string.settings_model_checked_at, formatCheckedAt(checkedAt)),
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                }
+                TextButton(
+                    text = stringResource(
+                        if (checking) R.string.settings_model_checking else R.string.settings_model_check,
+                    ),
+                    onClick = { if (!checking) onCheck() },
+                    enabled = !checking,
+                )
+            }
         }
-        // 只有「当前正在用的模型」不通时才展开原因：一堆行的报错正文没人看，
-        // 自己选的那个为什么不行才是用户要的。服务端原话比我们的转述更可信。
+
+        // 当前模型若有报错详情，置顶醒目提醒
         val probe = probes[current]
-        if (probe != null && probe.availability != ModelAvailability.AVAILABLE &&
-            probe.detail.isNotBlank()
-        ) {
-            Text(
-                text = stringResource(
-                    R.string.settings_model_detail,
-                    probe.detail.take(MAX_DETAIL_CHARS),
-                ),
-                fontSize = 12.sp,
-                color = availabilityStyle(probe.availability).second,
-                modifier = Modifier.padding(top = 6.dp),
-            )
+        if (probe != null && probe.availability != ModelAvailability.AVAILABLE && probe.detail.isNotBlank()) {
+            SectionCard {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                    Text(
+                        text = stringResource(
+                            R.string.settings_model_detail,
+                            probe.detail.take(MAX_DETAIL_CHARS),
+                        ),
+                        fontSize = 12.sp,
+                        color = availabilityStyle(probe.availability).second,
+                    )
+                }
+            }
         }
-        EngineHint(R.string.settings_model_check_hint, Modifier.padding(top = 2.dp))
+
+        // 搜索框（支持模糊搜索匹配，如 qwen、realtime 等）
+        SectionCard {
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = {
+                        androidx.compose.material3.Text(
+                            text = stringResource(R.string.settings_model_search_placeholder),
+                            fontSize = 13.sp,
+                        )
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
+                    colors = colors,
+                )
+            }
+        }
+
+        // 1. 推荐预设模型组
+        if (filteredPresets.isNotEmpty()) {
+            SmallTitle(
+                text = stringResource(R.string.settings_model_presets_group),
+                modifier = Modifier.padding(horizontal = 24.dp),
+            )
+            SectionCard {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                    filteredPresets.forEach { id ->
+                        ModelRow(
+                            model = id,
+                            selected = !customMode && id == current,
+                            availability = probes[id]?.availability,
+                            onClick = {
+                                customMode = false
+                                onModelChange(TextFieldValue(id))
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
+        // 2. 服务商返回模型列表（支持可折叠，当超过 6 个且未搜索时默认折叠）
+        if (filteredDiscovered.isNotEmpty()) {
+            SmallTitle(
+                text = stringResource(
+                    R.string.settings_model_discovered_group,
+                    filteredDiscovered.size,
+                ),
+                modifier = Modifier.padding(horizontal = 24.dp),
+            )
+            SectionCard {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                    val isCollapsible = query.isEmpty() && filteredDiscovered.size > 6
+                    val displayList = if (isCollapsible && !discoveredExpanded) {
+                        filteredDiscovered.take(6)
+                    } else {
+                        filteredDiscovered
+                    }
+
+                    displayList.forEach { id ->
+                        ModelRow(
+                            model = id,
+                            selected = !customMode && id == current,
+                            availability = probes[id]?.availability,
+                            onClick = {
+                                customMode = false
+                                onModelChange(TextFieldValue(id))
+                            },
+                        )
+                    }
+
+                    if (isCollapsible) {
+                        TextButton(
+                            text = if (discoveredExpanded) {
+                                stringResource(R.string.settings_model_collapse)
+                            } else {
+                                stringResource(R.string.settings_model_expand, filteredDiscovered.size)
+                            },
+                            onClick = { discoveredExpanded = !discoveredExpanded },
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        )
+                    }
+                }
+            }
+        }
+
+        // 3. 搜索无结果时的空状态提示
+        if (query.isNotEmpty() && filteredPresets.isEmpty() && filteredDiscovered.isEmpty()) {
+            SectionCard {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_model_search_empty),
+                        fontSize = 13.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    )
+                }
+            }
+        }
+
+        // 4. 自定义模型输入组
+        SmallTitle(
+            text = stringResource(R.string.settings_model_custom),
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
+        SectionCard {
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                OptionRow(
+                    label = stringResource(R.string.settings_model_custom),
+                    summary = stringResource(R.string.settings_model_custom_summary),
+                    selected = showCustomField,
+                    horizontalPadding = 0.dp,
+                    onClick = { customMode = true },
+                )
+                if (showCustomField) {
+                    EngineTextField(
+                        value = model,
+                        onValueChange = onModelChange,
+                        labelRes = R.string.settings_model_custom_label,
+                        colors = colors,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+                EngineHint(
+                    if (engineType.hasPresetModels) {
+                        R.string.settings_model_presets_hint
+                    } else {
+                        R.string.settings_generic_model_hint
+                    },
+                    Modifier.padding(top = 6.dp),
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
     }
 }
 

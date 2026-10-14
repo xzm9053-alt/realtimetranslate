@@ -110,8 +110,16 @@
     <string name="apikey_deepseek">DeepSeek</string>
     <string name="apikey_deepseek_cost">付费 · 按量计费，先充值再用</string>
 
-    <!-- 模型选择：预设 + 联网可用性检测 + 自定义输入 -->
+    <!-- 模型选择：二级页面 + 搜索过滤 + 折叠 + 预设 + 联网可用性检测 + 自定义输入 -->
     <string name="settings_model_title">模型</string>
+    <string name="settings_model_picker_title">选择模型</string>
+    <string name="settings_model_select_action">点击进入模型列表选择</string>
+    <string name="settings_model_search_placeholder">搜索模型名称 (如 qwen, realtime)…</string>
+    <string name="settings_model_presets_group">推荐预设模型</string>
+    <string name="settings_model_discovered_group">服务商返回模型 (%1$d 个)</string>
+    <string name="settings_model_collapse">折叠列表</string>
+    <string name="settings_model_expand">展开全部 (%1$d 个)</string>
+    <string name="settings_model_search_empty">未找到匹配的模型</string>
     <string name="settings_model_custom">自定义…</string>
     <string name="settings_model_custom_summary">自己填写模型名</string>
     <string name="settings_model_custom_label">模型名</string>

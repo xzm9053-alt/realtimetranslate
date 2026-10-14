@@ -119,7 +119,13 @@ object ModelListFilter {
 
     fun isChatModel(id: String): Boolean {
         val lower = id.trim().lowercase()
-        return lower.isNotEmpty() && NON_CHAT_MARKERS.none { lower.contains(it) }
+        if (lower.isEmpty()) return false
+        // 翻译与同传专用模型（如 qwen3.8-livetranslate-flash-realtime、qwen-mt-turbo 等）
+        // 含有 translate 或 mt 关键字，绝不能因为含有 live / realtime 而被过滤。
+        if (lower.contains("translate") || lower.contains("-mt") || lower.contains("_mt")) {
+            return true
+        }
+        return NON_CHAT_MARKERS.none { lower.contains(it) }
     }
 }
 
@@ -132,6 +138,16 @@ object ModelListFilter {
  * of each family rather than only the current one.
  */
 object ModelPresets {
+
+    /** 阿里云百炼 / 通用兼容端点常用推荐翻译与对话模型 */
+    val RECOMMENDED_COMPAT_MODELS = listOf(
+        "qwen3.8-livetranslate-flash-realtime",
+        "qwen3.8livetranslate-realtime",
+        "qwen3-livetranslate-flash",
+        "qwen-plus",
+        "qwen-turbo",
+        "qwen-mt-turbo",
+    )
 
     private val BY_ENGINE: Map<TranslationEngineType, List<String>> = mapOf(
         TranslationEngineType.DEEPSEEK to listOf("deepseek-v4-flash", "deepseek-v4-pro"),
