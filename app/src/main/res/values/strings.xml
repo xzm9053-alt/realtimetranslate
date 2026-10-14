@@ -63,6 +63,14 @@
     <string name="settings_subtitle">Engine, subtitle look, and voice</string>
     <string name="settings_engine">Translation engine</string>
     <string name="settings_engine_desc">Choose which service translates the recognized speech.</string>
+    <string name="settings_engine_current">Current engine</string>
+    <string name="settings_engine_other">Other engines</string>
+    <string name="settings_engine_other_summary">Switch or configure more translation engines</string>
+    <string name="settings_engine_select_prompt">Select translation engine</string>
+    <string name="settings_engine_select_summary">No translation engine configured, tap to select</string>
+    <string name="settings_engine_config_title">%1$s Settings</string>
+    <string name="settings_engine_in_use">In use</string>
+    <string name="settings_engine_switch_to">Set as current engine</string>
     <string name="engine_deepseek">DeepSeek</string>
     <string name="engine_deepseek_summary">Streaming, high quality · needs an API key</string>
     <string name="engine_microsoft">Microsoft (free)</string>

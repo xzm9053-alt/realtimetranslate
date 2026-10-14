@@ -41,12 +41,46 @@ enum class TranslationEngineType(
      * whose models belong to a provider only `GET /models` can describe.
      */
     val hasPresetModels: Boolean = true,
+    @StringRes val titleRes: Int,
+    @StringRes val summaryRes: Int,
 ) {
-    DEEPSEEK(ApiKeyRequirement.REQUIRED, isLlm = true, keyLabelRes = R.string.settings_deepseek_key),
-    ZHIPU(ApiKeyRequirement.REQUIRED, isLlm = true, keyLabelRes = R.string.settings_zhipu_key),
-    GEMINI(ApiKeyRequirement.REQUIRED, isLlm = true, keyLabelRes = R.string.settings_gemini_key),
-    MICROSOFT(ApiKeyRequirement.NONE, isLlm = false, keyLabelRes = null, hasPresetModels = false),
-    GOOGLE_FREE(ApiKeyRequirement.NONE, isLlm = false, keyLabelRes = null, hasPresetModels = false),
+    DEEPSEEK(
+        apiKeyRequirement = ApiKeyRequirement.REQUIRED,
+        isLlm = true,
+        keyLabelRes = R.string.settings_deepseek_key,
+        titleRes = R.string.engine_deepseek,
+        summaryRes = R.string.engine_deepseek_summary,
+    ),
+    ZHIPU(
+        apiKeyRequirement = ApiKeyRequirement.REQUIRED,
+        isLlm = true,
+        keyLabelRes = R.string.settings_zhipu_key,
+        titleRes = R.string.engine_zhipu,
+        summaryRes = R.string.engine_zhipu_summary,
+    ),
+    GEMINI(
+        apiKeyRequirement = ApiKeyRequirement.REQUIRED,
+        isLlm = true,
+        keyLabelRes = R.string.settings_gemini_key,
+        titleRes = R.string.engine_gemini,
+        summaryRes = R.string.engine_gemini_summary,
+    ),
+    MICROSOFT(
+        apiKeyRequirement = ApiKeyRequirement.NONE,
+        isLlm = false,
+        keyLabelRes = null,
+        hasPresetModels = false,
+        titleRes = R.string.engine_microsoft,
+        summaryRes = R.string.engine_microsoft_summary,
+    ),
+    GOOGLE_FREE(
+        apiKeyRequirement = ApiKeyRequirement.NONE,
+        isLlm = false,
+        keyLabelRes = null,
+        hasPresetModels = false,
+        titleRes = R.string.engine_google_free,
+        summaryRes = R.string.engine_google_free_summary,
+    ),
 
     /**
      * Any OpenAI-compatible endpoint the user points us at — a relay, OpenRouter,
@@ -56,10 +90,12 @@ enum class TranslationEngineType(
      * instead of at session start, which is the price of allowing the empty case.
      */
     OPENAI_COMPAT(
-        ApiKeyRequirement.OPTIONAL,
+        apiKeyRequirement = ApiKeyRequirement.OPTIONAL,
         isLlm = true,
         keyLabelRes = R.string.settings_generic_key,
         hasPresetModels = false,
+        titleRes = R.string.engine_generic,
+        summaryRes = R.string.engine_generic_summary,
     ),
     ;
 

@@ -43,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -163,7 +164,10 @@ fun SettingsScreen(
         unfocusedPlaceholderColor = scheme.onSurfaceVariantSummary,
     )
 
+    var showEnginePicker by rememberSaveable { mutableStateOf(false) }
+    var activeConfigEngine by rememberSaveable { mutableStateOf<TranslationEngineType?>(null) }
     var activeModelPickerEngine by rememberSaveable { mutableStateOf<TranslationEngineType?>(null) }
+
     val pickingEngine = activeModelPickerEngine
     if (pickingEngine != null) {
         val (currentModelVal, updateModelFn) = when (pickingEngine) {
@@ -189,6 +193,64 @@ fun SettingsScreen(
         return
     }
 
+    val configEngine = activeConfigEngine
+    if (configEngine != null) {
+        EngineConfigSubScreen(
+            engineType = configEngine,
+            isCurrentEngine = configEngine == engineType,
+            onSetAsCurrent = { viewModel.setEngine(configEngine) },
+            settings = settings,
+            deepSeekKey = deepSeekKey,
+            onDeepSeekKeyChange = viewModel::setDeepSeekKey,
+            deepSeekModel = deepSeekModel,
+            deepSeekBaseUrl = deepSeekBaseUrl,
+            onUpdateDeepSeekBaseUrl = viewModel::updateDeepSeekBaseUrl,
+            zhipuKey = zhipuKey,
+            onZhipuKeyChange = viewModel::setZhipuKey,
+            zhipuModel = zhipuModel,
+            zhipuBaseUrl = zhipuBaseUrl,
+            onUpdateZhipuBaseUrl = viewModel::updateZhipuBaseUrl,
+            geminiKey = geminiKey,
+            onGeminiKeyChange = viewModel::setGeminiKey,
+            geminiModel = geminiModel,
+            geminiBaseUrl = geminiBaseUrl,
+            onUpdateGeminiBaseUrl = viewModel::updateGeminiBaseUrl,
+            genericKey = genericKey,
+            onGenericKeyChange = viewModel::setGenericKey,
+            genericModel = genericModel,
+            genericBaseUrl = genericBaseUrl,
+            onUpdateGenericBaseUrl = viewModel::updateGenericBaseUrl,
+            onUpdateGenericThinkingOffStyle = viewModel::setGenericThinkingOffStyle,
+            onUpdateAiDeepThinking = viewModel::setAiDeepThinking,
+            testing = testing,
+            testResult = testResult,
+            onSaveAndTest = {
+                viewModel.saveApiKey()
+                viewModel.testConnection()
+            },
+            onSaveKeyOnly = viewModel::saveApiKey,
+            fieldColors = fieldColors,
+            onOpenModelPicker = { activeModelPickerEngine = it },
+            onBack = { activeConfigEngine = null },
+            modifier = modifier,
+        )
+        return
+    }
+
+    if (showEnginePicker) {
+        EnginePickerSubScreen(
+            currentEngine = engineType,
+            onSelectEngine = { selected ->
+                viewModel.setEngine(selected)
+                showEnginePicker = false
+                activeConfigEngine = selected
+            },
+            onBack = { showEnginePicker = false },
+            modifier = modifier,
+        )
+        return
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -205,304 +267,142 @@ fun SettingsScreen(
             text = stringResource(R.string.settings_engine),
             modifier = Modifier.padding(horizontal = 24.dp),
         )
+        val configured = isEngineConfigured(
+            engine = engineType,
+            deepSeekKey = deepSeekKey,
+            zhipuKey = zhipuKey,
+            geminiKey = geminiKey,
+            genericKey = genericKey,
+            genericBaseUrl = genericBaseUrl.text,
+        )
         SectionCard {
-            Column(
-                modifier = Modifier.padding(vertical = 6.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_engine_desc),
-                    fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
-                OptionRow(
-                    label = stringResource(R.string.engine_deepseek),
-                    summary = stringResource(R.string.engine_deepseek_summary),
-                    selected = engineType == TranslationEngineType.DEEPSEEK,
-                    onClick = { viewModel.setEngine(TranslationEngineType.DEEPSEEK) },
-                )
-                OptionRow(
-                    label = stringResource(R.string.engine_zhipu),
-                    summary = stringResource(R.string.engine_zhipu_summary),
-                    selected = engineType == TranslationEngineType.ZHIPU,
-                    onClick = { viewModel.setEngine(TranslationEngineType.ZHIPU) },
-                )
-                OptionRow(
-                    label = stringResource(R.string.engine_gemini),
-                    summary = stringResource(R.string.engine_gemini_summary),
-                    selected = engineType == TranslationEngineType.GEMINI,
-                    onClick = { viewModel.setEngine(TranslationEngineType.GEMINI) },
-                )
-                OptionRow(
-                    label = stringResource(R.string.engine_microsoft),
-                    summary = stringResource(R.string.engine_microsoft_summary),
-                    selected = engineType == TranslationEngineType.MICROSOFT,
-                    onClick = { viewModel.setEngine(TranslationEngineType.MICROSOFT) },
-                )
-                OptionRow(
-                    label = stringResource(R.string.engine_google_free),
-                    summary = stringResource(R.string.engine_google_free_summary),
-                    selected = engineType == TranslationEngineType.GOOGLE_FREE,
-                    onClick = { viewModel.setEngine(TranslationEngineType.GOOGLE_FREE) },
-                )
-                OptionRow(
-                    label = stringResource(R.string.engine_generic),
-                    summary = stringResource(R.string.engine_generic_summary),
-                    selected = engineType == TranslationEngineType.OPENAI_COMPAT,
-                    onClick = { viewModel.setEngine(TranslationEngineType.OPENAI_COMPAT) },
-                )
-            }
-        }
-
-        SectionCard {
-            Column {
-                // ---- 当前引擎的专属配置 ----
-                Column(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    when (engineType) {
-                        TranslationEngineType.DEEPSEEK -> {
-                            EngineKeyField(
-                                value = deepSeekKey,
-                                onValueChange = viewModel::setDeepSeekKey,
-                                labelRes = R.string.settings_deepseek_key,
-                                reveal = revealKey,
-                                colors = fieldColors,
-                            )
-                            RevealKeyButton(revealKey) { revealKey = !revealKey }
-                            ModelPickerEntryRow(
-                                model = deepSeekModel.text,
-                                onClick = { activeModelPickerEngine = engineType },
-                            )
-                            EngineTextField(
-                                value = deepSeekBaseUrl,
-                                onValueChange = viewModel::updateDeepSeekBaseUrl,
-                                labelRes = R.string.settings_deepseek_base_url,
-                                colors = fieldColors,
-                            )
-                        }
-                        TranslationEngineType.ZHIPU -> {
-                            EngineKeyField(
-                                value = zhipuKey,
-                                onValueChange = viewModel::setZhipuKey,
-                                labelRes = R.string.settings_zhipu_key,
-                                reveal = revealKey,
-                                colors = fieldColors,
-                            )
-                            RevealKeyButton(revealKey) { revealKey = !revealKey }
-                            ModelPickerEntryRow(
-                                model = zhipuModel.text,
-                                onClick = { activeModelPickerEngine = engineType },
-                            )
-                            EngineTextField(
-                                value = zhipuBaseUrl,
-                                onValueChange = viewModel::updateZhipuBaseUrl,
-                                labelRes = R.string.settings_zhipu_base_url,
-                                colors = fieldColors,
-                            )
-                            EngineHint(R.string.settings_zhipu_model_hint)
-                        }
-                        TranslationEngineType.GEMINI -> {
-                            EngineKeyField(
-                                value = geminiKey,
-                                onValueChange = viewModel::setGeminiKey,
-                                labelRes = R.string.settings_gemini_key,
-                                reveal = revealKey,
-                                colors = fieldColors,
-                            )
-                            RevealKeyButton(revealKey) { revealKey = !revealKey }
-                            ModelPickerEntryRow(
-                                model = geminiModel.text,
-                                onClick = { activeModelPickerEngine = engineType },
-                            )
-                            EngineTextField(
-                                value = geminiBaseUrl,
-                                onValueChange = viewModel::updateGeminiBaseUrl,
-                                labelRes = R.string.settings_gemini_base_url,
-                                colors = fieldColors,
-                            )
-                            EngineHint(R.string.settings_gemini_model_hint)
-                        }
-                        TranslationEngineType.OPENAI_COMPAT -> {
-                            EngineKeyField(
-                                value = genericKey,
-                                onValueChange = viewModel::setGenericKey,
-                                labelRes = R.string.settings_generic_key,
-                                reveal = revealKey,
-                                colors = fieldColors,
-                            )
-                            RevealKeyButton(revealKey) { revealKey = !revealKey }
-                            EngineTextField(
-                                value = genericBaseUrl,
-                                onValueChange = viewModel::updateGenericBaseUrl,
-                                labelRes = R.string.settings_generic_base_url,
-                                colors = fieldColors,
-                            )
-                            EngineHint(R.string.settings_generic_hint)
-                            ModelPickerEntryRow(
-                                model = genericModel.text,
-                                onClick = { activeModelPickerEngine = engineType },
-                            )
-                            // 三选一而非下拉框：项目里没有下拉组件，OptionRow 与引擎选择
-                            // 是同一套视觉，且下面每个选项都需要一行说明的分量。
-                            Text(
-                                text = stringResource(R.string.settings_generic_thinking_style),
-                                fontSize = 13.sp,
-                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                            )
-                            ThinkingOffStyle.entries.forEach { style ->
-                                OptionRow(
-                                    label = stringResource(style.labelRes),
-                                    selected = settings.genericThinkingOffStyle == style,
-                                    horizontalPadding = 0.dp,
-                                    onClick = { viewModel.setGenericThinkingOffStyle(style) },
-                                )
-                            }
-                            EngineHint(R.string.settings_generic_thinking_hint)
-                        }
-                        TranslationEngineType.MICROSOFT -> EngineHint(R.string.settings_microsoft_desc)
-                        TranslationEngineType.GOOGLE_FREE -> EngineHint(R.string.settings_google_free_desc)
-                    }
-                }
-
-                // ---- 思考开关：对所有 AI 类引擎生效，纯翻译 API 常驻置灰 ----
-                SettingSwitchRow(
-                    title = stringResource(R.string.settings_ai_thinking),
-                    summary = stringResource(
-                        if (engineType.isLlm) {
-                            R.string.settings_ai_thinking_summary
-                        } else {
-                            R.string.settings_ai_thinking_summary_na
-                        },
-                    ),
-                    checked = settings.aiDeepThinking,
-                    onCheckedChange = viewModel::setAiDeepThinking,
-                    enabled = engineType.isLlm,
-                )
-
-                // ---- 连接测试 ----
-                Column(
-                    modifier = Modifier
-                        .padding(horizontal = 16.dp)
-                        .padding(bottom = 14.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Button(
-                        onClick = {
-                            viewModel.saveApiKey()
-                            viewModel.testConnection()
-                        },
-                        enabled = !testing,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColorsPrimary(),
-                    ) {
-                        Text(
-                            text = stringResource(
-                                if (testing) R.string.settings_testing else R.string.settings_test_engine,
-                            ),
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
-                    // showsApiKeyField, not requiresApiKey: the generic engine's key is
-                    // optional but still has a field to save.
-                    if (engineType.showsApiKeyField) {
-                        TextButton(
-                            text = stringResource(R.string.settings_save_key_only),
-                            onClick = viewModel::saveApiKey,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                    if (!testResult.isNullOrBlank()) {
-                        val resultText = testResult.orEmpty()
-                        val hasOk = resultText.contains("✅")
-                        val hasFail = resultText.contains("❌")
-                        Text(
-                            text = resultText,
-                            fontSize = 13.sp,
-                            color = when {
-                                hasOk && !hasFail -> Booth.Success
-                                hasFail && !hasOk -> Booth.Danger
-                                else -> MiuixTheme.colorScheme.onSurface.copy(alpha = 0.85f)
-                            },
-                        )
-                    }
-                }
-            }
-        }
-
-        // 「怎么申请 API Key」：平时收成一个小长方块，点开才铺开四家申请入口。
-        //
-        // 摆在引擎区**之后**是刻意的：先让用户挑引擎，再告诉他去哪拿 Key，顺序才对得上。
-        // 反过来（摆在引擎列表之前）会让人以为这个 App 只有那几家免费服务商，而实际上
-        // 免费档全都跑在下面这些引擎上——缺的从来只是「去哪拿 Key」这一句话。
-        SectionCard {
-            Column {
+            if (!configured) {
+                // 尚未配置/使用任何引擎时，根据用户需求只显示「选择翻译引擎」
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { showApiKeyGuide = !showApiKeyGuide }
-                        .padding(horizontal = 16.dp, vertical = 15.dp),
+                        .clickable { showEnginePicker = true }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text(
-                        text = stringResource(R.string.settings_apikey_guide),
-                        color = Booth.Accent,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Icon(
-                        imageVector = if (showApiKeyGuide) {
-                            Icons.Outlined.ExpandLess
-                        } else {
-                            Icons.Outlined.ExpandMore
-                        },
-                        contentDescription = null,
-                        tint = Booth.Accent,
-                    )
-                }
-                if (showApiKeyGuide) {
-                    Column(
-                        modifier = Modifier
-                            .padding(horizontal = 16.dp)
-                            .padding(bottom = 10.dp),
-                    ) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = stringResource(R.string.settings_apikey_desc),
+                            text = stringResource(R.string.settings_engine_select_prompt),
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Booth.Accent,
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = stringResource(R.string.settings_engine_select_summary),
                             fontSize = 13.sp,
                             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         )
-                        ApiKeyProviders.all.forEach { provider ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
+                    }
+                    Icon(
+                        imageVector = Icons.Outlined.ExpandMore,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.6f),
+                        modifier = Modifier.rotate(-90f),
+                    )
+                }
+            } else {
+                Column {
+                    // 1. 当前使用的引擎（点击进入该引擎的配置二级菜单）
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { activeConfigEngine = engineType }
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = stringResource(engineType.titleRes),
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MiuixTheme.colorScheme.onSurface,
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(Booth.Accent.copy(alpha = 0.15f))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
                                     Text(
-                                        text = stringResource(provider.nameRes),
-                                        color = MiuixTheme.colorScheme.onSurface,
-                                    )
-                                    Text(
-                                        text = stringResource(provider.costRes),
-                                        fontSize = 13.sp,
-                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                        text = stringResource(R.string.settings_engine_in_use),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Booth.Accent,
                                     )
                                 }
-                                TextButton(
-                                    text = stringResource(R.string.settings_apikey_open),
-                                    onClick = { openUrl(context, provider.consoleUrl) },
-                                )
                             }
+                            Spacer(modifier = Modifier.height(3.dp))
+                            val currentModelName = when (engineType) {
+                                TranslationEngineType.DEEPSEEK -> deepSeekModel.text
+                                TranslationEngineType.ZHIPU -> zhipuModel.text
+                                TranslationEngineType.GEMINI -> geminiModel.text
+                                TranslationEngineType.OPENAI_COMPAT -> genericModel.text
+                                else -> ""
+                            }
+                            Text(
+                                text = if (currentModelName.isNotBlank()) {
+                                    "$currentModelName · " + stringResource(R.string.settings_model_select_action)
+                                } else {
+                                    stringResource(engineType.summaryRes)
+                                },
+                                fontSize = 13.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            )
                         }
-                        EngineHint(
-                            textRes = R.string.settings_apikey_nokey,
-                            modifier = Modifier.padding(top = 12.dp),
+                        Icon(
+                            imageVector = Icons.Outlined.ExpandMore,
+                            contentDescription = null,
+                            tint = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.6f),
+                            modifier = Modifier.rotate(-90f),
                         )
-                        EngineHint(
-                            textRes = R.string.settings_apikey_privacy,
-                            modifier = Modifier.padding(top = 8.dp),
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .height(0.5.dp)
+                            .background(MiuixTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    )
+
+                    // 2. 其他引擎入口（点击进入全部可用引擎选择列表）
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showEnginePicker = true }
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.settings_engine_other),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MiuixTheme.colorScheme.onSurface,
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = stringResource(R.string.settings_engine_other_summary),
+                                fontSize = 13.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Outlined.ExpandMore,
+                            contentDescription = null,
+                            tint = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.6f),
+                            modifier = Modifier.rotate(-90f),
                         )
                     }
                 }
@@ -1688,4 +1588,438 @@ private fun formatBytes(bytes: Long): String = when {
     bytes < 1024L -> "$bytes B"
     bytes < 1024L * 1024 -> "%.1f KB".format(Locale.US, bytes / 1024.0)
     else -> "%.1f MB".format(Locale.US, bytes / (1024.0 * 1024.0))
+}
+
+/**
+ * 检查指定引擎是否已配置好（免费引擎无需 Key 视为已就绪；LLM 引擎需填好 Key 或 BaseURL）。
+ */
+private fun isEngineConfigured(
+    engine: TranslationEngineType,
+    deepSeekKey: TextFieldValue,
+    zhipuKey: TextFieldValue,
+    geminiKey: TextFieldValue,
+    genericKey: TextFieldValue,
+    genericBaseUrl: String,
+): Boolean {
+    return when (engine) {
+        TranslationEngineType.MICROSOFT,
+        TranslationEngineType.GOOGLE_FREE -> true
+        TranslationEngineType.DEEPSEEK -> deepSeekKey.text.isNotBlank()
+        TranslationEngineType.ZHIPU -> zhipuKey.text.isNotBlank()
+        TranslationEngineType.GEMINI -> geminiKey.text.isNotBlank()
+        TranslationEngineType.OPENAI_COMPAT -> genericBaseUrl.isNotBlank() || genericKey.text.isNotBlank()
+    }
+}
+
+/**
+ * 翻译引擎配置二级页面：包含当前引擎的 API Key、Base URL、模型选择、AI 深度思考及连接测试。
+ */
+@Composable
+private fun EngineConfigSubScreen(
+    engineType: TranslationEngineType,
+    isCurrentEngine: Boolean,
+    onSetAsCurrent: () -> Unit,
+    settings: UserSettings,
+    deepSeekKey: TextFieldValue,
+    onDeepSeekKeyChange: (TextFieldValue) -> Unit,
+    deepSeekModel: TextFieldValue,
+    deepSeekBaseUrl: TextFieldValue,
+    onUpdateDeepSeekBaseUrl: (TextFieldValue) -> Unit,
+    zhipuKey: TextFieldValue,
+    onZhipuKeyChange: (TextFieldValue) -> Unit,
+    zhipuModel: TextFieldValue,
+    zhipuBaseUrl: TextFieldValue,
+    onUpdateZhipuBaseUrl: (TextFieldValue) -> Unit,
+    geminiKey: TextFieldValue,
+    onGeminiKeyChange: (TextFieldValue) -> Unit,
+    geminiModel: TextFieldValue,
+    geminiBaseUrl: TextFieldValue,
+    onUpdateGeminiBaseUrl: (TextFieldValue) -> Unit,
+    genericKey: TextFieldValue,
+    onGenericKeyChange: (TextFieldValue) -> Unit,
+    genericModel: TextFieldValue,
+    genericBaseUrl: TextFieldValue,
+    onUpdateGenericBaseUrl: (TextFieldValue) -> Unit,
+    onUpdateGenericThinkingOffStyle: (ThinkingOffStyle) -> Unit,
+    onUpdateAiDeepThinking: (Boolean) -> Unit,
+    testing: Boolean,
+    testResult: String?,
+    onSaveAndTest: () -> Unit,
+    onSaveKeyOnly: () -> Unit,
+    fieldColors: TextFieldColors,
+    onOpenModelPicker: (TranslationEngineType) -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    BackHandler(enabled = true) { onBack() }
+    var revealKey by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        PageTitle(
+            title = stringResource(R.string.settings_engine_config_title, stringResource(engineType.titleRes)),
+            subtitle = stringResource(engineType.summaryRes),
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            TextButton(
+                text = stringResource(R.string.settings_logs_back),
+                onClick = onBack,
+            )
+            if (!isCurrentEngine) {
+                TextButton(
+                    text = stringResource(R.string.settings_engine_switch_to),
+                    onClick = onSetAsCurrent,
+                )
+            }
+        }
+
+        SectionCard {
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                when (engineType) {
+                    TranslationEngineType.DEEPSEEK -> {
+                        EngineKeyField(
+                            value = deepSeekKey,
+                            onValueChange = onDeepSeekKeyChange,
+                            labelRes = R.string.settings_deepseek_key,
+                            reveal = revealKey,
+                            colors = fieldColors,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RevealKeyButton(revealKey) { revealKey = !revealKey }
+                            TextButton(
+                                text = stringResource(R.string.settings_apikey_open) + " (DeepSeek)",
+                                onClick = { openUrl(context, "https://platform.deepseek.com/api_keys") },
+                            )
+                        }
+                        ModelPickerEntryRow(
+                            model = deepSeekModel.text,
+                            onClick = { onOpenModelPicker(engineType) },
+                        )
+                        EngineTextField(
+                            value = deepSeekBaseUrl,
+                            onValueChange = onUpdateDeepSeekBaseUrl,
+                            labelRes = R.string.settings_deepseek_base_url,
+                            colors = fieldColors,
+                        )
+                    }
+                    TranslationEngineType.ZHIPU -> {
+                        EngineKeyField(
+                            value = zhipuKey,
+                            onValueChange = onZhipuKeyChange,
+                            labelRes = R.string.settings_zhipu_key,
+                            reveal = revealKey,
+                            colors = fieldColors,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RevealKeyButton(revealKey) { revealKey = !revealKey }
+                            TextButton(
+                                text = stringResource(R.string.settings_apikey_open) + " (永久免费)",
+                                onClick = { openUrl(context, "https://open.bigmodel.cn/usercenter/apikeys") },
+                            )
+                        }
+                        ModelPickerEntryRow(
+                            model = zhipuModel.text,
+                            onClick = { onOpenModelPicker(engineType) },
+                        )
+                        EngineTextField(
+                            value = zhipuBaseUrl,
+                            onValueChange = onUpdateZhipuBaseUrl,
+                            labelRes = R.string.settings_zhipu_base_url,
+                            colors = fieldColors,
+                        )
+                        EngineHint(R.string.settings_zhipu_model_hint)
+                    }
+                    TranslationEngineType.GEMINI -> {
+                        EngineKeyField(
+                            value = geminiKey,
+                            onValueChange = onGeminiKeyChange,
+                            labelRes = R.string.settings_gemini_key,
+                            reveal = revealKey,
+                            colors = fieldColors,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RevealKeyButton(revealKey) { revealKey = !revealKey }
+                            TextButton(
+                                text = stringResource(R.string.settings_apikey_open) + " (AI Studio)",
+                                onClick = { openUrl(context, "https://aistudio.google.com/apikey") },
+                            )
+                        }
+                        ModelPickerEntryRow(
+                            model = geminiModel.text,
+                            onClick = { onOpenModelPicker(engineType) },
+                        )
+                        EngineTextField(
+                            value = geminiBaseUrl,
+                            onValueChange = onUpdateGeminiBaseUrl,
+                            labelRes = R.string.settings_gemini_base_url,
+                            colors = fieldColors,
+                        )
+                        EngineHint(R.string.settings_gemini_model_hint)
+                    }
+                    TranslationEngineType.OPENAI_COMPAT -> {
+                        EngineKeyField(
+                            value = genericKey,
+                            onValueChange = onGenericKeyChange,
+                            labelRes = R.string.settings_generic_key,
+                            reveal = revealKey,
+                            colors = fieldColors,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RevealKeyButton(revealKey) { revealKey = !revealKey }
+                            TextButton(
+                                text = stringResource(R.string.settings_apikey_open) + " (硅基流动)",
+                                onClick = { openUrl(context, "https://cloud.siliconflow.cn/account/ak") },
+                            )
+                        }
+                        EngineTextField(
+                            value = genericBaseUrl,
+                            onValueChange = onUpdateGenericBaseUrl,
+                            labelRes = R.string.settings_generic_base_url,
+                            colors = fieldColors,
+                        )
+                        EngineHint(R.string.settings_generic_hint)
+                        ModelPickerEntryRow(
+                            model = genericModel.text,
+                            onClick = { onOpenModelPicker(engineType) },
+                        )
+                        Text(
+                            text = stringResource(R.string.settings_generic_thinking_style),
+                            fontSize = 13.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                        ThinkingOffStyle.entries.forEach { style ->
+                            OptionRow(
+                                label = stringResource(style.labelRes),
+                                selected = settings.genericThinkingOffStyle == style,
+                                horizontalPadding = 0.dp,
+                                onClick = { onUpdateGenericThinkingOffStyle(style) },
+                            )
+                        }
+                        EngineHint(R.string.settings_generic_thinking_hint)
+                    }
+                    TranslationEngineType.MICROSOFT -> EngineHint(R.string.settings_microsoft_desc)
+                    TranslationEngineType.GOOGLE_FREE -> EngineHint(R.string.settings_google_free_desc)
+                }
+            }
+        }
+
+        if (engineType.isLlm) {
+            SectionCard {
+                SettingSwitchRow(
+                    title = stringResource(R.string.settings_ai_thinking),
+                    summary = stringResource(R.string.settings_ai_thinking_summary),
+                    checked = settings.aiDeepThinking,
+                    onCheckedChange = onUpdateAiDeepThinking,
+                    enabled = true,
+                )
+            }
+        }
+
+        SectionCard {
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Button(
+                    onClick = onSaveAndTest,
+                    enabled = !testing,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColorsPrimary(),
+                ) {
+                    Text(
+                        text = stringResource(
+                            if (testing) R.string.settings_testing else R.string.settings_test_engine,
+                        ),
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                if (engineType.showsApiKeyField) {
+                    TextButton(
+                        text = stringResource(R.string.settings_save_key_only),
+                        onClick = onSaveKeyOnly,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                if (!testResult.isNullOrBlank()) {
+                    val resultText = testResult.orEmpty()
+                    val hasOk = resultText.contains("✅")
+                    val hasFail = resultText.contains("❌")
+                    Text(
+                        text = resultText,
+                        fontSize = 13.sp,
+                        color = when {
+                            hasOk && !hasFail -> Booth.Success
+                            hasFail && !hasOk -> Booth.Danger
+                            else -> MiuixTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                        },
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
+    }
+}
+
+/**
+ * 翻译引擎选择二级页面：列出全部支持的引擎，并可直接切换与进入配置。
+ */
+@Composable
+private fun EnginePickerSubScreen(
+    currentEngine: TranslationEngineType,
+    onSelectEngine: (TranslationEngineType) -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    BackHandler(enabled = true) { onBack() }
+    var showApiKeyGuide by rememberSaveable { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        PageTitle(
+            title = stringResource(R.string.settings_engine_select_prompt),
+            subtitle = stringResource(R.string.settings_engine_desc),
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            TextButton(
+                text = stringResource(R.string.settings_logs_back),
+                onClick = onBack,
+            )
+        }
+
+        SectionCard {
+            Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                TranslationEngineType.entries.forEach { engine ->
+                    OptionRow(
+                        label = stringResource(engine.titleRes),
+                        summary = stringResource(engine.summaryRes),
+                        selected = engine == currentEngine,
+                        onClick = { onSelectEngine(engine) },
+                    )
+                }
+            }
+        }
+
+        // 申请 API Key 引导
+        SectionCard {
+            Column {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showApiKeyGuide = !showApiKeyGuide }
+                        .padding(horizontal = 16.dp, vertical = 15.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_apikey_guide),
+                        color = Booth.Accent,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Icon(
+                        imageVector = if (showApiKeyGuide) {
+                            Icons.Outlined.ExpandLess
+                        } else {
+                            Icons.Outlined.ExpandMore
+                        },
+                        contentDescription = null,
+                        tint = Booth.Accent,
+                    )
+                }
+                if (showApiKeyGuide) {
+                    Column(
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp)
+                            .padding(bottom = 10.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.settings_apikey_desc),
+                            fontSize = 13.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                        ApiKeyProviders.all.forEach { provider ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = stringResource(provider.nameRes),
+                                        color = MiuixTheme.colorScheme.onSurface,
+                                    )
+                                    Text(
+                                        text = stringResource(provider.costRes),
+                                        fontSize = 13.sp,
+                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    )
+                                }
+                                TextButton(
+                                    text = stringResource(R.string.settings_apikey_open),
+                                    onClick = { openUrl(context, provider.consoleUrl) },
+                                )
+                            }
+                        }
+                        EngineHint(
+                            textRes = R.string.settings_apikey_nokey,
+                            modifier = Modifier.padding(top = 12.dp),
+                        )
+                        EngineHint(
+                            textRes = R.string.settings_apikey_privacy,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
+    }
 }

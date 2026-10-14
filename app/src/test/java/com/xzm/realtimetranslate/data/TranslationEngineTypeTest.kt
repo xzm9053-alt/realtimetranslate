@@ -68,6 +68,14 @@ class TranslationEngineTypeTest {
     }
 
     @Test
+    fun `all engines declare title and summary string resources`() {
+        TranslationEngineType.entries.forEach { type ->
+            assertTrue("$type has invalid titleRes", type.titleRes != 0)
+            assertTrue("$type has invalid summaryRes", type.summaryRes != 0)
+        }
+    }
+
+    @Test
     fun `stored values round-trip and unknown ones fall back to deepseek`() {
         TranslationEngineType.entries.forEach { type ->
             assertEquals(type, TranslationEngineType.fromStorage(type.name))

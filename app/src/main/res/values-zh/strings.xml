@@ -63,6 +63,14 @@
     <string name="settings_subtitle">翻译引擎、字幕外观与译音</string>
     <string name="settings_engine">翻译引擎</string>
     <string name="settings_engine_desc">选择用哪个服务来翻译识别出的语音。</string>
+    <string name="settings_engine_current">当前引擎</string>
+    <string name="settings_engine_other">其他引擎</string>
+    <string name="settings_engine_other_summary">切换或配置更多翻译引擎</string>
+    <string name="settings_engine_select_prompt">选择翻译引擎</string>
+    <string name="settings_engine_select_summary">尚未配置翻译服务，点击选择</string>
+    <string name="settings_engine_config_title">%1$s 设置</string>
+    <string name="settings_engine_in_use">正在使用</string>
+    <string name="settings_engine_switch_to">切换为当前引擎</string>
     <string name="engine_deepseek">DeepSeek</string>
     <string name="engine_deepseek_summary">流式高质量 · 需要 API Key</string>
     <string name="engine_microsoft">微软（免费）</string>
