@@ -304,4 +304,29 @@
     <string name="update_action_watch_video">Watch new video</string>
     <string name="update_action_later">Remind me later</string>
     <string name="update_new_version">Latest version: %1$s</string>
+
+    <!-- ASR Engines -->
+    <string name="asr_engine_local">Local SenseVoice (Offline)</string>
+    <string name="asr_engine_local_summary">On-device SenseVoice model. Zero data usage, fully private, works offline.</string>
+    <string name="asr_engine_aliyun">Aliyun FunASR (Cloud Streaming)</string>
+    <string name="asr_engine_aliyun_summary">WebSocket full-duplex real-time streaming. Millisecond typewriter subtitles.</string>
+    <string name="asr_engine_generic">Generic OpenAI-compatible ASR</string>
+    <string name="asr_engine_generic_summary">Standard /audio/transcriptions API (SiliconFlow free SenseVoice/Whisper, Groq, or self-hosted).</string>
+    <string name="settings_asr_engine">Speech Recognition Engine</string>
+    <string name="settings_asr_engine_desc">Choose speech recognition (ASR) backend</string>
+    <string name="settings_asr_generic_base_url">Transcription API Base URL</string>
+    <string name="settings_asr_generic_key">Transcription API Key</string>
+    <string name="settings_asr_generic_model">Transcription Model Name</string>
+    <string name="settings_asr_engine_other">Other Speech Recognition Engines</string>
+    <string name="settings_asr_engine_configure">Configure %1$s</string>
+    <string name="settings_asr_guide_title">How to Get a Speech Recognition API Key</string>
+    <string name="settings_asr_guide_siliconflow_title">SiliconFlow · Free Forever</string>
+    <string name="settings_asr_guide_siliconflow_desc">Free cloud SenseVoice and Whisper speech-to-text models.</string>
+    <string name="settings_asr_guide_aliyun_title">Aliyun DashScope · 10h Free Monthly</string>
+    <string name="settings_asr_guide_aliyun_desc">Real-time low-latency streaming recognition with FunASR / Paraformer.</string>
+
+    <!-- Support Author -->
+    <string name="settings_reward_author">☕ Support Author · Buy Me a Coffee</string>
+    <string name="settings_reward_dialog_title">☕ Support the Author</string>
+    <string name="settings_reward_dialog_desc">Thank you for your support and encouragement! Every bit helps keep this app updated and improving.</string>
 </resources>

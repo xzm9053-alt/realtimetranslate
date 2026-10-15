@@ -439,6 +439,12 @@ class MainActivity : ComponentActivity() {
                                 onOcrStop = { stopOcr() },
                                 onExport = { subtitleVm.exportLastSession() },
                                 canDrawOverlays = PermissionUtils.canDrawOverlays(this@MainActivity),
+                                onUpdateSettings = { transform ->
+                                    scope.launch { settingsVm.update(transform) }
+                                },
+                                onResetAppearance = {
+                                    scope.launch { settingsVm.resetSubtitleAppearance() }
+                                },
                             )
                             1 -> SettingsScreen(
                                 modifier = Modifier.fillMaxSize(),

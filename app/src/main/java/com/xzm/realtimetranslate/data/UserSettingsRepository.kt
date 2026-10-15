@@ -59,6 +59,11 @@ class UserSettingsRepository(private val context: Context) {
         val modelAvailability = stringPreferencesKey("model_availability")
         val modelsCheckedAt = longPreferencesKey("models_checked_at")
         val diagnosticLogContent = booleanPreferencesKey("diagnostic_log_content")
+        val asrEngine = stringPreferencesKey("asr_engine")
+        val aliyunAsrModel = stringPreferencesKey("aliyun_asr_model")
+        val genericAsrBaseUrl = stringPreferencesKey("generic_asr_base_url")
+        val genericAsrApiKey = stringPreferencesKey("generic_asr_api_key")
+        val genericAsrModel = stringPreferencesKey("generic_asr_model")
     }
 
     val settings: Flow<UserSettings> = context.dataStore.data.map { prefs ->
@@ -108,6 +113,11 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.modelAvailability] = ModelCacheCodec.encodeMap(next.modelAvailability)
             prefs[Keys.modelsCheckedAt] = next.modelsCheckedAt
             prefs[Keys.diagnosticLogContent] = next.diagnosticLogContent
+            prefs[Keys.asrEngine] = next.asrEngine.name
+            prefs[Keys.aliyunAsrModel] = next.aliyunAsrModel
+            prefs[Keys.genericAsrBaseUrl] = next.genericAsrBaseUrl
+            prefs[Keys.genericAsrApiKey] = next.genericAsrApiKey
+            prefs[Keys.genericAsrModel] = next.genericAsrModel
         }
     }
 
@@ -172,6 +182,11 @@ class UserSettingsRepository(private val context: Context) {
         modelsCheckedAt = this[Keys.modelsCheckedAt] ?: 0L,
         diagnosticLogContent = this[Keys.diagnosticLogContent]
             ?: UserSettings.Defaults.DIAGNOSTIC_LOG_CONTENT,
+        asrEngine = AsrEngineType.fromStorage(this[Keys.asrEngine]),
+        aliyunAsrModel = this[Keys.aliyunAsrModel] ?: UserSettings.Defaults.ALIYUN_ASR_MODEL,
+        genericAsrBaseUrl = this[Keys.genericAsrBaseUrl] ?: UserSettings.Defaults.GENERIC_ASR_BASE_URL,
+        genericAsrApiKey = this[Keys.genericAsrApiKey] ?: UserSettings.Defaults.GENERIC_ASR_API_KEY,
+        genericAsrModel = this[Keys.genericAsrModel] ?: UserSettings.Defaults.GENERIC_ASR_MODEL,
     )
 
     /** Migrate the pre-3-option boolean: true→BOTH, false/absent→TRANSLATION. */

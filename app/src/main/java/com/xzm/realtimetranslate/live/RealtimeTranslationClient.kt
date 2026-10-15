@@ -5,7 +5,10 @@ import com.xzm.realtimetranslate.util.AppLog
 import com.xzm.realtimetranslate.util.AppLog as Log
 import com.xzm.realtimetranslate.LiveTranslateApp
 import com.xzm.realtimetranslate.R
+import com.xzm.realtimetranslate.data.AsrEngineType
 import com.xzm.realtimetranslate.translate.AsrEngine
+import com.xzm.realtimetranslate.translate.SpeechRecognizer
+import com.xzm.realtimetranslate.translate.SpeechRecognizerFactory
 import com.xzm.realtimetranslate.translate.TranslationEngine
 import com.xzm.realtimetranslate.translate.TranslationEngineFactory
 import kotlinx.coroutines.CancellationException
@@ -155,7 +158,7 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
 
     private val intentionalClose = AtomicBoolean(false)
     private val setupComplete = AtomicBoolean(false)
-    private var asrEngine: AsrEngine? = null
+    private var speechRecognizer: SpeechRecognizer? = null
     private var translationEngine: TranslationEngine? = null
     private var connectJob: Job? = null
 
@@ -165,7 +168,7 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
         setupComplete.set(false)
         recentInputs.clear() // 新会话：去重窗口重新开始
         _connectionState.value = ConnectionState.Connecting
-        emitDebug("初始化本地语音识别…")
+        emitDebug("初始化语音识别…")
         activeConfig = config
 
         connectJob = scope.launch {
@@ -178,25 +181,31 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
                     return@launch
                 }
 
-                val models = app.modelManager
-                // Blocking fallback on the IO thread: unpack bundled models if the
-                // app-startup seed hasn't finished yet (idempotent, fast when done).
-                val seeded = models.seedFromAssetsIfNeeded()
-                if (!seeded || !models.isReady()) {
-                    fail("语音识别模型未就绪：内置解压失败或存储空间不足，可到 设置 → 语音识别模型 重新下载修复")
+                val asrType = settings.asrEngine
+                if (!app.apiKeyStore.hasKeyFor(asrType)) {
+                    fail("请先在设置中填写语音识别所需的 API Key")
                     return@launch
                 }
 
-                emitDebug("加载 SenseVoice 模型…")
-                // 「边说边出」是会话级开关：AsrEngine 只在 onPartial 非空时才重解码，
-                // 关掉就是零开销，所以改动在下次开始翻译时生效。
+                val models = app.modelManager
+                if (asrType == AsrEngineType.LOCAL_SENSEVOICE) {
+                    // Blocking fallback on the IO thread: unpack bundled models if the
+                    // app-startup seed hasn't finished yet (idempotent, fast when done).
+                    val seeded = models.seedFromAssetsIfNeeded()
+                    if (!seeded || !models.isReady()) {
+                        fail("语音识别模型未就绪：内置解压失败或存储空间不足，可到 设置 → 语音识别模型 重新下载修复")
+                        return@launch
+                    }
+                    emitDebug("加载本地 SenseVoice 模型…")
+                } else {
+                    emitDebug("连接云端语音识别（${asrType.name}）…")
+                }
+
                 val partials = settings.partialTranscripts
-                val engine = AsrEngine(
-                    modelDir = models.paths.senseVoiceModel.parentFile!!,
-                    sileroVadPath = models.paths.sileroVad.absolutePath,
-                    language = AsrEngine.senseVoiceLanguageFor(settings.sourceLanguageCode),
-                    vadMinSilenceDuration = settings.vadMinSilenceSec,
-                    vadMaxSpeechDuration = settings.vadMaxSpeechSec,
+                speechRecognizer = SpeechRecognizerFactory.create(
+                    settings = settings,
+                    keys = app.apiKeyStore,
+                    models = models,
                     onSegment = { text -> onSegment(text, config) },
                     onPartial = if (partials) {
                         { text -> onPartial(text, config) }
@@ -204,7 +213,6 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
                         null
                     },
                 )
-                asrEngine = engine
                 if (partials) ensureDraftWorker()
 
                 // liveSettings: 引擎每次请求重读设置，模型名 / baseUrl / 思考开关
@@ -228,7 +236,7 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
 
     fun sendPcm16le(chunk: ByteArray, sampleRate: Int = 16_000) {
         if (sampleRate != 16_000) return // pipeline is fixed to 16 kHz
-        asrEngine?.acceptPcm(chunk)
+        speechRecognizer?.acceptPcm(chunk)
     }
 
     fun close() {
@@ -425,8 +433,8 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
         setupComplete.set(false)
         connectJob?.cancel()
         connectJob = null
-        asrEngine?.close()
-        asrEngine = null
+        speechRecognizer?.close()
+        speechRecognizer = null
         translationEngine = null
         activeConfig = null
         // 让上一会话遗留的草稿请求全部作废（worker 是长期协程，跨会话复用）。

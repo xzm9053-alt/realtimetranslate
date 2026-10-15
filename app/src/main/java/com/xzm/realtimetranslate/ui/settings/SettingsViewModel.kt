@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.xzm.realtimetranslate.LiveTranslateApp
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.ApiKeyStore
+import com.xzm.realtimetranslate.data.AsrEngineType
 import com.xzm.realtimetranslate.data.HistoryMode
 import com.xzm.realtimetranslate.data.OcrScript
 import com.xzm.realtimetranslate.data.ThinkingOffStyle
@@ -16,6 +17,7 @@ import com.xzm.realtimetranslate.data.UserSettingsRepository
 import com.xzm.realtimetranslate.translate.ModelAvailability
 import com.xzm.realtimetranslate.translate.ModelPresets
 import com.xzm.realtimetranslate.translate.ModelProbe
+import com.xzm.realtimetranslate.translate.SpeechRecognizerFactory
 import com.xzm.realtimetranslate.translate.TranslationEngineFactory
 import com.xzm.realtimetranslate.util.AppLog
 import com.xzm.realtimetranslate.util.CrashReporter
@@ -93,6 +95,28 @@ class SettingsViewModel(
     private val _genericBaseUrl = MutableStateFlow(TextFieldValue(""))
     val genericBaseUrl: StateFlow<TextFieldValue> = _genericBaseUrl.asStateFlow()
 
+    // ---- ASR fields (drafts) ----
+    private val _aliyunAsrKey = MutableStateFlow(TextFieldValue(apiKeyStore.getAliyunAsrKey()))
+    val aliyunAsrKey: StateFlow<TextFieldValue> = _aliyunAsrKey.asStateFlow()
+
+    private val _aliyunAsrModel = MutableStateFlow(
+        TextFieldValue(UserSettings.Defaults.ALIYUN_ASR_MODEL),
+    )
+    val aliyunAsrModel: StateFlow<TextFieldValue> = _aliyunAsrModel.asStateFlow()
+
+    private val _genericAsrBaseUrl = MutableStateFlow(
+        TextFieldValue(UserSettings.Defaults.GENERIC_ASR_BASE_URL),
+    )
+    val genericAsrBaseUrl: StateFlow<TextFieldValue> = _genericAsrBaseUrl.asStateFlow()
+
+    private val _genericAsrApiKey = MutableStateFlow(TextFieldValue(apiKeyStore.getGenericAsrKey()))
+    val genericAsrApiKey: StateFlow<TextFieldValue> = _genericAsrApiKey.asStateFlow()
+
+    private val _genericAsrModel = MutableStateFlow(
+        TextFieldValue(UserSettings.Defaults.GENERIC_ASR_MODEL),
+    )
+    val genericAsrModel: StateFlow<TextFieldValue> = _genericAsrModel.asStateFlow()
+
     private val _mirrorUrl = MutableStateFlow(
         TextFieldValue(UserSettings.Defaults.MODEL_MIRROR_URL),
     )
@@ -115,6 +139,12 @@ class SettingsViewModel(
 
     private val _testing = MutableStateFlow(false)
     val testing: StateFlow<Boolean> = _testing.asStateFlow()
+
+    private val _asrTestResult = MutableStateFlow<String?>(null)
+    val asrTestResult: StateFlow<String?> = _asrTestResult.asStateFlow()
+
+    private val _asrTesting = MutableStateFlow(false)
+    val asrTesting: StateFlow<Boolean> = _asrTesting.asStateFlow()
 
     // ---- 模型可用性检测（联网，结果缓存到 DataStore 供下次启动复用）----
     // ModelProbe 而非 ModelAvailability：可用性是要缓存的，detail（服务端原话）只在
@@ -154,6 +184,15 @@ class SettingsViewModel(
             )
             _genericModel.value = TextFieldValue(s.genericModel)
             _genericBaseUrl.value = TextFieldValue(s.genericBaseUrl)
+            _aliyunAsrModel.value = TextFieldValue(
+                s.aliyunAsrModel.ifBlank { UserSettings.Defaults.ALIYUN_ASR_MODEL },
+            )
+            _genericAsrBaseUrl.value = TextFieldValue(
+                s.genericAsrBaseUrl.ifBlank { UserSettings.Defaults.GENERIC_ASR_BASE_URL },
+            )
+            _genericAsrModel.value = TextFieldValue(
+                s.genericAsrModel.ifBlank { UserSettings.Defaults.GENERIC_ASR_MODEL },
+            )
             _mirrorUrl.value = TextFieldValue(
                 s.modelMirrorUrl.ifBlank { UserSettings.Defaults.MODEL_MIRROR_URL },
             )
@@ -264,6 +303,85 @@ class SettingsViewModel(
 
     fun setEngine(type: TranslationEngineType) {
         update { it.copy(translationEngine = type) }
+    }
+
+    fun setAsrEngine(engine: AsrEngineType) {
+        update { it.copy(asrEngine = engine) }
+    }
+
+    fun updateAliyunAsrKey(value: TextFieldValue) {
+        _aliyunAsrKey.value = value
+        apiKeyStore.setAliyunAsrKey(value.text)
+    }
+
+    fun updateAliyunAsrModel(value: TextFieldValue) {
+        _aliyunAsrModel.value = value
+        update { it.copy(aliyunAsrModel = value.text.trim()) }
+    }
+
+    fun updateGenericAsrBaseUrl(value: TextFieldValue) {
+        _genericAsrBaseUrl.value = value
+        update { it.copy(genericAsrBaseUrl = value.text.trim()) }
+    }
+
+    fun updateGenericAsrApiKey(value: TextFieldValue) {
+        _genericAsrApiKey.value = value
+        apiKeyStore.setGenericAsrKey(value.text)
+        update { it.copy(genericAsrApiKey = value.text.trim()) }
+    }
+
+    fun updateGenericAsrModel(value: TextFieldValue) {
+        _genericAsrModel.value = value
+        update { it.copy(genericAsrModel = value.text.trim()) }
+    }
+
+    fun saveAsrConfig(engineType: AsrEngineType) {
+        when (engineType) {
+            AsrEngineType.LOCAL_SENSEVOICE -> Unit
+            AsrEngineType.ALIYUN_FUN_ASR -> {
+                apiKeyStore.setAliyunAsrKey(_aliyunAsrKey.value.text)
+                update { it.copy(aliyunAsrModel = _aliyunAsrModel.value.text.trim()) }
+            }
+            AsrEngineType.GENERIC_OPENAI -> {
+                apiKeyStore.setGenericAsrKey(_genericAsrApiKey.value.text)
+                update {
+                    it.copy(
+                        genericAsrBaseUrl = _genericAsrBaseUrl.value.text.trim(),
+                        genericAsrApiKey = _genericAsrApiKey.value.text.trim(),
+                        genericAsrModel = _genericAsrModel.value.text.trim(),
+                    )
+                }
+            }
+        }
+        _asrTestResult.value = "✅ 配置已保存"
+    }
+
+    fun testAsrConnection(engineType: AsrEngineType) {
+        if (_asrTesting.value) return
+        _asrTesting.value = true
+        _asrTestResult.value = null
+        saveAsrConfig(engineType)
+        viewModelScope.launch {
+            val s = settingsRepository.settings.first()
+            val outcome = runCatching {
+                SpeechRecognizerFactory.testConnection(
+                    engineType = engineType,
+                    settings = s,
+                    keys = apiKeyStore,
+                    models = app.modelManager,
+                )
+            }
+            _asrTestResult.value = outcome.fold(
+                onSuccess = { res ->
+                    res.fold(
+                        onSuccess = { it },
+                        onFailure = { "❌ 连接失败：${it.message}" },
+                    )
+                },
+                onFailure = { "❌ 测试异常：${it.message}" },
+            )
+            _asrTesting.value = false
+        }
     }
 
     fun setOcrScript(script: OcrScript) {

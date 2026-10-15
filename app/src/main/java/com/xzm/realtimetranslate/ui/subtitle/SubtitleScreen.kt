@@ -1,8 +1,10 @@
 package com.xzm.realtimetranslate.ui.subtitle
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,9 +14,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,25 +37,32 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.AudioSourceMode
 import com.xzm.realtimetranslate.data.LanguageOption
+import com.xzm.realtimetranslate.data.OcrScript
+import com.xzm.realtimetranslate.data.SubtitleDisplayMode
 import com.xzm.realtimetranslate.data.SupportedLanguages
 import com.xzm.realtimetranslate.data.UserSettings
 import com.xzm.realtimetranslate.service.ScreenOcrBus
 import com.xzm.realtimetranslate.service.SessionBus
 import com.xzm.realtimetranslate.ui.components.PageTitle
 import com.xzm.realtimetranslate.ui.components.SectionCard
+import com.xzm.realtimetranslate.ui.components.SettingSwitchRow
 import com.xzm.realtimetranslate.ui.components.StatusPill
 import com.xzm.realtimetranslate.ui.components.StatusTone
 import com.xzm.realtimetranslate.ui.theme.Booth
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Slider
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import kotlin.math.roundToInt
 
 private enum class LangPicker { Source, Target }
 
@@ -72,6 +83,8 @@ fun SubtitleScreen(
     onOcrStop: () -> Unit,
     onExport: () -> Unit,
     canDrawOverlays: Boolean,
+    onUpdateSettings: ((UserSettings) -> UserSettings) -> Unit = {},
+    onResetAppearance: () -> Unit = {},
 ) {
     val running = session.status == SessionBus.Status.Running ||
         session.status == SessionBus.Status.Starting
@@ -306,6 +319,97 @@ fun SubtitleScreen(
                     }
                 }
             }
+
+            // 屏幕取词专属配置（语种识别、区域红框与透明度）
+            SmallTitle(
+                text = "屏幕取词配置",
+                modifier = Modifier.padding(horizontal = 24.dp),
+            )
+            SectionCard {
+                Column(
+                    modifier = Modifier.padding(vertical = 6.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_ocr_desc),
+                        fontSize = 13.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                    OptionRow(
+                        label = stringResource(R.string.ocr_script_auto),
+                        summary = stringResource(R.string.ocr_script_auto_summary),
+                        selected = settings.ocrScript == OcrScript.AUTO,
+                        onClick = { onUpdateSettings { it.copy(ocrScript = OcrScript.AUTO) } },
+                    )
+                    OptionRow(
+                        label = stringResource(R.string.ocr_script_latin),
+                        summary = stringResource(R.string.ocr_script_latin_summary),
+                        selected = settings.ocrScript == OcrScript.LATIN,
+                        onClick = { onUpdateSettings { it.copy(ocrScript = OcrScript.LATIN) } },
+                    )
+                    OptionRow(
+                        label = stringResource(R.string.ocr_script_chinese),
+                        summary = stringResource(R.string.ocr_script_chinese_summary),
+                        selected = settings.ocrScript == OcrScript.CHINESE_MIX,
+                        onClick = { onUpdateSettings { it.copy(ocrScript = OcrScript.CHINESE_MIX) } },
+                    )
+                    OptionRow(
+                        label = stringResource(R.string.ocr_script_japanese),
+                        summary = stringResource(R.string.ocr_script_japanese_summary),
+                        selected = settings.ocrScript == OcrScript.JAPANESE,
+                        onClick = { onUpdateSettings { it.copy(ocrScript = OcrScript.JAPANESE) } },
+                    )
+                    OptionRow(
+                        label = stringResource(R.string.ocr_script_korean),
+                        summary = stringResource(R.string.ocr_script_korean_summary),
+                        selected = settings.ocrScript == OcrScript.KOREAN,
+                        onClick = { onUpdateSettings { it.copy(ocrScript = OcrScript.KOREAN) } },
+                    )
+                    SettingSwitchRow(
+                        title = stringResource(R.string.ocr_outline_enabled),
+                        summary = stringResource(R.string.ocr_outline_enabled_summary),
+                        checked = settings.ocrRegionOutlineEnabled,
+                        onCheckedChange = { v ->
+                            onUpdateSettings { it.copy(ocrRegionOutlineEnabled = v) }
+                        },
+                    )
+                    if (settings.ocrRegionOutlineEnabled) {
+                        Text(
+                            text = stringResource(R.string.ocr_outline_color),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        )
+                        ColorSwatchRow(
+                            selected = settings.ocrRegionOutlineColor,
+                            onSelect = { c ->
+                                onUpdateSettings { it.copy(ocrRegionOutlineColor = c) }
+                            },
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                        )
+                        Column(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text(
+                                text = stringResource(
+                                    R.string.ocr_outline_alpha,
+                                    (settings.ocrRegionOutlineAlpha * 100).toInt(),
+                                ),
+                                fontSize = 13.sp,
+                            )
+                            Slider(
+                                value = settings.ocrRegionOutlineAlpha,
+                                onValueChange = { v ->
+                                    onUpdateSettings { it.copy(ocrRegionOutlineAlpha = v) }
+                                },
+                                valueRange = 0.1f..1f,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         // 语言设置卡片（双向语言互换按钮）
@@ -448,6 +552,173 @@ fun SubtitleScreen(
             }
         }
 
+        // 字幕外观设置（所见即所得仿真预览 + 字号/透明度/颜色/模式）
+        SmallTitle(
+            text = stringResource(R.string.settings_appearance),
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
+        SectionCard {
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = "实时效果预览",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            Color(
+                                red = 0.08f,
+                                green = 0.08f,
+                                blue = 0.10f,
+                                alpha = settings.backgroundAlpha.coerceIn(0.1f, 1f),
+                            )
+                        )
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .width(36.dp)
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(Color.White.copy(alpha = 0.35f)),
+                        )
+                        when (settings.displayMode) {
+                            SubtitleDisplayMode.BOTH -> {
+                                Text(
+                                    text = "Live transcription demo text",
+                                    fontSize = settings.fontSizeSp.sp,
+                                    color = Color(settings.sourceTextColor.toInt()),
+                                    lineHeight = (settings.fontSizeSp * 1.35f).sp,
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(1.dp)
+                                        .background(Color.White.copy(alpha = 0.18f)),
+                                )
+                                Text(
+                                    text = "实时字幕预览示例",
+                                    fontSize = settings.fontSizeSp.sp,
+                                    color = Color(settings.translationTextColor.toInt()),
+                                    fontWeight = FontWeight.SemiBold,
+                                    lineHeight = (settings.fontSizeSp * 1.35f).sp,
+                                )
+                            }
+                            SubtitleDisplayMode.SOURCE -> {
+                                Text(
+                                    text = "Live transcription demo text",
+                                    fontSize = settings.fontSizeSp.sp,
+                                    color = Color(settings.sourceTextColor.toInt()),
+                                    lineHeight = (settings.fontSizeSp * 1.35f).sp,
+                                )
+                            }
+                            SubtitleDisplayMode.TRANSLATION -> {
+                                Text(
+                                    text = "实时字幕预览示例",
+                                    fontSize = settings.fontSizeSp.sp,
+                                    color = Color(settings.translationTextColor.toInt()),
+                                    fontWeight = FontWeight.SemiBold,
+                                    lineHeight = (settings.fontSizeSp * 1.35f).sp,
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Text(
+                    text = stringResource(R.string.settings_font_size, settings.fontSizeSp.roundToInt()),
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                Slider(
+                    value = settings.fontSizeSp,
+                    onValueChange = { s -> onUpdateSettings { it.copy(fontSizeSp = s.roundToInt().toFloat()) } },
+                    valueRange = 12f..32f,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    text = stringResource(
+                        R.string.settings_bg_alpha,
+                        (settings.backgroundAlpha * 100).toInt(),
+                    ),
+                    fontSize = 13.sp,
+                )
+                Slider(
+                    value = settings.backgroundAlpha,
+                    onValueChange = { a -> onUpdateSettings { it.copy(backgroundAlpha = a) } },
+                    valueRange = 0.1f..0.95f,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            Text(
+                text = stringResource(R.string.settings_bilingual),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+            OptionRow(
+                label = stringResource(R.string.display_mode_both),
+                summary = stringResource(R.string.display_mode_both_summary),
+                selected = settings.displayMode == SubtitleDisplayMode.BOTH,
+                onClick = { onUpdateSettings { it.copy(displayMode = SubtitleDisplayMode.BOTH) } },
+            )
+            OptionRow(
+                label = stringResource(R.string.display_mode_source),
+                summary = stringResource(R.string.display_mode_source_summary),
+                selected = settings.displayMode == SubtitleDisplayMode.SOURCE,
+                onClick = { onUpdateSettings { it.copy(displayMode = SubtitleDisplayMode.SOURCE) } },
+            )
+            OptionRow(
+                label = stringResource(R.string.display_mode_translation),
+                summary = stringResource(R.string.display_mode_translation_summary),
+                selected = settings.displayMode == SubtitleDisplayMode.TRANSLATION,
+                onClick = {
+                    onUpdateSettings { it.copy(displayMode = SubtitleDisplayMode.TRANSLATION) }
+                },
+            )
+            Text(
+                text = stringResource(R.string.settings_source_color),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+            ColorSwatchRow(
+                selected = settings.sourceTextColor,
+                onSelect = { c -> onUpdateSettings { it.copy(sourceTextColor = c) } },
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            Text(
+                text = stringResource(R.string.settings_translation_color),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+            ColorSwatchRow(
+                selected = settings.translationTextColor,
+                onSelect = { c -> onUpdateSettings { it.copy(translationTextColor = c) } },
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            TextButton(
+                text = stringResource(R.string.settings_reset_appearance),
+                onClick = onResetAppearance,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+            )
+        }
+
         Spacer(modifier = Modifier.height(24.dp))
     }
 
@@ -579,5 +850,85 @@ private fun LanguageChip(
             overflow = TextOverflow.Ellipsis,
             color = MiuixTheme.colorScheme.onSurface,
         )
+    }
+}
+
+@Composable
+private fun OptionRow(
+    label: String,
+    summary: String? = null,
+    selected: Boolean,
+    onClick: () -> Unit,
+    horizontalPadding: Dp = 16.dp,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = horizontalPadding, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(modifier = Modifier.weight(1f)) {
+            Column {
+                Text(
+                    text = label,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (selected) Booth.Accent else MiuixTheme.colorScheme.onSurface,
+                )
+                if (summary != null) {
+                    Text(
+                        text = summary,
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    )
+                }
+            }
+        }
+        if (selected) {
+            Text(text = "✓", color = Booth.Accent, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+private val SUBTITLE_COLOR_PRESETS: List<Long> = listOf(
+    0xFFFFFFFF, 0xFFD6D6D6, 0xFFB0BEC5, 0xFF000000, 0xFFFFD600,
+    0xFFFFC400, 0xFFFF9800, 0xFFFF5252, 0xFFE91E8C, 0xFFCE93D8,
+    0xFF448AFF, 0xFF00E5FF, 0xFF69F0AE, 0xFF00C853,
+)
+
+@Composable
+private fun ColorSwatchRow(
+    selected: Long,
+    onSelect: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        SUBTITLE_COLOR_PRESETS.chunked(7).forEach { rowColors ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                rowColors.forEach { c ->
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .aspectRatio(1f)
+                            .clip(CircleShape)
+                            .background(Color(c.toInt()))
+                            .then(
+                                if (c == selected) {
+                                    Modifier.border(3.dp, Booth.Accent, CircleShape)
+                                } else {
+                                    Modifier
+                                },
+                            )
+                            .clickable { onSelect(c) },
+                    )
+                }
+            }
+        }
     }
 }

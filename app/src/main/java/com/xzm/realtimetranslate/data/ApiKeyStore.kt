@@ -93,6 +93,39 @@ class ApiKeyStore(context: Context) {
     }
 
     // ------------------------------------------------------------------
+    // ASR API Keys: Aliyun FunASR & Generic OpenAI-compatible ASR
+    // ------------------------------------------------------------------
+
+    fun getAliyunAsrKey(): String = prefs.getString(KEY_ALIYUN_ASR, "").orEmpty().trim()
+
+    fun setAliyunAsrKey(value: String) {
+        prefs.edit().putString(KEY_ALIYUN_ASR, value.trim()).apply()
+    }
+
+    fun getGenericAsrKey(): String = prefs.getString(KEY_GENERIC_ASR, "").orEmpty().trim()
+
+    fun setGenericAsrKey(value: String) {
+        prefs.edit().putString(KEY_GENERIC_ASR, value.trim()).apply()
+    }
+
+    fun getKeyFor(type: AsrEngineType): String = when (type) {
+        AsrEngineType.LOCAL_SENSEVOICE -> ""
+        AsrEngineType.ALIYUN_FUN_ASR -> getAliyunAsrKey().ifBlank { getGenericKey() }
+        AsrEngineType.GENERIC_OPENAI -> getGenericAsrKey()
+    }
+
+    fun setKeyFor(type: AsrEngineType, value: String) {
+        when (type) {
+            AsrEngineType.LOCAL_SENSEVOICE -> Unit
+            AsrEngineType.ALIYUN_FUN_ASR -> setAliyunAsrKey(value)
+            AsrEngineType.GENERIC_OPENAI -> setGenericAsrKey(value)
+        }
+    }
+
+    fun hasKeyFor(type: AsrEngineType): Boolean =
+        !type.requiresApiKey || getKeyFor(type).isNotEmpty()
+
+    // ------------------------------------------------------------------
     // Engine-agnostic accessors — the single place that maps an engine to its
     // key, so call sites never hard-code an engine name.
     // ------------------------------------------------------------------
@@ -183,6 +216,8 @@ class ApiKeyStore(context: Context) {
         private const val KEY_ZHIPU = "zhipu_api_key"
         private const val KEY_GEMINI = "gemini_api_key"
         private const val KEY_GENERIC = "generic_api_key"
+        private const val KEY_ALIYUN_ASR = "aliyun_asr_key"
+        private const val KEY_GENERIC_ASR = "generic_asr_key"
         const val MAX_KEYS = 10
     }
 }

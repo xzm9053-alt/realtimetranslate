@@ -303,4 +303,29 @@
     <string name="update_action_watch_video">去看看新视频</string>
     <string name="update_action_later">稍后提醒</string>
     <string name="update_new_version">最新版本：%1$s</string>
+
+    <!-- 语音识别 ASR 引擎 -->
+    <string name="asr_engine_local">本地 SenseVoice（离线）</string>
+    <string name="asr_engine_local_summary">内置阿里 SenseVoice 模型，完全离线运行，零流量消耗，隐私不出手机</string>
+    <string name="asr_engine_aliyun">阿里百炼 FunASR（云端真流式）</string>
+    <string name="asr_engine_aliyun_summary">WebSocket 全双工极速流式推流，毫秒级边说边出，国内极速直连（每月赠送免费额度）</string>
+    <string name="asr_engine_generic">通用 OpenAI 兼容语音转录</string>
+    <string name="asr_engine_generic_summary">兼容标准 /audio/transcriptions 接口，支持硅基流动（免费SenseVoice/Whisper）、Groq或自建服务</string>
+    <string name="settings_asr_engine">语音识别引擎</string>
+    <string name="settings_asr_engine_desc">选择音频识别（ASR）引擎与运行方式</string>
+    <string name="settings_asr_generic_base_url">转录 API 地址 (Base URL)</string>
+    <string name="settings_asr_generic_key">转录 API Key</string>
+    <string name="settings_asr_generic_model">语音转录模型名称</string>
+    <string name="settings_asr_engine_other">其他语音识别引擎</string>
+    <string name="settings_asr_engine_configure">配置 %1$s</string>
+    <string name="settings_asr_guide_title">怎么申请语音识别 API Key</string>
+    <string name="settings_asr_guide_siliconflow_title">硅基流动 (SiliconFlow) · 永久免费</string>
+    <string name="settings_asr_guide_siliconflow_desc">提供免费云端 SenseVoice 与 Whisper 语音转录，国内极速直连免翻墙。</string>
+    <string name="settings_asr_guide_aliyun_title">阿里百炼 (DashScope) · 每月免费10小时</string>
+    <string name="settings_asr_guide_aliyun_desc">提供高精度毫秒级 FunASR / Paraformer 实时流式识别，超低延迟同传首选。</string>
+
+    <!-- 打赏作者 -->
+    <string name="settings_reward_author">☕ 打赏作者 · 支持开发</string>
+    <string name="settings_reward_dialog_title">☕ 打赏支持作者</string>
+    <string name="settings_reward_dialog_desc">感谢你的喜爱与支持，每一份鼓励都是持续打磨优化软件的动力！</string>
 </resources>

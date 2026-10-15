@@ -45,7 +45,7 @@ class AsrEngine(
     private val onPartial: ((String) -> Unit)? = null,
     /** 两次草稿识别之间的最小间隔；缓冲越长实际间隔越大，见 [maybeRunPartial]。 */
     private val partialIntervalMillis: Long = 400,
-) {
+) : SpeechRecognizer {
 
     // VAD runs synchronously on the caller thread (cheap); recognition is queued.
     private val vad = Vad(
@@ -121,13 +121,13 @@ class AsrEngine(
 
     /** Feed 16 kHz mono PCM16 little-endian bytes. Any thread. */
     @Synchronized
-    fun acceptPcm(pcm: ByteArray) {
+    override fun acceptPcm(chunk: ByteArray) {
         if (closed.get()) return
-        if (pcm.size < 2) return
-        val floats = FloatArray(pcm.size / 2)
+        if (chunk.size < 2) return
+        val floats = FloatArray(chunk.size / 2)
         for (i in floats.indices) {
-            val lo = pcm[i * 2].toInt() and 0xff
-            val hi = pcm[i * 2 + 1].toInt()
+            val lo = chunk[i * 2].toInt() and 0xff
+            val hi = chunk[i * 2 + 1].toInt()
             val s = ((hi shl 8) or lo).toShort()
             floats[i] = s / 32768.0f
         }
@@ -161,7 +161,7 @@ class AsrEngine(
         stablePrefix.reset()
     }
 
-    fun close() {
+    override fun close() {
         if (closed.getAndSet(true)) return
         // 释放排在所有已入队的识别之后、且在识别线程上完成：直接在这里 release，
         // 就会和队列里正在跑的 native 解码抢同一份模型。

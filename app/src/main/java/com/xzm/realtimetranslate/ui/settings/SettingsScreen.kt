@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -46,8 +47,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TextFieldValue
@@ -59,12 +62,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.xzm.realtimetranslate.BuildConfig
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.ApiKeyProviders
+import com.xzm.realtimetranslate.data.AsrEngineType
 import com.xzm.realtimetranslate.data.HistoryMode
 import com.xzm.realtimetranslate.data.OcrScript
 import com.xzm.realtimetranslate.data.SubtitleDisplayMode
 import com.xzm.realtimetranslate.data.ThinkingOffStyle
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
+import com.xzm.realtimetranslate.translate.AsrModelCatalog
 import com.xzm.realtimetranslate.translate.ModelAvailability
 import com.xzm.realtimetranslate.translate.ModelListFilter
 import com.xzm.realtimetranslate.translate.ModelProbe
@@ -75,6 +80,8 @@ import com.xzm.realtimetranslate.ui.components.SettingSwitchRow
 import com.xzm.realtimetranslate.ui.theme.Booth
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Slider
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
@@ -132,6 +139,15 @@ fun SettingsScreen(
     val modelsCheckedAt by viewModel.modelsCheckedAt.collectAsStateWithLifecycle()
     val checkingModels by viewModel.checkingModels.collectAsStateWithLifecycle()
 
+    val asrEngine = settings.asrEngine
+    val aliyunAsrKey by viewModel.aliyunAsrKey.collectAsStateWithLifecycle()
+    val aliyunAsrModel by viewModel.aliyunAsrModel.collectAsStateWithLifecycle()
+    val genericAsrBaseUrl by viewModel.genericAsrBaseUrl.collectAsStateWithLifecycle()
+    val genericAsrApiKey by viewModel.genericAsrApiKey.collectAsStateWithLifecycle()
+    val genericAsrModel by viewModel.genericAsrModel.collectAsStateWithLifecycle()
+    val asrTestResult by viewModel.asrTestResult.collectAsStateWithLifecycle()
+    val asrTesting by viewModel.asrTesting.collectAsStateWithLifecycle()
+
     var revealKey by remember { mutableStateOf(false) }
     val engineType = settings.translationEngine
     val context = LocalContext.current
@@ -167,6 +183,10 @@ fun SettingsScreen(
     var showEnginePicker by rememberSaveable { mutableStateOf(false) }
     var activeConfigEngine by rememberSaveable { mutableStateOf<TranslationEngineType?>(null) }
     var activeModelPickerEngine by rememberSaveable { mutableStateOf<TranslationEngineType?>(null) }
+
+    var showAsrEnginePicker by rememberSaveable { mutableStateOf(false) }
+    var activeConfigAsrEngine by rememberSaveable { mutableStateOf<AsrEngineType?>(null) }
+    var showRewardDialog by remember { mutableStateOf(false) }
 
     val pickingEngine = activeModelPickerEngine
     if (pickingEngine != null) {
@@ -246,6 +266,56 @@ fun SettingsScreen(
                 activeConfigEngine = selected
             },
             onBack = { showEnginePicker = false },
+            modifier = modifier,
+        )
+        return
+    }
+
+    val configAsr = activeConfigAsrEngine
+    if (configAsr != null) {
+        AsrEngineConfigSubScreen(
+            engineType = configAsr,
+            isCurrentEngine = configAsr == asrEngine,
+            onSetAsCurrent = { viewModel.setAsrEngine(configAsr) },
+            modelStatus = modelStatus,
+            downloading = downloading,
+            downloadProgress = downloadProgress,
+            onDownloadModels = viewModel::downloadModels,
+            onRefreshModelStatus = viewModel::refreshModelStatus,
+            mirrorUrl = mirrorUrl,
+            onUpdateMirrorUrl = viewModel::updateMirrorUrl,
+            hfToken = hfToken,
+            onUpdateHfToken = viewModel::updateHfToken,
+            aliyunAsrKey = aliyunAsrKey,
+            onUpdateAliyunAsrKey = viewModel::updateAliyunAsrKey,
+            aliyunAsrModel = aliyunAsrModel,
+            onUpdateAliyunAsrModel = viewModel::updateAliyunAsrModel,
+            genericAsrBaseUrl = genericAsrBaseUrl,
+            onUpdateGenericAsrBaseUrl = viewModel::updateGenericAsrBaseUrl,
+            genericAsrApiKey = genericAsrApiKey,
+            onUpdateGenericAsrApiKey = viewModel::updateGenericAsrApiKey,
+            genericAsrModel = genericAsrModel,
+            onUpdateGenericAsrModel = viewModel::updateGenericAsrModel,
+            fieldColors = fieldColors,
+            asrTesting = asrTesting,
+            asrTestResult = asrTestResult,
+            onSaveAndTest = { viewModel.testAsrConnection(configAsr) },
+            onSaveOnly = { viewModel.saveAsrConfig(configAsr) },
+            onBack = { activeConfigAsrEngine = null },
+            modifier = modifier,
+        )
+        return
+    }
+
+    if (showAsrEnginePicker) {
+        AsrEnginePickerSubScreen(
+            currentEngine = asrEngine,
+            onSelectEngine = { selected ->
+                viewModel.setAsrEngine(selected)
+                showAsrEnginePicker = false
+                activeConfigAsrEngine = selected
+            },
+            onBack = { showAsrEnginePicker = false },
             modifier = modifier,
         )
         return
@@ -410,78 +480,107 @@ fun SettingsScreen(
         }
 
         SmallTitle(
-            text = stringResource(R.string.settings_model),
+            text = stringResource(R.string.settings_asr_engine),
             modifier = Modifier.padding(horizontal = 24.dp),
         )
         SectionCard {
-            Column(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_model_desc),
-                    fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                )
-                Text(
-                    text = modelStatus.ifBlank { stringResource(R.string.settings_model_unknown) },
-                    fontSize = 13.sp,
-                )
-                if (downloading) {
-                    LinearProgressIndicator(
-                        progress = { downloadProgress.coerceIn(0f, 1f) },
-                        modifier = Modifier.fillMaxWidth(),
+            Column {
+                // 1. 当前在用识别引擎卡片
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { activeConfigAsrEngine = asrEngine }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                text = stringResource(asrEngine.titleRes),
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MiuixTheme.colorScheme.onSurface,
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Booth.Accent.copy(alpha = 0.12f))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                            ) {
+                                Text(
+                                    text = "使用中",
+                                    fontSize = 11.sp,
+                                    color = Booth.Accent,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(3.dp))
+                        val asrSubtitle = when (asrEngine) {
+                            AsrEngineType.LOCAL_SENSEVOICE -> "本地离线模型 · 零流量消耗 · 隐私不出手机"
+                            AsrEngineType.ALIYUN_FUN_ASR -> {
+                                val m = aliyunAsrModel.text.ifBlank { "fun-asr-realtime" }
+                                "$m · WebSocket 全双工实时流式"
+                            }
+                            AsrEngineType.GENERIC_OPENAI -> {
+                                val m = genericAsrModel.text.ifBlank { "FunAudioLLM/SenseVoiceSmall" }
+                                "$m · 标准 /audio/transcriptions 接口"
+                            }
+                        }
+                        Text(
+                            text = "$asrSubtitle · 点击配置",
+                            fontSize = 13.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Outlined.ExpandMore,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.6f),
+                        modifier = Modifier.rotate(-90f),
                     )
                 }
-                OutlinedTextField(
-                    value = mirrorUrl,
-                    onValueChange = viewModel::updateMirrorUrl,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = {
-                        androidx.compose.material3.Text(stringResource(R.string.settings_model_mirror))
-                    },
-                    singleLine = true,
-                    shape = RoundedCornerShape(16.dp),
-                    colors = fieldColors,
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .height(0.5.dp)
+                        .background(MiuixTheme.colorScheme.outline.copy(alpha = 0.15f))
                 )
-                OutlinedTextField(
-                    value = hfToken,
-                    onValueChange = viewModel::updateHfToken,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = {
-                        androidx.compose.material3.Text(stringResource(R.string.settings_model_hf_token))
-                    },
-                    singleLine = true,
-                    visualTransformation = if (revealKey) {
-                        VisualTransformation.None
-                    } else {
-                        PasswordVisualTransformation()
-                    },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = fieldColors,
-                )
-                Button(
-                    onClick = {
-                        if (downloading) viewModel.refreshModelStatus()
-                        else viewModel.downloadModels()
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = if (downloading) {
-                        ButtonDefaults.buttonColors()
-                    } else {
-                        ButtonDefaults.buttonColorsPrimary()
-                    },
+
+                // 2. 其他识别引擎切换入口
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showAsrEnginePicker = true }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text(
-                        text = stringResource(
-                            if (downloading) {
-                                R.string.settings_model_downloading
-                            } else {
-                                R.string.settings_model_download
-                            },
-                        ),
-                        fontWeight = FontWeight.SemiBold,
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.settings_asr_engine_other),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MiuixTheme.colorScheme.onSurface,
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "本地离线 SenseVoice / 阿里百炼流式 / 通用 OpenAI 兼容",
+                            fontSize = 12.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Outlined.ExpandMore,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.6f),
+                        modifier = Modifier.rotate(-90f),
                     )
                 }
             }
@@ -538,256 +637,6 @@ fun SettingsScreen(
                 onCheckedChange = { v ->
                     viewModel.update { it.copy(partialTranscripts = v) }
                 },
-            )
-        }
-
-        SmallTitle(
-            text = stringResource(R.string.settings_ocr),
-            modifier = Modifier.padding(horizontal = 24.dp),
-        )
-        SectionCard {
-            Column(
-                modifier = Modifier.padding(vertical = 6.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_ocr_desc),
-                    fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
-                OptionRow(
-                    label = stringResource(R.string.ocr_script_auto),
-                    summary = stringResource(R.string.ocr_script_auto_summary),
-                    selected = settings.ocrScript == OcrScript.AUTO,
-                    onClick = { viewModel.setOcrScript(OcrScript.AUTO) },
-                )
-                OptionRow(
-                    label = stringResource(R.string.ocr_script_latin),
-                    summary = stringResource(R.string.ocr_script_latin_summary),
-                    selected = settings.ocrScript == OcrScript.LATIN,
-                    onClick = { viewModel.setOcrScript(OcrScript.LATIN) },
-                )
-                OptionRow(
-                    label = stringResource(R.string.ocr_script_chinese),
-                    summary = stringResource(R.string.ocr_script_chinese_summary),
-                    selected = settings.ocrScript == OcrScript.CHINESE_MIX,
-                    onClick = { viewModel.setOcrScript(OcrScript.CHINESE_MIX) },
-                )
-                OptionRow(
-                    label = stringResource(R.string.ocr_script_japanese),
-                    summary = stringResource(R.string.ocr_script_japanese_summary),
-                    selected = settings.ocrScript == OcrScript.JAPANESE,
-                    onClick = { viewModel.setOcrScript(OcrScript.JAPANESE) },
-                )
-                OptionRow(
-                    label = stringResource(R.string.ocr_script_korean),
-                    summary = stringResource(R.string.ocr_script_korean_summary),
-                    selected = settings.ocrScript == OcrScript.KOREAN,
-                    onClick = { viewModel.setOcrScript(OcrScript.KOREAN) },
-                )
-                SettingSwitchRow(
-                    title = stringResource(R.string.ocr_outline_enabled),
-                    summary = stringResource(R.string.ocr_outline_enabled_summary),
-                    checked = settings.ocrRegionOutlineEnabled,
-                    onCheckedChange = { v ->
-                        viewModel.update { it.copy(ocrRegionOutlineEnabled = v) }
-                    },
-                )
-                if (settings.ocrRegionOutlineEnabled) {
-                    Text(
-                        text = stringResource(R.string.ocr_outline_color),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                    )
-                    ColorSwatchRow(
-                        selected = settings.ocrRegionOutlineColor,
-                        onSelect = { c ->
-                            viewModel.update { it.copy(ocrRegionOutlineColor = c) }
-                        },
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
-                    Column(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Text(
-                            text = stringResource(
-                                R.string.ocr_outline_alpha,
-                                (settings.ocrRegionOutlineAlpha * 100).toInt(),
-                            ),
-                            fontSize = 13.sp,
-                        )
-                        Slider(
-                            value = settings.ocrRegionOutlineAlpha,
-                            onValueChange = { v ->
-                                viewModel.update { it.copy(ocrRegionOutlineAlpha = v) }
-                            },
-                            valueRange = 0.1f..1f,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                }
-            }
-        }
-
-        SmallTitle(
-            text = stringResource(R.string.settings_appearance),
-            modifier = Modifier.padding(horizontal = 24.dp),
-        )
-        SectionCard {
-            Column(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                // 所见即所得实时字幕预览卡片
-                Text(
-                    text = "实时效果预览",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(
-                            Color(
-                                red = 0.08f,
-                                green = 0.08f,
-                                blue = 0.10f,
-                                alpha = settings.backgroundAlpha.coerceIn(0.1f, 1f)
-                            )
-                        )
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        // 抓手条示意
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.CenterHorizontally)
-                                .width(36.dp)
-                                .height(4.dp)
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(Color.White.copy(alpha = 0.45f)),
-                        )
-
-                        Spacer(modifier = Modifier.height(2.dp))
-
-                        if (settings.displayMode != SubtitleDisplayMode.TRANSLATION) {
-                            Text(
-                                text = "Good morning, everyone. Welcome to the conference.",
-                                fontSize = settings.fontSizeSp.sp,
-                                color = Color(settings.sourceTextColor),
-                                lineHeight = (settings.fontSizeSp * 1.3f).sp,
-                                fontWeight = FontWeight.Normal,
-                            )
-                        }
-
-                        if (settings.displayMode == SubtitleDisplayMode.BOTH) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(1.dp)
-                                    .background(Color.White.copy(alpha = 0.15f))
-                            )
-                        }
-
-                        if (settings.displayMode != SubtitleDisplayMode.SOURCE) {
-                            Text(
-                                text = "大家早上好，欢迎参加本次大会。",
-                                fontSize = settings.fontSizeSp.sp,
-                                color = Color(settings.translationTextColor),
-                                lineHeight = (settings.fontSizeSp * 1.3f).sp,
-                                fontWeight = FontWeight.Medium,
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(2.dp))
-
-                Text(
-                    text = stringResource(R.string.settings_font_size, settings.fontSizeSp.toInt()),
-                    fontSize = 13.sp,
-                )
-                Slider(
-                    value = settings.fontSizeSp,
-                    onValueChange = { size -> viewModel.update { it.copy(fontSizeSp = size) } },
-                    valueRange = 12f..32f,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Text(
-                    text = stringResource(
-                        R.string.settings_bg_alpha,
-                        (settings.backgroundAlpha * 100).toInt(),
-                    ),
-                    fontSize = 13.sp,
-                )
-                Slider(
-                    value = settings.backgroundAlpha,
-                    onValueChange = { a -> viewModel.update { it.copy(backgroundAlpha = a) } },
-                    valueRange = 0.1f..0.95f,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-            Text(
-                text = stringResource(R.string.settings_bilingual),
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-            )
-            OptionRow(
-                label = stringResource(R.string.display_mode_both),
-                summary = stringResource(R.string.display_mode_both_summary),
-                selected = settings.displayMode == SubtitleDisplayMode.BOTH,
-                onClick = { viewModel.update { it.copy(displayMode = SubtitleDisplayMode.BOTH) } },
-            )
-            OptionRow(
-                label = stringResource(R.string.display_mode_source),
-                summary = stringResource(R.string.display_mode_source_summary),
-                selected = settings.displayMode == SubtitleDisplayMode.SOURCE,
-                onClick = { viewModel.update { it.copy(displayMode = SubtitleDisplayMode.SOURCE) } },
-            )
-            OptionRow(
-                label = stringResource(R.string.display_mode_translation),
-                summary = stringResource(R.string.display_mode_translation_summary),
-                selected = settings.displayMode == SubtitleDisplayMode.TRANSLATION,
-                onClick = {
-                    viewModel.update { it.copy(displayMode = SubtitleDisplayMode.TRANSLATION) }
-                },
-            )
-            Text(
-                text = stringResource(R.string.settings_source_color),
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-            )
-            ColorSwatchRow(
-                selected = settings.sourceTextColor,
-                onSelect = { c -> viewModel.update { it.copy(sourceTextColor = c) } },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-            Text(
-                text = stringResource(R.string.settings_translation_color),
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-            )
-            ColorSwatchRow(
-                selected = settings.translationTextColor,
-                onSelect = { c -> viewModel.update { it.copy(translationTextColor = c) } },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-            TextButton(
-                text = stringResource(R.string.settings_reset_appearance),
-                onClick = viewModel::resetSubtitleAppearance,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
 
@@ -960,6 +809,15 @@ fun SettingsScreen(
                         },
                 )
                 Text(
+                    text = stringResource(R.string.settings_reward_author),
+                    fontSize = 13.sp,
+                    color = Color(0xFF07C160),
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showRewardDialog = true },
+                )
+                Text(
                     text = stringResource(R.string.settings_version, BuildConfig.VERSION_NAME),
                     fontSize = 13.sp,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
@@ -1031,6 +889,10 @@ fun SettingsScreen(
         }
 
         Spacer(modifier = Modifier.height(28.dp))
+    }
+
+    if (showRewardDialog) {
+        RewardDialog(onDismiss = { showRewardDialog = false })
     }
 }
 
@@ -2021,5 +1883,683 @@ private fun EnginePickerSubScreen(
         }
 
         Spacer(modifier = Modifier.height(28.dp))
+    }
+}
+
+/**
+ * 语音识别引擎配置二级页面：包含本地 SenseVoice 模型管理、阿里百炼 Key 配置、通用 OpenAI 兼容配置。
+ */
+@Composable
+private fun AsrEngineConfigSubScreen(
+    engineType: AsrEngineType,
+    isCurrentEngine: Boolean,
+    onSetAsCurrent: () -> Unit,
+    modelStatus: String,
+    downloading: Boolean,
+    downloadProgress: Float,
+    onDownloadModels: () -> Unit,
+    onRefreshModelStatus: () -> Unit,
+    mirrorUrl: TextFieldValue,
+    onUpdateMirrorUrl: (TextFieldValue) -> Unit,
+    hfToken: TextFieldValue,
+    onUpdateHfToken: (TextFieldValue) -> Unit,
+    aliyunAsrKey: TextFieldValue,
+    onUpdateAliyunAsrKey: (TextFieldValue) -> Unit,
+    aliyunAsrModel: TextFieldValue,
+    onUpdateAliyunAsrModel: (TextFieldValue) -> Unit,
+    genericAsrBaseUrl: TextFieldValue,
+    onUpdateGenericAsrBaseUrl: (TextFieldValue) -> Unit,
+    genericAsrApiKey: TextFieldValue,
+    onUpdateGenericAsrApiKey: (TextFieldValue) -> Unit,
+    genericAsrModel: TextFieldValue,
+    onUpdateGenericAsrModel: (TextFieldValue) -> Unit,
+    fieldColors: TextFieldColors,
+    asrTesting: Boolean,
+    asrTestResult: String?,
+    onSaveAndTest: () -> Unit,
+    onSaveOnly: () -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    BackHandler(enabled = true) { onBack() }
+    val context = LocalContext.current
+    var revealKey by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        PageTitle(
+            title = stringResource(R.string.settings_asr_engine_configure, stringResource(engineType.titleRes)),
+            subtitle = stringResource(engineType.summaryRes),
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            TextButton(
+                text = stringResource(R.string.settings_logs_back),
+                onClick = onBack,
+            )
+            if (!isCurrentEngine) {
+                TextButton(
+                    text = "设为当前识别引擎",
+                    onClick = onSetAsCurrent,
+                )
+            }
+        }
+
+        when (engineType) {
+            AsrEngineType.LOCAL_SENSEVOICE -> {
+                SmallTitle(
+                    text = "本地离线模型管理",
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                )
+                SectionCard {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(
+                            text = "本地内置阿里 SenseVoice 语音识别模型，完全离线运行，零流量消耗，隐私不出手机。",
+                            fontSize = 13.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                        Text(
+                            text = modelStatus.ifBlank { stringResource(R.string.settings_model_unknown) },
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        if (downloading) {
+                            LinearProgressIndicator(
+                                progress = { downloadProgress.coerceIn(0f, 1f) },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                        Button(
+                            onClick = {
+                                if (downloading) onRefreshModelStatus()
+                                else onDownloadModels()
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = if (downloading) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColorsPrimary(),
+                        ) {
+                            Text(
+                                text = stringResource(if (downloading) R.string.settings_model_downloading else R.string.settings_model_download),
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                        OutlinedTextField(
+                            value = mirrorUrl,
+                            onValueChange = onUpdateMirrorUrl,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { androidx.compose.material3.Text(stringResource(R.string.settings_model_mirror)) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(16.dp),
+                            colors = fieldColors,
+                        )
+                        OutlinedTextField(
+                            value = hfToken,
+                            onValueChange = onUpdateHfToken,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { androidx.compose.material3.Text(stringResource(R.string.settings_model_hf_token)) },
+                            singleLine = true,
+                            visualTransformation = if (revealKey) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = fieldColors,
+                        )
+                    }
+                }
+            }
+
+            AsrEngineType.ALIYUN_FUN_ASR -> {
+                SmallTitle(
+                    text = "阿里百炼云端流式配置",
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                )
+                SectionCard {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(
+                            text = "WebSocket 全双工极速流式推流，毫秒级边说边出。每月赠送 10 小时免费额度，国内直连免翻墙。",
+                            fontSize = 13.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                        OutlinedTextField(
+                            value = aliyunAsrKey,
+                            onValueChange = onUpdateAliyunAsrKey,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { androidx.compose.material3.Text("DashScope API Key") },
+                            singleLine = true,
+                            visualTransformation = if (revealKey) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = fieldColors,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            TextButton(
+                                text = if (revealKey) "隐藏 API Key" else "显示 API Key",
+                                onClick = { revealKey = !revealKey },
+                            )
+                            TextButton(
+                                text = "去控制台获取 Key ↗",
+                                onClick = { openUrl(context, "https://dashscope.console.aliyun.com/apiKey") },
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "选择阿里百炼实时流式模型",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MiuixTheme.colorScheme.onSurface,
+                        )
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            AsrModelCatalog.ALIYUN_REALTIME_MODELS.forEach { preset ->
+                                val isSelected = aliyunAsrModel.text == preset.id ||
+                                    (aliyunAsrModel.text.isBlank() && preset.id == "fun-asr-realtime")
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(
+                                            if (isSelected) Booth.Accent.copy(alpha = 0.12f)
+                                            else MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                                        )
+                                        .clickable { onUpdateAliyunAsrModel(TextFieldValue(preset.id)) }
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        ) {
+                                            Text(
+                                                text = preset.name,
+                                                fontSize = 14.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                color = if (isSelected) Booth.Accent else MiuixTheme.colorScheme.onSurface,
+                                            )
+                                            if (preset.recommended) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(4.dp))
+                                                        .background(Booth.Accent)
+                                                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "推荐",
+                                                        fontSize = 10.sp,
+                                                        color = Color.White,
+                                                        fontWeight = FontWeight.Bold,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        Text(
+                                            text = "${preset.id} · ${preset.description}",
+                                            fontSize = 12.sp,
+                                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                            lineHeight = 16.sp,
+                                        )
+                                    }
+                                    if (isSelected) {
+                                        Text(text = "✓", color = Booth.Accent, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+
+                        OutlinedTextField(
+                            value = aliyunAsrModel,
+                            onValueChange = onUpdateAliyunAsrModel,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { androidx.compose.material3.Text("当前模型 ID（支持直接修改或填入自定义模型）") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(16.dp),
+                            colors = fieldColors,
+                        )
+                    }
+                }
+            }
+
+            AsrEngineType.GENERIC_OPENAI -> {
+                SmallTitle(
+                    text = "OpenAI 兼容语音转录配置",
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                )
+                SectionCard {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(
+                            text = "标准 /v1/audio/transcriptions 接口。默认预设为硅基流动（免费云端 SenseVoice），亦可接入 Groq 或本地局域网 Whisper。",
+                            fontSize = 13.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                        OutlinedTextField(
+                            value = genericAsrBaseUrl,
+                            onValueChange = onUpdateGenericAsrBaseUrl,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { androidx.compose.material3.Text(stringResource(R.string.settings_asr_generic_base_url)) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(16.dp),
+                            colors = fieldColors,
+                        )
+                        OutlinedTextField(
+                            value = genericAsrApiKey,
+                            onValueChange = onUpdateGenericAsrApiKey,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { androidx.compose.material3.Text(stringResource(R.string.settings_asr_generic_key)) },
+                            singleLine = true,
+                            visualTransformation = if (revealKey) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = fieldColors,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            TextButton(
+                                text = if (revealKey) "隐藏 API Key" else "显示 API Key",
+                                onClick = { revealKey = !revealKey },
+                            )
+                            TextButton(
+                                text = "去硅基流动免费申请 Key ↗",
+                                onClick = { openUrl(context, "https://cloud.siliconflow.cn/account/ak") },
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "常用优质转录模型预设（点击快速选择）",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MiuixTheme.colorScheme.onSurface,
+                        )
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            AsrModelCatalog.GENERIC_OPENAI_MODELS.forEach { preset ->
+                                val isSelected = genericAsrModel.text == preset.id ||
+                                    (genericAsrModel.text.isBlank() && preset.id == "FunAudioLLM/SenseVoiceSmall")
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(
+                                            if (isSelected) Booth.Accent.copy(alpha = 0.12f)
+                                            else MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                                        )
+                                        .clickable {
+                                            onUpdateGenericAsrModel(TextFieldValue(preset.id))
+                                            if (genericAsrBaseUrl.text.isBlank()) {
+                                                onUpdateGenericAsrBaseUrl(TextFieldValue("https://api.siliconflow.cn/v1"))
+                                            }
+                                        }
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        ) {
+                                            Text(
+                                                text = preset.name,
+                                                fontSize = 14.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                color = if (isSelected) Booth.Accent else MiuixTheme.colorScheme.onSurface,
+                                            )
+                                            if (preset.recommended) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(4.dp))
+                                                        .background(Booth.Accent)
+                                                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "推荐",
+                                                        fontSize = 10.sp,
+                                                        color = Color.White,
+                                                        fontWeight = FontWeight.Bold,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        Text(
+                                            text = "${preset.id} · ${preset.description}",
+                                            fontSize = 12.sp,
+                                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                            lineHeight = 16.sp,
+                                        )
+                                    }
+                                    if (isSelected) {
+                                        Text(text = "✓", color = Booth.Accent, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+
+                        OutlinedTextField(
+                            value = genericAsrModel,
+                            onValueChange = onUpdateGenericAsrModel,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { androidx.compose.material3.Text("当前模型 ID（支持直接修改或填入自定义模型）") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(16.dp),
+                            colors = fieldColors,
+                        )
+                    }
+                }
+            }
+        }
+
+        // 保存并测试连接卡片
+        SmallTitle(
+            text = "连接测试与生效",
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
+        SectionCard {
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Button(
+                        onClick = onSaveAndTest,
+                        enabled = !asrTesting,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColorsPrimary(),
+                    ) {
+                        Text(
+                            text = if (asrTesting) "正在检测连接…" else "保存并测试连接",
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                    TextButton(
+                        text = "仅保存配置",
+                        onClick = onSaveOnly,
+                    )
+                }
+
+                if (asrTesting) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+
+                asrTestResult?.let { resultText ->
+                    val hasOk = resultText.contains("✅")
+                    val hasFail = resultText.contains("❌")
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(
+                                when {
+                                    hasOk && !hasFail -> Booth.Accent.copy(alpha = 0.10f)
+                                    hasFail -> Color(0xFFD32F2F).copy(alpha = 0.10f)
+                                    else -> MiuixTheme.colorScheme.surfaceVariant
+                                }
+                            )
+                            .padding(10.dp)
+                    ) {
+                        Text(
+                            text = resultText,
+                            fontSize = 13.sp,
+                            color = when {
+                                hasOk && !hasFail -> Booth.Accent
+                                hasFail -> Color(0xFFD32F2F)
+                                else -> MiuixTheme.colorScheme.onSurface
+                            },
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
+    }
+}
+
+/**
+ * 语音识别引擎选择二级页面：列出可用 ASR 引擎，并附带底部折叠申请指南。
+ */
+@Composable
+private fun AsrEnginePickerSubScreen(
+    currentEngine: AsrEngineType,
+    onSelectEngine: (AsrEngineType) -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    BackHandler(enabled = true) { onBack() }
+    val context = LocalContext.current
+    var showGuide by rememberSaveable { mutableStateOf(false) }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        PageTitle(
+            title = stringResource(R.string.settings_asr_engine),
+            subtitle = stringResource(R.string.settings_asr_engine_desc),
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(
+                text = stringResource(R.string.settings_logs_back),
+                onClick = onBack,
+            )
+        }
+
+        SmallTitle(
+            text = "可用语音识别引擎",
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
+        SectionCard {
+            Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                AsrEngineType.entries.forEach { engine ->
+                    OptionRow(
+                        label = stringResource(engine.titleRes),
+                        summary = stringResource(engine.summaryRes),
+                        selected = engine == currentEngine,
+                        onClick = { onSelectEngine(engine) },
+                    )
+                }
+            }
+        }
+
+        // 怎么申请语音识别 API Key 教学卡片
+        SmallTitle(
+            text = "申请指南",
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
+        SectionCard {
+            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showGuide = !showGuide }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.settings_asr_guide_title),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "硅基流动免费云端 SenseVoice · 阿里百炼每月免费10小时",
+                            fontSize = 12.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                    }
+                    Icon(
+                        imageVector = if (showGuide) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    )
+                }
+
+                if (showGuide) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .height(0.5.dp)
+                            .background(MiuixTheme.colorScheme.outline.copy(alpha = 0.2f))
+                    )
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        // 1. 硅基流动
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = stringResource(R.string.settings_asr_guide_siliconflow_title),
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp,
+                                color = Booth.Accent,
+                            )
+                            Text(
+                                text = stringResource(R.string.settings_asr_guide_siliconflow_desc),
+                                fontSize = 12.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            )
+                            TextButton(
+                                text = "去硅基流动免费申请 Key ↗",
+                                onClick = { openUrl(context, "https://cloud.siliconflow.cn/account/ak") },
+                            )
+                        }
+
+                        // 2. 阿里百炼
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = stringResource(R.string.settings_asr_guide_aliyun_title),
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp,
+                                color = Booth.Accent,
+                            )
+                            Text(
+                                text = stringResource(R.string.settings_asr_guide_aliyun_desc),
+                                fontSize = 12.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            )
+                            TextButton(
+                                text = "去阿里云 DashScope 控制台 ↗",
+                                onClick = { openUrl(context, "https://dashscope.console.aliyun.com/apiKey") },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
+    }
+}
+
+/**
+ * 微信赞赏收款码弹窗。
+ */
+@Composable
+private fun RewardDialog(onDismiss: () -> Unit) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            colors = CardDefaults.defaultColors(
+                color = MiuixTheme.colorScheme.surfaceContainer,
+                contentColor = MiuixTheme.colorScheme.onSurfaceContainer,
+            ),
+            cornerRadius = 20.dp,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_reward_dialog_title),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MiuixTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = stringResource(R.string.settings_reward_dialog_desc),
+                    fontSize = 13.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 18.sp,
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.88f)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.White)
+                        .padding(8.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.img_reward_qrcode),
+                        contentDescription = "WeChat Reward QR Code",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(3f / 4.2f),
+                    )
+                }
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColorsPrimary(),
+                ) {
+                    Text(
+                        text = "关闭",
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        }
     }
 }

@@ -71,6 +71,12 @@ data class UserSettings(
     // default: it is the user's own content, and the diagnostic report is meant to be
     // forwarded to the author.
     val diagnosticLogContent: Boolean = Defaults.DIAGNOSTIC_LOG_CONTENT,
+    // ASR Engine selection and settings
+    val asrEngine: AsrEngineType = Defaults.ASR_ENGINE,
+    val aliyunAsrModel: String = Defaults.ALIYUN_ASR_MODEL,
+    val genericAsrBaseUrl: String = Defaults.GENERIC_ASR_BASE_URL,
+    val genericAsrApiKey: String = Defaults.GENERIC_ASR_API_KEY,
+    val genericAsrModel: String = Defaults.GENERIC_ASR_MODEL,
 ) {
     object Defaults {
         // Kept for schema compatibility; the engine now reads DeepSeek settings directly.
@@ -127,6 +133,11 @@ data class UserSettings(
         const val OCR_OUTLINE_COLOR = 0xFF2E7CF6
         const val OCR_OUTLINE_ALPHA = 0.5f
         const val DIAGNOSTIC_LOG_CONTENT = false
+        val ASR_ENGINE: AsrEngineType = AsrEngineType.LOCAL_SENSEVOICE
+        const val ALIYUN_ASR_MODEL = "fun-asr-realtime"
+        const val GENERIC_ASR_BASE_URL = "https://api.siliconflow.cn/v1"
+        const val GENERIC_ASR_API_KEY = ""
+        const val GENERIC_ASR_MODEL = "FunAudioLLM/SenseVoiceSmall"
     }
 }
 
