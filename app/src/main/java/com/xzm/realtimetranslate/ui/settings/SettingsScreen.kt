@@ -251,6 +251,7 @@ fun SettingsScreen(
             onSaveKeyOnly = viewModel::saveApiKey,
             fieldColors = fieldColors,
             onOpenModelPicker = { activeModelPickerEngine = it },
+            onUpdateSettings = { transform -> viewModel.update(transform) },
             onBack = { activeConfigEngine = null },
             modifier = modifier,
         )
@@ -301,6 +302,8 @@ fun SettingsScreen(
             asrTestResult = asrTestResult,
             onSaveAndTest = { viewModel.testAsrConnection(configAsr) },
             onSaveOnly = { viewModel.saveAsrConfig(configAsr) },
+            settings = settings,
+            onUpdateSettings = { transform -> viewModel.update(transform) },
             onBack = { activeConfigAsrEngine = null },
             modifier = modifier,
         )
@@ -587,65 +590,10 @@ fun SettingsScreen(
         }
 
         SmallTitle(
-            text = stringResource(R.string.settings_vad),
+            text = "系统与诊断",
             modifier = Modifier.padding(horizontal = 24.dp),
         )
         SectionCard {
-            Column(
-                modifier = Modifier
-                    .padding(horizontal = 16.dp)
-                    .padding(bottom = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_vad_desc),
-                    fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                )
-                Text(
-                    text = stringResource(R.string.settings_vad_pause_value, settings.vadMinSilenceSec),
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-                Slider(
-                    value = settings.vadMinSilenceSec.coerceIn(0.1f, 1.0f),
-                    onValueChange = { v ->
-                        viewModel.update { it.copy(vadMinSilenceSec = (v * 10).roundToInt() / 10f) }
-                    },
-                    valueRange = 0.1f..1.0f,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Text(
-                    text = stringResource(R.string.settings_vad_max_value, settings.vadMaxSpeechSec),
-                    fontSize = 13.sp,
-                )
-                Slider(
-                    value = settings.vadMaxSpeechSec.coerceIn(1f, 10f),
-                    onValueChange = { v ->
-                        viewModel.update { it.copy(vadMaxSpeechSec = (v * 2).roundToInt() / 2f) }
-                    },
-                    valueRange = 1f..10f,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-            // 「边说边出」跟切句参数是一回事的两面：切得越长，草稿字幕能提前显示的
-            // 就越多，所以放在同一张卡里——用户一眼能看出两个滑杆是在权衡同一件事。
-            SettingSwitchRow(
-                title = stringResource(R.string.settings_partial_title),
-                summary = stringResource(R.string.settings_partial_summary),
-                checked = settings.partialTranscripts,
-                onCheckedChange = { v ->
-                    viewModel.update { it.copy(partialTranscripts = v) }
-                },
-            )
-            SettingSwitchRow(
-                title = stringResource(R.string.settings_draft_translation_preview_title),
-                summary = stringResource(R.string.settings_draft_translation_preview_summary),
-                checked = settings.draftTranslationPreview,
-                onCheckedChange = { v ->
-                    viewModel.update { it.copy(draftTranslationPreview = v) }
-                },
-            )
             SettingSwitchRow(
                 title = stringResource(R.string.settings_silence_detection_title),
                 summary = stringResource(R.string.settings_silence_detection_summary),
@@ -1295,6 +1243,153 @@ private fun formatCheckedAt(millis: Long): String =
     SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(millis))
 
 @Composable
+private fun SpeechSlicingAndSilenceCard(
+    settings: UserSettings,
+    onUpdateSettings: ((UserSettings) -> UserSettings) -> Unit,
+    currentAsrEngine: AsrEngineType,
+    modifier: Modifier = Modifier,
+) {
+    SmallTitle(
+        text = "语音切片与静音断句",
+        modifier = modifier.padding(horizontal = 24.dp),
+    )
+    SectionCard {
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            when (currentAsrEngine) {
+                AsrEngineType.ALIYUN_FUN_ASR -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "静音断句门槛",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            text = "${settings.aliyunAsrSilenceMs} ms (${settings.aliyunAsrSilenceMs / 1000f} 秒)",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Booth.Accent,
+                        )
+                    }
+                    Slider(
+                        value = settings.aliyunAsrSilenceMs.toFloat().coerceIn(200f, 2000f),
+                        onValueChange = { v ->
+                            val stepped = ((v / 50).roundToInt() * 50).coerceIn(200, 2000)
+                            onUpdateSettings { it.copy(aliyunAsrSilenceMs = stepped) }
+                        },
+                        valueRange = 200f..2000f,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                AsrEngineType.LOCAL_SENSEVOICE -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "停顿切段门槛",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            text = "%.1f 秒".format(settings.vadMinSilenceSec),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Booth.Accent,
+                        )
+                    }
+                    Slider(
+                        value = settings.vadMinSilenceSec.coerceIn(0.1f, 1.0f),
+                        onValueChange = { v ->
+                            onUpdateSettings { it.copy(vadMinSilenceSec = (v * 10).roundToInt() / 10f) }
+                        },
+                        valueRange = 0.1f..1.0f,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "单句最长时间",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            text = "%.1f 秒".format(settings.vadMaxSpeechSec),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Booth.Accent,
+                        )
+                    }
+                    Slider(
+                        value = settings.vadMaxSpeechSec.coerceIn(1f, 10f),
+                        onValueChange = { v ->
+                            onUpdateSettings { it.copy(vadMaxSpeechSec = (v * 2).roundToInt() / 2f) }
+                        },
+                        valueRange = 1f..10f,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                AsrEngineType.GENERIC_OPENAI -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "分段停顿门槛",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            text = "%.1f 秒".format(settings.vadMinSilenceSec),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Booth.Accent,
+                        )
+                    }
+                    Slider(
+                        value = settings.vadMinSilenceSec.coerceIn(0.1f, 1.0f),
+                        onValueChange = { v ->
+                            onUpdateSettings { it.copy(vadMinSilenceSec = (v * 10).roundToInt() / 10f) }
+                        },
+                        valueRange = 0.1f..1.0f,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+
+            SettingSwitchRow(
+                title = stringResource(R.string.settings_partial_title),
+                summary = stringResource(R.string.settings_partial_summary),
+                checked = settings.partialTranscripts,
+                onCheckedChange = { v ->
+                    onUpdateSettings { it.copy(partialTranscripts = v) }
+                },
+            )
+            SettingSwitchRow(
+                title = stringResource(R.string.settings_draft_translation_preview_title),
+                summary = stringResource(R.string.settings_draft_translation_preview_summary),
+                checked = settings.draftTranslationPreview,
+                onCheckedChange = { v ->
+                    onUpdateSettings { it.copy(draftTranslationPreview = v) }
+                },
+            )
+        }
+    }
+}
+
+@Composable
 private fun EngineTextField(
     value: TextFieldValue,
     onValueChange: (TextFieldValue) -> Unit,
@@ -1526,6 +1621,7 @@ private fun EngineConfigSubScreen(
     onSaveKeyOnly: () -> Unit,
     fieldColors: TextFieldColors,
     onOpenModelPicker: (TranslationEngineType) -> Unit,
+    onUpdateSettings: ((UserSettings) -> UserSettings) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1598,6 +1694,12 @@ private fun EngineConfigSubScreen(
                             onValueChange = onUpdateDeepSeekBaseUrl,
                             labelRes = R.string.settings_deepseek_base_url,
                             colors = fieldColors,
+                        )
+                        Text(
+                            text = "💡 峰谷优惠提示：DeepSeek 实行闲时半价优惠，每日 00:30 ~ 08:30（北京时间）享受 5 折优惠（低至 0.5元 / 百万Token），其余时段为标准价格。",
+                            fontSize = 12.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            lineHeight = 16.sp,
                         )
                     }
                     TranslationEngineType.ZHIPU -> {
@@ -1724,6 +1826,12 @@ private fun EngineConfigSubScreen(
                 )
             }
         }
+
+        SpeechSlicingAndSilenceCard(
+            settings = settings,
+            onUpdateSettings = onUpdateSettings,
+            currentAsrEngine = settings.asrEngine,
+        )
 
         SectionCard {
             Column(
@@ -1934,6 +2042,8 @@ private fun AsrEngineConfigSubScreen(
     asrTestResult: String?,
     onSaveAndTest: () -> Unit,
     onSaveOnly: () -> Unit,
+    settings: UserSettings,
+    onUpdateSettings: ((UserSettings) -> UserSettings) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1983,11 +2093,6 @@ private fun AsrEngineConfigSubScreen(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Text(
-                            text = "本地内置阿里 SenseVoice 语音识别模型，完全离线运行，零流量消耗，隐私不出手机。",
-                            fontSize = 13.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        )
                         Text(
                             text = modelStatus.ifBlank { stringResource(R.string.settings_model_unknown) },
                             fontSize = 13.sp,
@@ -2046,11 +2151,6 @@ private fun AsrEngineConfigSubScreen(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Text(
-                            text = "WebSocket 全双工极速流式推流，毫秒级边说边出。每月赠送 10 小时免费额度，国内直连免翻墙。",
-                            fontSize = 13.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        )
                         OutlinedTextField(
                             value = aliyunAsrKey,
                             onValueChange = onUpdateAliyunAsrKey,
@@ -2168,11 +2268,6 @@ private fun AsrEngineConfigSubScreen(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Text(
-                            text = "标准 /v1/audio/transcriptions 接口。默认预设为硅基流动（免费云端 SenseVoice），亦可接入 Groq 或本地局域网 Whisper。",
-                            fontSize = 13.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        )
                         OutlinedTextField(
                             value = genericAsrBaseUrl,
                             onValueChange = onUpdateGenericAsrBaseUrl,
@@ -2294,6 +2389,12 @@ private fun AsrEngineConfigSubScreen(
                 }
             }
         }
+
+        SpeechSlicingAndSilenceCard(
+            settings = settings,
+            onUpdateSettings = onUpdateSettings,
+            currentAsrEngine = engineType,
+        )
 
         // 保存并测试连接卡片
         SmallTitle(

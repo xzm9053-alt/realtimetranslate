@@ -74,6 +74,8 @@ data class UserSettings(
     // ASR Engine selection and settings
     val asrEngine: AsrEngineType = Defaults.ASR_ENGINE,
     val aliyunAsrModel: String = Defaults.ALIYUN_ASR_MODEL,
+    // 阿里百炼 FunASR 静音断句门槛（毫秒）：说话停顿超过此阈值即判定为句子结束并送翻。默认 400ms。
+    val aliyunAsrSilenceMs: Int = Defaults.ALIYUN_ASR_SILENCE_MS,
     val genericAsrBaseUrl: String = Defaults.GENERIC_ASR_BASE_URL,
     val genericAsrApiKey: String = Defaults.GENERIC_ASR_API_KEY,
     val genericAsrModel: String = Defaults.GENERIC_ASR_MODEL,
@@ -140,6 +142,7 @@ data class UserSettings(
         const val DIAGNOSTIC_LOG_CONTENT = false
         val ASR_ENGINE: AsrEngineType = AsrEngineType.LOCAL_SENSEVOICE
         const val ALIYUN_ASR_MODEL = "fun-asr-realtime"
+        const val ALIYUN_ASR_SILENCE_MS = 400
         const val GENERIC_ASR_BASE_URL = "https://api.siliconflow.cn/v1"
         const val GENERIC_ASR_API_KEY = ""
         const val GENERIC_ASR_MODEL = "FunAudioLLM/SenseVoiceSmall"
