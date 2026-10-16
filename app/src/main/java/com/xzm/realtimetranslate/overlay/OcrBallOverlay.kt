@@ -227,19 +227,21 @@ class OcrBallOverlay(
     }
 
     private fun triggerSnapHaptic() {
-        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-            vm?.defaultVibrator
-        } else {
-            @Suppress("DEPRECATION")
-            context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-        }
-        vibrator?.let {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                it.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
+        runCatching {
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                vm?.defaultVibrator
             } else {
                 @Suppress("DEPRECATION")
-                it.vibrate(20L)
+                context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            }
+            vibrator?.let {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    it.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
+                } else {
+                    @Suppress("DEPRECATION")
+                    it.vibrate(20L)
+                }
             }
         }
     }

@@ -171,8 +171,12 @@
     <string name="settings_vad_desc">切句灵敏度：停顿多久算一句、一句话最多说多久。下次启动会话生效。</string>
     <string name="settings_vad_pause_value">停顿切段 %1$.1f 秒</string>
     <string name="settings_vad_max_value">单句最长 %1$.1f 秒</string>
-    <string name="settings_partial_title">边说边出（草稿字幕）</string>
-    <string name="settings_partial_summary">话还没说完就先显示前半句，说完再整句替换成更准的。看着更跟手；代价是更费电，且每句多一两次翻译请求。下次开始翻译时生效。</string>
+    <string name="settings_partial_title">边说边出（原文打字机）</string>
+    <string name="settings_partial_summary">话还没说完就先在屏幕上打字机式流式展开原文（纯本地、零流量）。说完再整句定稿。下次开始翻译时生效。</string>
+    <string name="settings_draft_translation_preview_title">译文草稿预览</string>
+    <string name="settings_draft_translation_preview_summary">默认关闭（推荐：最稳零跳动、无闪烁、省85%以上Token）。关闭时每句定稿翻译一次；开启后在说话停顿时低频预览半句译文。</string>
+    <string name="settings_silence_detection_title">静音诊断提醒</string>
+    <string name="settings_silence_detection_summary">持续 10 秒采集到绝对静音时在状态栏给出柔性提醒，便于排查部分应用限制系统内录或麦克风异常。</string>
 
     <string name="settings_appearance">字幕外观</string>
     <string name="settings_font_size">字体大小 %1$d sp · 系统默认字体</string>

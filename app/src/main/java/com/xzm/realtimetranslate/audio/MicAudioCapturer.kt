@@ -16,9 +16,11 @@ import kotlinx.coroutines.launch
  */
 class MicAudioCapturer(
     private val scope: CoroutineScope,
+    private val onSilenceAlert: ((durationMs: Long, source: String) -> Unit)? = null,
 ) {
     private var audioRecord: AudioRecord? = null
     private var captureJob: Job? = null
+    private val silenceDetector = AudioSilenceDetector("Microphone", onSilenceAlert = onSilenceAlert)
 
     @Volatile
     private var running = false
@@ -54,6 +56,7 @@ class MicAudioCapturer(
             while (isActive && running) {
                 val n = record.read(readBuf, 0, readBuf.size)
                 if (n > 0) {
+                    silenceDetector.processPcm(readBuf, n)
                     val pcm16k = resampler.resample(readBuf, n)
                     if (pcm16k.isNotEmpty()) onPcm16k(pcm16k)
                 } else if (n < 0) {
@@ -68,6 +71,7 @@ class MicAudioCapturer(
         running = false
         captureJob?.cancel()
         captureJob = null
+        silenceDetector.reset()
         try {
             audioRecord?.stop()
         } catch (_: Exception) {

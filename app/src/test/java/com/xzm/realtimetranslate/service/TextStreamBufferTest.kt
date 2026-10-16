@@ -86,4 +86,35 @@ class TextStreamBufferTest {
         buffer.updateDraft(epoch2, "today")
         assertEquals("Hello world today", buffer.getDisplayText())
     }
+
+    @Test
+    fun testDraftSmoothTransitionAcrossEpoch() {
+        val buffer = TextStreamBuffer()
+        val epoch1 = buffer.startNewEpoch()
+        buffer.updateDraft(epoch1, "正在翻译草稿")
+        assertEquals("正在翻译草稿", buffer.getDisplayText())
+
+        // 切换到下一句世代（定稿开始，但大模型正式文本尚未返回）
+        val epoch2 = buffer.startNewEpoch()
+        // 关键体验：在定稿文本到达前，草稿保持展示，不闪断变空白！
+        assertEquals("正在翻译草稿", buffer.getDisplayText())
+
+        // 大模型首个定稿字符到来，草稿被平滑替换为正式文字
+        buffer.appendFinal(epoch2, "正式译文")
+        assertEquals("正式译文", buffer.getDisplayText())
+    }
+
+    @Test
+    fun testCumulativeRewriteWithWhitespaceTolerance() {
+        val buffer = TextStreamBuffer()
+        val epoch = buffer.startNewEpoch()
+
+        // 模拟 LLM 或格式器在后续分段中微调了空格
+        buffer.appendFinal(epoch, "Hello")
+        buffer.appendFinal(epoch, "Hello world")
+        buffer.appendFinal(epoch, "Hello world!")
+
+        // 不应退化为普通追加堆叠成 "Hello Hello world Hello world!"
+        assertEquals("Hello world!", buffer.getDisplayText())
+    }
 }

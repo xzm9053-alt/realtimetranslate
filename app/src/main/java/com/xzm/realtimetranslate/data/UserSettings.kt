@@ -77,6 +77,11 @@ data class UserSettings(
     val genericAsrBaseUrl: String = Defaults.GENERIC_ASR_BASE_URL,
     val genericAsrApiKey: String = Defaults.GENERIC_ASR_API_KEY,
     val genericAsrModel: String = Defaults.GENERIC_ASR_MODEL,
+    // 译文草稿预览：默认关闭。关闭时仅在定稿(onSegment)时翻译整句，彻底消除译文闪烁与语序颠倒重写；
+    // 开启时对未定稿的草稿片段进行低频防抖预览翻译。原文打字机不受此开关影响，始终保持极速流式。
+    val draftTranslationPreview: Boolean = Defaults.DRAFT_TRANSLATION_PREVIEW,
+    // 静音检测告警：持续 10 秒绝对静音时输出日志与柔性提示，排查内录受限或麦克风故障。
+    val silenceDetectionEnabled: Boolean = Defaults.SILENCE_DETECTION_ENABLED,
 ) {
     object Defaults {
         // Kept for schema compatibility; the engine now reads DeepSeek settings directly.
@@ -138,6 +143,8 @@ data class UserSettings(
         const val GENERIC_ASR_BASE_URL = "https://api.siliconflow.cn/v1"
         const val GENERIC_ASR_API_KEY = ""
         const val GENERIC_ASR_MODEL = "FunAudioLLM/SenseVoiceSmall"
+        const val DRAFT_TRANSLATION_PREVIEW = false
+        const val SILENCE_DETECTION_ENABLED = true
     }
 }
 

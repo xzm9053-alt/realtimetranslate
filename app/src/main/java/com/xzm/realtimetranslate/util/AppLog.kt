@@ -177,13 +177,15 @@ object AppLog {
     private fun log(level: Char, tag: String?, msg: String?, tr: Throwable?): Int {
         val safeTag = tag ?: "?"
         val safeMsg = msg ?: "null"
-        val result = when (level) {
-            'V' -> AndroidLog.v(safeTag, safeMsg, tr)
-            'D' -> AndroidLog.d(safeTag, safeMsg, tr)
-            'I' -> AndroidLog.i(safeTag, safeMsg, tr)
-            'W' -> AndroidLog.w(safeTag, safeMsg, tr)
-            else -> AndroidLog.e(safeTag, safeMsg, tr)
-        }
+        val result = runCatching {
+            when (level) {
+                'V' -> AndroidLog.v(safeTag, safeMsg, tr)
+                'D' -> AndroidLog.d(safeTag, safeMsg, tr)
+                'I' -> AndroidLog.i(safeTag, safeMsg, tr)
+                'W' -> AndroidLog.w(safeTag, safeMsg, tr)
+                else -> AndroidLog.e(safeTag, safeMsg, tr)
+            }
+        }.getOrDefault(0)
         enqueue(LineRecord(level, safeTag, safeMsg, tr, System.currentTimeMillis(), false))
         return result
     }

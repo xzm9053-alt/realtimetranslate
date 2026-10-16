@@ -638,6 +638,22 @@ fun SettingsScreen(
                     viewModel.update { it.copy(partialTranscripts = v) }
                 },
             )
+            SettingSwitchRow(
+                title = stringResource(R.string.settings_draft_translation_preview_title),
+                summary = stringResource(R.string.settings_draft_translation_preview_summary),
+                checked = settings.draftTranslationPreview,
+                onCheckedChange = { v ->
+                    viewModel.update { it.copy(draftTranslationPreview = v) }
+                },
+            )
+            SettingSwitchRow(
+                title = stringResource(R.string.settings_silence_detection_title),
+                summary = stringResource(R.string.settings_silence_detection_summary),
+                checked = settings.silenceDetectionEnabled,
+                onCheckedChange = { v ->
+                    viewModel.update { it.copy(silenceDetectionEnabled = v) }
+                },
+            )
         }
 
         SmallTitle(

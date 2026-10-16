@@ -24,12 +24,13 @@ class TextStreamBuffer(
 
     /**
      * 开启新句子世代（VAD 切段、新句定稿或流式重置）。
-     * 将当前句固化至滚动历史中，清空临时草稿，返回新世代号。
+     * 将当前句固化至滚动历史中，返回新世代号。
+     * 注意：不在此刻强行抹除 pendingDraft，保留其作为定稿文本返回前的平滑视觉占位，
+     * 直到 appendFinal 首个正式定稿字符到达时才清除，彻底消除"瞬间空白闪断"现象。
      */
     @Synchronized
     fun startNewEpoch(): Long {
         finalizeCurrent()
-        pendingDraft = ""
         currentEpoch++
         return currentEpoch
     }
@@ -42,28 +43,45 @@ class TextStreamBuffer(
     @Synchronized
     fun appendFinal(epoch: Long, chunk: String): Boolean {
         if (epoch != currentEpoch) return false
-        pendingDraft = "" // 正式文字到来，清除临时草稿
+        pendingDraft = "" // 正式文字到来，立即清除临时草稿
 
         if (chunk.isEmpty()) return true
 
-        // 累计重写判定：若新内容以当前句为前缀且更长，直接整句替换，避免重复堆叠
-        if (currentSentence.isNotEmpty() &&
-            chunk.length >= currentSentence.length &&
-            chunk.startsWith(currentSentence.toString())
-        ) {
-            val delta = chunk.substring(currentSentence.length)
-            currentSentence.clear()
-            currentSentence.append(chunk)
-            // 导出全量文本只追加增量部分
-            if (delta.isNotEmpty()) {
-                CjkTextSpacers.appendWithSmartSpacing(fullExport, delta)
+        val curStr = currentSentence.toString()
+        val nCur = curStr.filter { !it.isWhitespace() }
+        val nChunk = chunk.filter { !it.isWhitespace() }
+
+        // 累计重写判定：
+        // 1. chunk 完全等于当前句
+        // 2. chunk 以当前句为前缀
+        // 3. 去掉空格后比对，chunk 以当前句前缀开头且更长（容忍 CJK 排版空格插入引起的格式微差）
+        val isRewrite = curStr.isNotEmpty() && (
+            chunk == curStr ||
+            chunk.startsWith(curStr) ||
+            (chunk.length >= curStr.length && nCur.isNotEmpty() && nChunk.startsWith(nCur))
+        )
+
+        if (isRewrite) {
+            if (chunk != curStr) {
+                val delta = if (chunk.startsWith(curStr)) chunk.substring(curStr.length) else chunk
+                currentSentence.clear()
+                currentSentence.append(chunk)
+                // 导出全量文本只追加增量部分
+                if (delta.isNotEmpty()) {
+                    CjkTextSpacers.appendWithSmartSpacing(fullExport, delta)
+                }
             }
-        } else if (currentSentence.endsWith(chunk)) {
+        } else if (curStr.endsWith(chunk)) {
             // 完全重复文本，忽略
         } else {
-            // 普通增量追加
-            CjkTextSpacers.appendWithSmartSpacing(currentSentence, chunk)
-            CjkTextSpacers.appendWithSmartSpacing(fullExport, chunk)
+            if (currentSentence.isEmpty()) {
+                currentSentence.append(chunk)
+                CjkTextSpacers.appendWithSmartSpacing(fullExport, chunk)
+            } else {
+                // 普通增量追加
+                CjkTextSpacers.appendWithSmartSpacing(currentSentence, chunk)
+                CjkTextSpacers.appendWithSmartSpacing(fullExport, chunk)
+            }
         }
 
         trimExportIfNeeded()

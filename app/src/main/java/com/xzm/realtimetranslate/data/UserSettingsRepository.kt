@@ -64,6 +64,8 @@ class UserSettingsRepository(private val context: Context) {
         val genericAsrBaseUrl = stringPreferencesKey("generic_asr_base_url")
         val genericAsrApiKey = stringPreferencesKey("generic_asr_api_key")
         val genericAsrModel = stringPreferencesKey("generic_asr_model")
+        val draftTranslationPreview = booleanPreferencesKey("draft_translation_preview")
+        val silenceDetectionEnabled = booleanPreferencesKey("silence_detection_enabled")
     }
 
     val settings: Flow<UserSettings> = context.dataStore.data.map { prefs ->
@@ -118,6 +120,8 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.genericAsrBaseUrl] = next.genericAsrBaseUrl
             prefs[Keys.genericAsrApiKey] = next.genericAsrApiKey
             prefs[Keys.genericAsrModel] = next.genericAsrModel
+            prefs[Keys.draftTranslationPreview] = next.draftTranslationPreview
+            prefs[Keys.silenceDetectionEnabled] = next.silenceDetectionEnabled
         }
     }
 
@@ -187,6 +191,10 @@ class UserSettingsRepository(private val context: Context) {
         genericAsrBaseUrl = this[Keys.genericAsrBaseUrl] ?: UserSettings.Defaults.GENERIC_ASR_BASE_URL,
         genericAsrApiKey = this[Keys.genericAsrApiKey] ?: UserSettings.Defaults.GENERIC_ASR_API_KEY,
         genericAsrModel = this[Keys.genericAsrModel] ?: UserSettings.Defaults.GENERIC_ASR_MODEL,
+        draftTranslationPreview = this[Keys.draftTranslationPreview]
+            ?: UserSettings.Defaults.DRAFT_TRANSLATION_PREVIEW,
+        silenceDetectionEnabled = this[Keys.silenceDetectionEnabled]
+            ?: UserSettings.Defaults.SILENCE_DETECTION_ENABLED,
     )
 
     /** Migrate the pre-3-option boolean: true→BOTH, false/absent→TRANSLATION. */

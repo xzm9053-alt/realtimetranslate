@@ -208,12 +208,14 @@ class SubtitleSessionService : Service() {
                             SessionBus.setPreview(output = text)
                         }
                         // 草稿译文：排在已定格的历史和当前句之后。它整条都可丢弃——
-                        // 正式翻译一开始（OutputReset）就没了。
+                        // 带有世代校验：过期草稿绝不上屏篡改新句。
                         is RealtimeTranslationClient.LiveEvent.OutputPartial -> {
-                            outputBuffer.updateDraft(outputBuffer.currentEpoch, event.text)
-                            val text = outputBuffer.getDisplayText()
-                            overlay?.updateTranscripts(input = null, output = text)
-                            SessionBus.setPreview(output = text)
+                            if (event.epoch == 0L || event.epoch == outputBuffer.currentEpoch) {
+                                outputBuffer.updateDraft(outputBuffer.currentEpoch, event.text)
+                                val text = outputBuffer.getDisplayText()
+                                overlay?.updateTranscripts(input = null, output = text)
+                                SessionBus.setPreview(output = text)
+                            }
                         }
                         // 新句开始：开启新世代，当前句定格进滚动历史（不清屏）。流式重写只改当前行、
                         // 不会逐段追加成上一句的重复堆叠。导出文本仍保持完整累积。
@@ -254,17 +256,23 @@ class SubtitleSessionService : Service() {
     private fun startCapturePipeline(client: RealtimeTranslationClient) {
         if (captureStarted) return
         captureStarted = true
+        val silenceCallback: (Long, String) -> Unit = { _, src ->
+            if (currentSettings.silenceDetectionEnabled) {
+                val hint = if (src.contains("Media")) "未检测到系统声音（当前应用可能限制内录）" else "未检测到麦克风输入"
+                SessionBus.setStatus(SessionBus.Status.Running, "翻译中 · $hint")
+            }
+        }
         try {
             when (audioSourceMode) {
                 AudioSourceMode.MEDIA -> {
                     val projection = mediaProjection
                         ?: throw IllegalStateException("缺少 MediaProjection")
-                    val cap = SystemAudioCapturer(ioScope)
+                    val cap = SystemAudioCapturer(ioScope, onSilenceAlert = silenceCallback)
                     mediaCapturer = cap
                     cap.start(projection) { pcm -> client.sendPcm16le(pcm, 16_000) }
                 }
                 AudioSourceMode.MIC -> {
-                    val mic = MicAudioCapturer(ioScope)
+                    val mic = MicAudioCapturer(ioScope, onSilenceAlert = silenceCallback)
                     micCapturer = mic
                     mic.start { pcm -> client.sendPcm16le(pcm, 16_000) }
                 }
@@ -273,10 +281,10 @@ class SubtitleSessionService : Service() {
                         ?: throw IllegalStateException("缺少 MediaProjection")
                     val mixer = PcmMixer { mixed -> client.sendPcm16le(mixed, 16_000) }
                     pcmMixer = mixer
-                    val media = SystemAudioCapturer(ioScope)
+                    val media = SystemAudioCapturer(ioScope, onSilenceAlert = silenceCallback)
                     mediaCapturer = media
                     media.start(projection) { pcm -> mixer.offerMedia(pcm) }
-                    val mic = MicAudioCapturer(ioScope)
+                    val mic = MicAudioCapturer(ioScope, onSilenceAlert = silenceCallback)
                     micCapturer = mic
                     mic.start { pcm -> mixer.offerMic(pcm) }
                 }

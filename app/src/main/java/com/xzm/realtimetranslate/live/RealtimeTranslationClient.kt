@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -100,6 +101,12 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
     private var lastDraftText = ""
     private var lastDraftAtMs = 0L
 
+    @Volatile
+    private var draftTranslationPreview = false
+    private var settingsJob: Job? = null
+    private var idleFlushJob: Job? = null
+    private var lastPartialText = ""
+
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Idle)
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
@@ -129,8 +136,8 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
     }
 
     sealed class LiveEvent {
-        data class InputTranscript(val text: String, val languageCode: String? = null) : LiveEvent()
-        data class OutputTranscript(val text: String, val languageCode: String? = null) : LiveEvent()
+        data class InputTranscript(val text: String, val languageCode: String? = null, val epoch: Long = 0L) : LiveEvent()
+        data class OutputTranscript(val text: String, val languageCode: String? = null, val epoch: Long = 0L) : LiveEvent()
         data class AudioChunk(val pcm: ByteArray, val mimeType: String?) : LiveEvent() {
             override fun equals(other: Any?): Boolean = this === other
             override fun hashCode(): Int = pcm.contentHashCode()
@@ -139,21 +146,21 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
         data object SetupComplete : LiveEvent()
         data class Debug(val message: String) : LiveEvent()
         /** Marks the start of a new translated sentence: the subtitle UI clears its current output line. */
-        data object OutputReset : LiveEvent()
+        data class OutputReset(val epoch: Long = 0L) : LiveEvent()
 
         /**
          * 草稿原文：这一句还没说完，但已经稳下来的那截（见 [StablePrefix]）。
          * 会被同一句的 [InputTranscript] 取代，所以显示方要把草稿单独放在一个可丢弃的
          * 缓冲里，**不能**直接追加进累积原文。
          */
-        data class InputPartial(val text: String) : LiveEvent()
+        data class InputPartial(val text: String, val epoch: Long = 0L) : LiveEvent()
 
         /**
          * 草稿译文：拿 [InputPartial] 那截半句先翻出来的结果，专为「仅译文」显示模式而存在
          * ——那个模式下不先翻草稿，屏幕上就什么都不会动。
          * [OutputReset] / [OutputTranscript] 一到即作废。
          */
-        data class OutputPartial(val text: String) : LiveEvent()
+        data class OutputPartial(val text: String, val epoch: Long = 0L) : LiveEvent()
     }
 
     private val intentionalClose = AtomicBoolean(false)
@@ -199,6 +206,14 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
                     emitDebug("加载本地 SenseVoice 模型…")
                 } else {
                     emitDebug("连接云端语音识别（${asrType.name}）…")
+                }
+
+                draftTranslationPreview = settings.draftTranslationPreview
+                settingsJob?.cancel()
+                settingsJob = scope.launch {
+                    app.settingsRepository.settings.collectLatest { s ->
+                        draftTranslationPreview = s.draftTranslationPreview
+                    }
                 }
 
                 val partials = settings.partialTranscripts
@@ -270,6 +285,9 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
         if (intentionalClose.get()) return
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return
+        idleFlushJob?.cancel()
+        idleFlushJob = null
+        lastPartialText = ""
         // 一句说完了 = 一句新的要开始了：草稿的限流计数跟着翻页，否则上一句攒下的
         // "已经翻到哪儿了"会白白压住下一句的第一条草稿。
         lastDraftText = ""
@@ -296,8 +314,6 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
             // 翻译结果仍串行，保证输出顺序不交错。
             // 这一行归正式翻译了——从这一刻算起，包含排队等锁的那段时间（上一句的译文
             // 还在往这一行上吐字），草稿一律不上屏。
-            // 不用 try/finally：withLock 只会在会话销毁（scope 被 cancel）时抛出，那时
-            // 这个标志位已经没有任何读者了。
             finalInFlight = true
             translateMutex.withLock {
                 if (intentionalClose.get()) return@withLock
@@ -305,9 +321,10 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
                 // 新句开始：先清空字幕当前输出行，避免本句流式增量被逐段追加成上一句的重复堆叠。
                 // draftEpoch++ 必须和 OutputReset 在同一把锁里（理由见 outputLineLock 注释），
                 // 这样「草稿上屏」和「这一行归正式翻译了」之间没有插队的缝。
-                synchronized(outputLineLock) {
-                    draftEpoch.incrementAndGet()
-                    _events.tryEmit(LiveEvent.OutputReset)
+                val epoch = synchronized(outputLineLock) {
+                    val ep = draftEpoch.incrementAndGet().toLong()
+                    _events.tryEmit(LiveEvent.OutputReset(ep))
+                    ep
                 }
                 val settings = app.settingsRepository.settings.first()
                 val target = config.targetLanguageCode.ifBlank { "zh-Hans" }
@@ -323,7 +340,7 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
                         if (intentionalClose.get()) return@collect
                         outChars = fragment.length
                         outText = fragment
-                        _events.emit(LiveEvent.OutputTranscript(fragment, languageCode = null))
+                        _events.emit(LiveEvent.OutputTranscript(fragment, languageCode = null, epoch = epoch))
                     }
                 } catch (t: Throwable) {
                     Log.e(TAG, "translate failed", t)
@@ -374,8 +391,27 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
         if (trimmed.isEmpty()) return
         // tryEmit（而不是 emitEvent）：草稿必须**同步**进入事件流，才能保证它一定排在
         // 本句定稿的 InputTranscript 之前——那个是在协程里发的，一异步就有插队的可能。
-        // DROP_OLDEST 的策略下 tryEmit 不会失败（挤掉的是更早的一条）。
+        // 原文草稿纯本地处理（打字机展开），零延迟、零 Token 开销。
         _events.tryEmit(LiveEvent.InputPartial(trimmed))
+
+        lastPartialText = trimmed
+
+        // 静音/停顿自动结句计时器：
+        // 若说话人在句尾停顿超过 1.5 秒且 ASR 未发出 onSegment（常见于云端流式 ASR 的静音停流），
+        // 自动强制把已识别的文本作为整句送翻，彻底防止界面卡住或翻译悬停！
+        idleFlushJob?.cancel()
+        idleFlushJob = scope.launch {
+            delay(IDLE_FLUSH_TIMEOUT_MS)
+            val toFlush = lastPartialText.trim()
+            if (toFlush.isNotEmpty() && !intentionalClose.get()) {
+                Log.i(TAG, "ASR 静音停顿超时(${IDLE_FLUSH_TIMEOUT_MS}ms)，触发强制结句送翻: ${toFlush.take(50)}")
+                lastPartialText = ""
+                onSegment(toFlush, config)
+            }
+        }
+
+        // 译文草稿预览门禁：默认关闭以彻底消灭全屏跳动与前文篡改，仅在用户显式开启时才做低频防抖预览
+        if (!draftTranslationPreview) return
 
         if (trimmed.length - lastDraftText.length < DRAFT_MIN_GROWTH_CHARS) return
         // 正式翻译还在跑：这一行归它（理由见 finalInFlight）。
@@ -424,7 +460,7 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
         synchronized(outputLineLock) {
             // 整句已经定稿：这一行现在归正式翻译，草稿再新也不许上屏。
             if (epoch != draftEpoch.get()) return
-            _events.tryEmit(LiveEvent.OutputPartial(fragment))
+            _events.tryEmit(LiveEvent.OutputPartial(fragment, epoch = epoch.toLong()))
         }
     }
 
@@ -433,6 +469,11 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
         setupComplete.set(false)
         connectJob?.cancel()
         connectJob = null
+        idleFlushJob?.cancel()
+        idleFlushJob = null
+        lastPartialText = ""
+        settingsJob?.cancel()
+        settingsJob = null
         speechRecognizer?.close()
         speechRecognizer = null
         translationEngine = null
@@ -469,12 +510,14 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
         private const val TAG = "RealtimeTranslationClient"
 
         /**
-         * 两条译文草稿之间的最小间隔。每一条草稿都是一次真实的翻译请求，句中频繁重发
-         * 会把每句话的请求数翻好几倍——免费额度按次计的引擎上这是实打实的代价。
+         * 两条译文草稿之间的最小间隔。
          */
-        private const val DRAFT_MIN_INTERVAL_MS = 1_200L
+        private const val DRAFT_MIN_INTERVAL_MS = 1_800L
 
         /** 草稿至少比上次送去翻译时长这么多字，才值得再发一次请求。 */
-        private const val DRAFT_MIN_GROWTH_CHARS = 4
+        private const val DRAFT_MIN_GROWTH_CHARS = 8
+
+        /** ASR 停顿超过该时长未定稿，触发强制结句送翻，杜绝静音悬挂卡死。 */
+        private const val IDLE_FLUSH_TIMEOUT_MS = 1_500L
     }
 }
