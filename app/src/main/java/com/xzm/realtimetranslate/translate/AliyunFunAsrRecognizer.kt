@@ -37,16 +37,25 @@ class AliyunFunAsrRecognizer(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val closed = AtomicBoolean(false)
     private val readyForAudio = AtomicBoolean(false)
-    private val taskId = UUID.randomUUID().toString().replace("-", "")
+    private var currentTaskId = UUID.randomUUID().toString().replace("-", "")
+
+    private val handshakeLock = Any()
+    private val handshakeBuffer = java.io.ByteArrayOutputStream()
+    @Volatile
+    private var lastSendTimeMs = 0L
 
     private var webSocket: WebSocket? = null
 
     init {
         start()
+        startKeepAlive()
     }
 
     override fun start() {
         if (closed.get()) return
+        readyForAudio.set(false)
+        currentTaskId = UUID.randomUUID().toString().replace("-", "")
+
         val request = Request.Builder()
             .url(WS_ENDPOINT)
             .header("Authorization", "bearer ${apiKey.trim()}")
@@ -55,31 +64,60 @@ class AliyunFunAsrRecognizer(
 
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                Log.i(TAG, "WebSocket connected, sending run-task...")
+                Log.i(TAG, "WebSocket connected, sending run-task (task_id=$currentTaskId)...")
                 sendRunTask(webSocket)
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
-                handleServerMessage(text)
+                handleServerMessage(webSocket, text)
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 if (!closed.get()) {
-                    Log.w(TAG, "WebSocket failure: ${t.message}")
+                    Log.w(TAG, "WebSocket failure: ${t.message}, scheduling reconnect...")
+                    scheduleReconnect(1000)
                 }
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                Log.i(TAG, "WebSocket closed: $code $reason")
+                if (!closed.get()) {
+                    Log.i(TAG, "WebSocket closed ($code $reason), scheduling reconnect...")
+                    scheduleReconnect(500)
+                }
             }
         })
+    }
+
+    private fun scheduleReconnect(delayMs: Long = 500) {
+        if (closed.get()) return
+        readyForAudio.set(false)
+        scope.launch {
+            kotlinx.coroutines.delay(delayMs)
+            if (!closed.get()) {
+                Log.i(TAG, "Reconnecting Aliyun FunASR WebSocket...")
+                start()
+            }
+        }
+    }
+
+    private fun startKeepAlive() {
+        scope.launch {
+            while (!closed.get()) {
+                kotlinx.coroutines.delay(2000)
+                if (readyForAudio.get() && System.currentTimeMillis() - lastSendTimeMs > 8000) {
+                    val silence = ByteArray(3200)
+                    webSocket?.send(silence.toByteString())
+                    lastSendTimeMs = System.currentTimeMillis()
+                }
+            }
+        }
     }
 
     private fun sendRunTask(ws: WebSocket) {
         val json = JSONObject().apply {
             put("header", JSONObject().apply {
                 put("action", "run-task")
-                put("task_id", taskId)
+                put("task_id", currentTaskId)
                 put("streaming", "duplex")
             })
             put("payload", JSONObject().apply {
@@ -101,7 +139,7 @@ class AliyunFunAsrRecognizer(
         ws.send(json.toString())
     }
 
-    private fun handleServerMessage(text: String) {
+    private fun handleServerMessage(ws: WebSocket, text: String) {
         try {
             val json = JSONObject(text)
             val header = json.optJSONObject("header") ?: return
@@ -110,7 +148,16 @@ class AliyunFunAsrRecognizer(
             when (event) {
                 "task-started" -> {
                     readyForAudio.set(true)
+                    lastSendTimeMs = System.currentTimeMillis()
                     Log.i(TAG, "Task started, ready to stream audio.")
+                    // 握手完成：将暂存的首字缓冲一次性灌入，解决首字吞音
+                    synchronized(handshakeLock) {
+                        if (handshakeBuffer.size() > 0) {
+                            val bytes = handshakeBuffer.toByteArray()
+                            handshakeBuffer.reset()
+                            ws.send(bytes.toByteString())
+                        }
+                    }
                 }
                 "result-generated" -> {
                     val payload = json.optJSONObject("payload") ?: return
@@ -128,11 +175,13 @@ class AliyunFunAsrRecognizer(
                     }
                 }
                 "task-finished" -> {
-                    Log.i(TAG, "Task finished.")
+                    Log.i(TAG, "Task finished by server, starting new task...")
+                    scheduleReconnect(200)
                 }
                 "task-failed" -> {
                     val errorMsg = header.optString("error_message", "Unknown error")
-                    Log.w(TAG, "Task failed: $errorMsg")
+                    Log.w(TAG, "Task failed: $errorMsg, retrying...")
+                    scheduleReconnect(1000)
                 }
             }
         } catch (e: Exception) {
@@ -141,7 +190,16 @@ class AliyunFunAsrRecognizer(
     }
 
     override fun acceptPcm(chunk: ByteArray) {
-        if (closed.get() || !readyForAudio.get() || chunk.isEmpty()) return
+        if (closed.get() || chunk.isEmpty()) return
+        if (!readyForAudio.get()) {
+            synchronized(handshakeLock) {
+                if (handshakeBuffer.size() < 48000) {
+                    handshakeBuffer.write(chunk)
+                }
+            }
+            return
+        }
+        lastSendTimeMs = System.currentTimeMillis()
         webSocket?.send(chunk.toByteString())
     }
 
@@ -152,7 +210,7 @@ class AliyunFunAsrRecognizer(
             val finishJson = JSONObject().apply {
                 put("header", JSONObject().apply {
                     put("action", "finish-task")
-                    put("task_id", taskId)
+                    put("task_id", currentTaskId)
                     put("streaming", "duplex")
                 })
                 put("payload", JSONObject().apply {
@@ -168,6 +226,9 @@ class AliyunFunAsrRecognizer(
         readyForAudio.set(false)
         webSocket?.close(1000, "Normal closure")
         webSocket = null
+        synchronized(handshakeLock) {
+            handshakeBuffer.reset()
+        }
         scope.cancel()
     }
 
