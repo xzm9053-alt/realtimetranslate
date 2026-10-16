@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -187,6 +188,7 @@ fun SettingsScreen(
     var showAsrEnginePicker by rememberSaveable { mutableStateOf(false) }
     var activeConfigAsrEngine by rememberSaveable { mutableStateOf<AsrEngineType?>(null) }
     var showRewardDialog by remember { mutableStateOf(false) }
+    var showUserGuideDialog by remember { mutableStateOf(false) }
 
     val pickingEngine = activeModelPickerEngine
     if (pickingEngine != null) {
@@ -752,6 +754,15 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text(
+                    text = stringResource(R.string.settings_user_guide),
+                    fontSize = 13.sp,
+                    color = Booth.Accent,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showUserGuideDialog = true },
+                )
+                Text(
                     text = stringResource(
                         R.string.settings_bilibili,
                         stringResource(R.string.settings_bilibili_author),
@@ -856,6 +867,9 @@ fun SettingsScreen(
 
     if (showRewardDialog) {
         RewardDialog(onDismiss = { showRewardDialog = false })
+    }
+    if (showUserGuideDialog) {
+        UserGuideDialog(onDismiss = { showUserGuideDialog = false })
     }
 }
 
@@ -2670,5 +2684,119 @@ private fun RewardDialog(onDismiss: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+/**
+ * 软件使用说明与快速上手弹窗。
+ */
+@Composable
+private fun UserGuideDialog(onDismiss: () -> Unit) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            colors = CardDefaults.defaultColors(
+                color = MiuixTheme.colorScheme.surfaceContainer,
+                contentColor = MiuixTheme.colorScheme.onSurfaceContainer,
+            ),
+            cornerRadius = 20.dp,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_user_guide_title),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MiuixTheme.colorScheme.onSurface,
+                )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    GuideItem(
+                        icon = "🎧",
+                        title = "系统音频与麦克风翻译",
+                        desc = "在字幕主页选择声音来源（系统内录/麦克风/混合），点击「开始翻译」即可监听其他 App（YouTube、Bilibili、游戏等）的声音，实时输出同传字幕。"
+                    )
+                    GuideItem(
+                        icon = "🪟",
+                        title = "悬浮窗手势与交互",
+                        desc = "• 拖动：按住顶部细条移动位置\n• 缩放：按住右下角圆点自由拉伸大小\n• 折叠：拖到屏幕左右边缘自动收起为贴边半球，轻点半球展开\n• 锁定：点锁图标开启点击穿透，长按解锁"
+                    )
+                    GuideItem(
+                        icon = "🔍",
+                        title = "屏幕取词翻译",
+                        desc = "在字幕主页点击「屏幕取词」，框选屏幕任意区域（游戏剧情、漫画、无字幕视频），悬浮球将实时 OCR 并弹窗翻译，点击悬浮球可重选区域。"
+                    )
+                    GuideItem(
+                        icon = "⚡",
+                        title = "语音识别引擎推荐",
+                        desc = "• 本地 SenseVoice：纯离线运行，零流量消耗，端侧秒切词\n• 阿里百炼 FunASR：云端极速流式，识别精度高\n• 进入识别引擎二级页可调节「静音断句门槛」（默认 200ms），快语速建议 200~400ms，慢语速建议 500~800ms。"
+                    )
+                    GuideItem(
+                        icon = "💡",
+                        title = "翻译大模型与省钱技巧",
+                        desc = "推荐使用 DeepSeek（deepseek-v4-flash 模型极速且实惠）。DeepSeek 实行闲时半价优惠，每日 00:30 ~ 08:30 享受 5 折优惠（低至 0.5元 / 百万Token）。"
+                    )
+                }
+
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColorsPrimary(),
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_user_guide_close),
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GuideItem(
+    icon: String,
+    title: String,
+    desc: String,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(text = icon, fontSize = 16.sp)
+            Text(
+                text = title,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MiuixTheme.colorScheme.onSurface,
+            )
+        }
+        Text(
+            text = desc,
+            fontSize = 12.sp,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            lineHeight = 17.sp,
+        )
     }
 }

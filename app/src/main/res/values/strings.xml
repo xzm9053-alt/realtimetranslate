@@ -333,4 +333,9 @@
     <string name="settings_reward_author">☕ Support Author · Buy Me a Coffee</string>
     <string name="settings_reward_dialog_title">☕ Support the Author</string>
     <string name="settings_reward_dialog_desc">Thank you for your support and encouragement! Every bit helps keep this app updated and improving.</string>
+
+    <!-- User Guide -->
+    <string name="settings_user_guide">📖 User Guide · Quick Start</string>
+    <string name="settings_user_guide_title">User Guide · Quick Start</string>
+    <string name="settings_user_guide_close">Got It</string>
 </resources>

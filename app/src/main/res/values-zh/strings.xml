@@ -332,4 +332,9 @@
     <string name="settings_reward_author">☕ 打赏作者 · 支持开发</string>
     <string name="settings_reward_dialog_title">☕ 打赏支持作者</string>
     <string name="settings_reward_dialog_desc">感谢你的喜爱与支持，每一份鼓励都是持续打磨优化软件的动力！</string>
+
+    <!-- 使用说明 -->
+    <string name="settings_user_guide">📖 使用说明 · 快速上手</string>
+    <string name="settings_user_guide_title">使用说明 · 快速上手</string>
+    <string name="settings_user_guide_close">我知道了</string>
 </resources>
