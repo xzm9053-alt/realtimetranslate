@@ -41,14 +41,11 @@ class AliyunFunAsrRecognizer(
 
     private val handshakeLock = Any()
     private val handshakeBuffer = java.io.ByteArrayOutputStream()
-    @Volatile
-    private var lastSendTimeMs = 0L
 
     private var webSocket: WebSocket? = null
 
     init {
         start()
-        startKeepAlive()
     }
 
     override fun start() {
@@ -100,19 +97,6 @@ class AliyunFunAsrRecognizer(
         }
     }
 
-    private fun startKeepAlive() {
-        scope.launch {
-            while (!closed.get()) {
-                kotlinx.coroutines.delay(2000)
-                if (readyForAudio.get() && System.currentTimeMillis() - lastSendTimeMs > 8000) {
-                    val silence = ByteArray(3200)
-                    webSocket?.send(silence.toByteString())
-                    lastSendTimeMs = System.currentTimeMillis()
-                }
-            }
-        }
-    }
-
     private fun sendRunTask(ws: WebSocket) {
         val json = JSONObject().apply {
             put("header", JSONObject().apply {
@@ -148,7 +132,6 @@ class AliyunFunAsrRecognizer(
             when (event) {
                 "task-started" -> {
                     readyForAudio.set(true)
-                    lastSendTimeMs = System.currentTimeMillis()
                     Log.i(TAG, "Task started, ready to stream audio.")
                     // 握手完成：将暂存的首字缓冲一次性灌入，解决首字吞音
                     synchronized(handshakeLock) {
@@ -164,10 +147,15 @@ class AliyunFunAsrRecognizer(
                     val output = payload.optJSONObject("output") ?: return
                     val sentence = output.optJSONObject("sentence") ?: return
                     val sentenceText = sentence.optString("text", "").trim()
-                    val isEnd = sentence.optBoolean("end", false)
+                    // 阿里云百炼 FunASR 流式协议在定稿时携带 sentence_end: true 或包含 end_time 标定
+                    val isEnd = sentence.optBoolean("sentence_end", false)
+                        || (sentence.has("end_time") && sentence.opt("end_time") != JSONObject.NULL)
+                        || sentence.optBoolean("end", false)
+                        || output.optBoolean("end", false)
 
                     if (sentenceText.isNotBlank()) {
                         if (isEnd) {
+                            Log.d(TAG, "FunASR onSegment: $sentenceText")
                             onSegment(sentenceText)
                         } else {
                             onPartial?.invoke(sentenceText)
@@ -199,7 +187,6 @@ class AliyunFunAsrRecognizer(
             }
             return
         }
-        lastSendTimeMs = System.currentTimeMillis()
         webSocket?.send(chunk.toByteString())
     }
 

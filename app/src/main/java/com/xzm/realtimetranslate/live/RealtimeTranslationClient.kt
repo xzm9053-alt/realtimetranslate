@@ -517,7 +517,7 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
         /** 草稿至少比上次送去翻译时长这么多字，才值得再发一次请求。 */
         private const val DRAFT_MIN_GROWTH_CHARS = 8
 
-        /** ASR 停顿超过该时长未定稿，触发强制结句送翻，杜绝静音悬挂卡死。 */
-        private const val IDLE_FLUSH_TIMEOUT_MS = 1_500L
+        /** ASR 停顿超过该时长未定稿，触发强制结句送翻（800ms 贴合口语自然停顿，极速响应）。 */
+        private const val IDLE_FLUSH_TIMEOUT_MS = 800L
     }
 }
