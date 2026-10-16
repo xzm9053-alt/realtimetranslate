@@ -104,8 +104,6 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
     @Volatile
     private var draftTranslationPreview = false
     private var settingsJob: Job? = null
-    private var idleFlushJob: Job? = null
-    private var lastPartialText = ""
 
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Idle)
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
@@ -285,9 +283,6 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
         if (intentionalClose.get()) return
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return
-        idleFlushJob?.cancel()
-        idleFlushJob = null
-        lastPartialText = ""
         // 一句说完了 = 一句新的要开始了：草稿的限流计数跟着翻页，否则上一句攒下的
         // "已经翻到哪儿了"会白白压住下一句的第一条草稿。
         lastDraftText = ""
@@ -394,22 +389,6 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
         // 原文草稿纯本地处理（打字机展开），零延迟、零 Token 开销。
         _events.tryEmit(LiveEvent.InputPartial(trimmed))
 
-        lastPartialText = trimmed
-
-        // 静音/停顿自动结句计时器：
-        // 若说话人在句尾停顿超过 1.5 秒且 ASR 未发出 onSegment（常见于云端流式 ASR 的静音停流），
-        // 自动强制把已识别的文本作为整句送翻，彻底防止界面卡住或翻译悬停！
-        idleFlushJob?.cancel()
-        idleFlushJob = scope.launch {
-            delay(IDLE_FLUSH_TIMEOUT_MS)
-            val toFlush = lastPartialText.trim()
-            if (toFlush.isNotEmpty() && !intentionalClose.get()) {
-                Log.i(TAG, "ASR 静音停顿超时(${IDLE_FLUSH_TIMEOUT_MS}ms)，触发强制结句送翻: ${toFlush.take(50)}")
-                lastPartialText = ""
-                onSegment(toFlush, config)
-            }
-        }
-
         // 译文草稿预览门禁：默认关闭以彻底消灭全屏跳动与前文篡改，仅在用户显式开启时才做低频防抖预览
         if (!draftTranslationPreview) return
 
@@ -469,9 +448,6 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
         setupComplete.set(false)
         connectJob?.cancel()
         connectJob = null
-        idleFlushJob?.cancel()
-        idleFlushJob = null
-        lastPartialText = ""
         settingsJob?.cancel()
         settingsJob = null
         speechRecognizer?.close()
@@ -516,8 +492,5 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
 
         /** 草稿至少比上次送去翻译时长这么多字，才值得再发一次请求。 */
         private const val DRAFT_MIN_GROWTH_CHARS = 8
-
-        /** ASR 停顿超过该时长未定稿，触发强制结句送翻（800ms 贴合口语自然停顿，极速响应）。 */
-        private const val IDLE_FLUSH_TIMEOUT_MS = 800L
     }
 }
