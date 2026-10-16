@@ -236,6 +236,13 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
                     liveSettings = { app.settingsRepository.settings.first() },
                 )
 
+                // 预热翻译连接池：后台建立 TLS 与 HTTP/2 握手，消除首句翻译 3~4 秒的冷启动延迟
+                scope.launch {
+                    runCatching {
+                        translationEngine?.testConnection(config.targetLanguageCode.ifBlank { "zh-Hans" })
+                    }
+                }
+
                 setupComplete.set(true)
                 _connectionState.value = ConnectionState.Ready
                 emitEvent(LiveEvent.SetupComplete)

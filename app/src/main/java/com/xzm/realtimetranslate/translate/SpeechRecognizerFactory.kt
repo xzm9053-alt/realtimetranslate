@@ -52,6 +52,7 @@ object SpeechRecognizerFactory {
                     apiKey = apiKey,
                     model = settings.aliyunAsrModel,
                     language = settings.sourceLanguageCode,
+                    maxSentenceSilenceMs = (settings.vadMinSilenceSec * 1000).toInt().coerceIn(200, 2000),
                     onSegment = onSegment,
                     onPartial = onPartial,
                 )

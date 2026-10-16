@@ -29,6 +29,7 @@ class AliyunFunAsrRecognizer(
     private val apiKey: String,
     private val model: String = "fun-asr-realtime",
     private val language: String? = null,
+    private val maxSentenceSilenceMs: Int = 400,
     private val onSegment: (String) -> Unit,
     private val onPartial: ((String) -> Unit)? = null,
     private val client: OkHttpClient = defaultClient(),
@@ -113,6 +114,10 @@ class AliyunFunAsrRecognizer(
                     put("format", "pcm")
                     put("sample_rate", 16000)
                     put("disfluency_removal", true)
+                    // 默认 1300ms 结句过慢会导致整段 10~12 秒话积压成一句巨长文本才翻；
+                    // 动态对齐设置(如 400ms~500ms)，换气停顿即结句送翻，切片敏捷如 SenseVoice！
+                    put("max_sentence_silence", maxSentenceSilenceMs.coerceIn(200, 2000))
+                    put("multi_threshold_mode_enabled", true)
                     if (!language.isNullOrBlank() && language != "auto") {
                         put("language_hints", JSONArray().put(language))
                     }
