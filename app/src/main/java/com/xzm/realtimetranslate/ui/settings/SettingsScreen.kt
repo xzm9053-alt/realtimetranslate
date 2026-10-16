@@ -251,7 +251,6 @@ fun SettingsScreen(
             onSaveKeyOnly = viewModel::saveApiKey,
             fieldColors = fieldColors,
             onOpenModelPicker = { activeModelPickerEngine = it },
-            onUpdateSettings = { transform -> viewModel.update(transform) },
             onBack = { activeConfigEngine = null },
             modifier = modifier,
         )
@@ -1621,7 +1620,6 @@ private fun EngineConfigSubScreen(
     onSaveKeyOnly: () -> Unit,
     fieldColors: TextFieldColors,
     onOpenModelPicker: (TranslationEngineType) -> Unit,
-    onUpdateSettings: ((UserSettings) -> UserSettings) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1826,12 +1824,6 @@ private fun EngineConfigSubScreen(
                 )
             }
         }
-
-        SpeechSlicingAndSilenceCard(
-            settings = settings,
-            onUpdateSettings = onUpdateSettings,
-            currentAsrEngine = settings.asrEngine,
-        )
 
         SectionCard {
             Column(

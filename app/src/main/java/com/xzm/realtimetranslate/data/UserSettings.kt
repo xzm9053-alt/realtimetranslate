@@ -127,9 +127,9 @@ data class UserSettings(
         const val HISTORY_LIMIT = 20
         const val HISTORY_LIMIT_MIN = 5
         const val HISTORY_LIMIT_MAX = 200
-        // Silero VAD 切句参数（秒）：默认静音放宽至 0.4s（贴合口语换气停顿），单句上限放宽至 4.5s 保证长句语义完整。
-        const val VAD_MIN_SILENCE_SEC = 0.4f
-        const val VAD_MAX_SPEECH_SEC = 4.5f
+        // Silero VAD 切句参数（秒）：默认静音 0.2s，单句上限 2.0s 保证极速切句出词。
+        const val VAD_MIN_SILENCE_SEC = 0.2f
+        const val VAD_MAX_SPEECH_SEC = 2.0f
         const val PARTIAL_TRANSCRIPTS = true
         // Default OCR script for screen-region text recognition. AUTO runs the
         // Latin + Japanese recognizers and picks the better result (English/Japanese
@@ -142,7 +142,7 @@ data class UserSettings(
         const val DIAGNOSTIC_LOG_CONTENT = false
         val ASR_ENGINE: AsrEngineType = AsrEngineType.LOCAL_SENSEVOICE
         const val ALIYUN_ASR_MODEL = "fun-asr-realtime"
-        const val ALIYUN_ASR_SILENCE_MS = 400
+        const val ALIYUN_ASR_SILENCE_MS = 200
         const val GENERIC_ASR_BASE_URL = "https://api.siliconflow.cn/v1"
         const val GENERIC_ASR_API_KEY = ""
         const val GENERIC_ASR_MODEL = "FunAudioLLM/SenseVoiceSmall"
