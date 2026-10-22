@@ -17,8 +17,13 @@ object ScreenOcrBus {
         Idle,
         Starting,
         Running,
+        Paused,
         Error,
-        Stopped,
+        Stopped;
+
+        /** Session still holds the screen-capture token and its overlay windows. */
+        val isActive: Boolean
+            get() = this == Starting || this == Running || this == Paused
     }
 
     data class UiState(

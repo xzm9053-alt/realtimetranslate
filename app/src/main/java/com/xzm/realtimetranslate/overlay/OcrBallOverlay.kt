@@ -27,6 +27,7 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import com.xzm.realtimetranslate.R
@@ -40,20 +41,28 @@ import kotlin.math.roundToInt
  * Screen-OCR presentation: an edge-snapped hemisphere ball plus a translation
  * bubble that pops out of the ball. Independent of the audio subtitle overlay.
  *
- * Three windows:
+ * Windows:
  * - **ball window**: draggable hemisphere (SIDE_LEFT / SIDE_RIGHT / SIDE_FLOAT
- *   state machine). Tapping it fires [onTap] — the service re-opens the region
- *   selector to pick a new capture area.
+ *   state machine). Tap toggles pause/resume ([onTogglePause]); long-press opens
+ *   the action menu (pause, reselect the capture area, toggle the outline, stop).
  * - **popup window**: the latest translation anchored beside the ball, with a ✕
  *   close button. Stays until closed or a new sentence arrives (which re-opens
  *   it); streaming updates to the same sentence only re-paint the open bubble.
+ *   Drag it anywhere on screen — once moved it stops following the ball and
+ *   stays where the user put it.
+ * - **menu window**: the long-press action menu; a transparent full-screen scrim
+ *   so tapping anywhere outside dismisses it.
  * - **region outline window**: a subtle, touch-transparent outline of the OCR
  *   capture area, kept on screen so the user can see which part is being
  *   translated. Managed via [showRegionOutline] / [hideRegionOutline].
  */
 class OcrBallOverlay(
     private val context: Context,
-    private val onTap: () -> Unit,
+    private val onTogglePause: () -> Unit,
+    private val onReselectRegion: () -> Unit,
+    private val onStop: () -> Unit,
+    /** 拖动识别框右下角圆点结束后回调，参数是落定后的新选区。 */
+    private val onRegionMoved: (Rect) -> Unit,
 ) {
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
@@ -69,6 +78,12 @@ class OcrBallOverlay(
     private var outlineView: RegionOutlineView? = null
     private var lastRegion: Rect? = null
 
+    /** 识别框右下角的拖动圆点：独立的小窗口，只有圆点本身吃触摸。 */
+    private var regionHandleWindow: FrameLayout? = null
+    private var regionHandleParams: WindowManager.LayoutParams? = null
+    private var regionHandleDot: View? = null
+    private var draggingRegion = false
+
     private var settings: UserSettings = UserSettings()
 
     // Ball centre in screen px; `side` decides the window geometry around it.
@@ -82,6 +97,15 @@ class OcrBallOverlay(
     private var shownInput = ""
     private var shownOutput = ""
     private var lastInput = ""
+
+    // Once the user drags the bubble it stops following the ball and keeps these
+    // top-left coords (clamped to the screen on every layout pass).
+    private var popupPinned = false
+    private var popupX = 0
+    private var popupY = 0
+    private var handleOwnsGesture = false
+
+    private var menuWindowView: FrameLayout? = null
 
     private val touchSlopPx: Int = ViewConfiguration.get(context).scaledTouchSlop
 
@@ -145,6 +169,12 @@ class OcrBallOverlay(
         runCatching { movePopup() }
     }
 
+    /** Pause state is owned by the service (it drives the capture loop); the ball
+     *  only mirrors it, so a paused session is recognisable at a glance. */
+    fun setPaused(value: Boolean) {
+        ballView?.paused = value
+    }
+
     /** Feeds translation results. Only the [output] is displayed (the OCR region
      *  already shows the source text on screen). */
     fun updateTranscripts(input: String?, output: String?) {
@@ -168,6 +198,7 @@ class OcrBallOverlay(
     /** Repositions after rotation / display change; keeps the ball on-screen. */
     fun reclamp() {
         if (ballWindowView == null) return
+        hideMenu()
         val (screenW, screenH, _) = screenMetrics()
         val size = sizePx()
         if (side != BallView.SIDE_FLOAT) {
@@ -180,8 +211,10 @@ class OcrBallOverlay(
 
     fun hide() {
         unregisterCallbacks()
+        hideMenu()
         popupVisible = false
         popupUserClosed = false
+        popupPinned = false
         popupWindowView?.let { runCatching { windowManager.removeView(it) } }
         popupWindowView = null
         popupParams = null
@@ -246,6 +279,95 @@ class OcrBallOverlay(
         }
     }
 
+    // ---- long-press menu ----
+
+    private fun showMenu() {
+        hideMenu()
+        if (ballWindowView == null) return
+        val density = context.resources.displayMetrics.density
+        val (screenW, screenH, _) = screenMetrics()
+        val size = sizePx()
+        val margin = (12 * density).roundToInt()
+
+        val card = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            isClickable = true // taps on the card itself must not dismiss the menu
+            background = GradientDrawable().apply {
+                cornerRadius = 16 * density
+                setColor(Color.argb(243, 22, 22, 30))
+            }
+            setPadding(
+                (6 * density).roundToInt(),
+                (6 * density).roundToInt(),
+                (6 * density).roundToInt(),
+                (6 * density).roundToInt(),
+            )
+        }
+        val itemW = (168 * density).roundToInt()
+        val itemH = (42 * density).roundToInt()
+        fun addItem(label: String, action: () -> Unit) {
+            card.addView(
+                TextView(context).apply {
+                    text = label
+                    setTextColor(Color.WHITE)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding((14 * density).roundToInt(), 0, (14 * density).roundToInt(), 0)
+                    layoutParams = LinearLayout.LayoutParams(itemW, itemH)
+                    setOnClickListener {
+                        hideMenu()
+                        runCatching { action() }
+                    }
+                },
+            )
+        }
+
+        val paused = ballView?.paused == true
+        addItem(
+            context.getString(if (paused) R.string.ocr_menu_resume else R.string.ocr_menu_pause),
+        ) { onTogglePause() }
+        addItem(context.getString(R.string.ocr_menu_reselect)) { onReselectRegion() }
+        addItem(
+            context.getString(
+                if (outlineWindowView != null) R.string.ocr_menu_hide_outline
+                else R.string.ocr_menu_show_outline,
+            ),
+        ) { toggleRegionOutline() }
+        addItem(context.getString(R.string.ocr_menu_stop)) { onStop() }
+
+        val unspecified = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        card.measure(unspecified, unspecified)
+        val cw = card.measuredWidth
+        val ch = card.measuredHeight
+        // Open on whichever side of the ball has room, vertically centred on it.
+        val ballLeft = centerX - size / 2
+        val ballRight = centerX + size / 2
+        val x = if (ballLeft - margin - cw >= 0) {
+            ballLeft - margin - cw
+        } else {
+            (ballRight + margin).coerceIn(0, max(0, screenW - cw))
+        }
+        val y = (centerY - ch / 2).coerceIn(margin, max(margin, screenH - ch - margin))
+        card.layoutParams = FrameLayout.LayoutParams(cw, ch).apply {
+            gravity = Gravity.TOP or Gravity.START
+            leftMargin = x
+            topMargin = y
+        }
+
+        val root = FrameLayout(context).apply {
+            setBackgroundColor(Color.TRANSPARENT)
+            setOnClickListener { hideMenu() } // transparent scrim: tap outside to dismiss
+            addView(card)
+        }
+        menuWindowView = root
+        runCatching { windowManager.addView(root, overlayParams(screenW, screenH)) }
+    }
+
+    private fun hideMenu() {
+        menuWindowView?.let { runCatching { windowManager.removeView(it) } }
+        menuWindowView = null
+    }
+
     private fun toggleRegionOutline() {
         val region = lastRegion ?: return
         if (outlineWindowView != null) {
@@ -269,7 +391,7 @@ class OcrBallOverlay(
         private val longPressRunnable = Runnable {
             if (!dragging) {
                 longPressTriggered = true
-                toggleRegionOutline()
+                showMenu()
                 triggerSnapHaptic()
             }
         }
@@ -312,7 +434,7 @@ class OcrBallOverlay(
                         if (longPressTriggered) {
                             true
                         } else if (!dragging) {
-                            runCatching { onTap() }
+                            runCatching { onTogglePause() }
                             true
                         } else {
                             val (screenW, _, _) = screenMetrics()
@@ -408,9 +530,30 @@ class OcrBallOverlay(
             )
         }
 
+        // Explicit move grip: a small dot in the bottom-right corner. Dragging it
+        // moves the bubble in real time; the body stays draggable too, so the dot
+        // is an affordance rather than the only way in.
+        val handleSize = (18 * density).roundToInt()
+        val dragHandle = View(context).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.argb(120, 255, 255, 255))
+            }
+            contentDescription = context.getString(R.string.ocr_popup_drag)
+            layoutParams = FrameLayout.LayoutParams(
+                handleSize,
+                handleSize,
+                Gravity.BOTTOM or Gravity.END,
+            ).apply {
+                bottomMargin = (5 * density).roundToInt()
+                marginEnd = (5 * density).roundToInt()
+            }
+            setOnTouchListener(MoveHandleTouch())
+        }
+
         val padH = (12 * density).roundToInt()
         val padV = (8 * density).roundToInt()
-        val card = FrameLayout(context).apply {
+        val card = DragFrame(context).apply {
             background = GradientDrawable().apply {
                 cornerRadius = 14 * density
                 setColor(Color.argb(236, 20, 20, 28))
@@ -425,12 +568,109 @@ class OcrBallOverlay(
             )
             addView(copy)
             addView(close)
+            addView(dragHandle)
         }
         popupWindowView = card
         popupParams = overlayParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
         )
+    }
+
+    /**
+     * The translation bubble card. Dragging it moves its window; taps still reach
+     * the copy/close buttons, and a vertical drag over text that still has room to
+     * scroll scrolls the text instead of moving the bubble.
+     */
+    @SuppressLint("ViewConstructor")
+    private inner class DragFrame(context: Context) : FrameLayout(context) {
+        private var downRawX = 0f
+        private var downRawY = 0f
+        private var startX = 0
+        private var startY = 0
+        private var dragging = false
+
+        override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downRawX = ev.rawX
+                    downRawY = ev.rawY
+                    startX = popupParams?.x ?: 0
+                    startY = popupParams?.y ?: 0
+                    dragging = false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (handleOwnsGesture) return false // the corner dot is moving it
+                    if (dragging) return true
+                    val dx = ev.rawX - downRawX
+                    val dy = ev.rawY - downRawY
+                    if (abs(dx) <= touchSlopPx && abs(dy) <= touchSlopPx) return false
+                    val textScrolls = abs(dy) > abs(dx) &&
+                        popupText?.canScrollVertically(if (dy < 0) -1 else 1) == true
+                    if (textScrolls) return false
+                    dragging = true
+                    popupPinned = true
+                    return true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> dragging = false
+            }
+            return false
+        }
+
+        override fun onTouchEvent(ev: MotionEvent): Boolean {
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_MOVE -> {
+                    val params = popupParams ?: return true
+                    popupX = startX + (ev.rawX - downRawX).roundToInt()
+                    popupY = startY + (ev.rawY - downRawY).roundToInt()
+                    params.x = popupX
+                    params.y = popupY
+                    runCatching { windowManager.updateViewLayout(this, params) }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> movePopup() // clamp on-screen
+            }
+            return true
+        }
+    }
+
+    /** Real-time drag from the corner dot. Kept separate from [DragFrame] so the
+     *  dot never has to compete with the text view for the gesture. */
+    @SuppressLint("ClickableViewAccessibility")
+    private inner class MoveHandleTouch : View.OnTouchListener {
+        private var downRawX = 0f
+        private var downRawY = 0f
+        private var startX = 0
+        private var startY = 0
+        private var moved = false
+
+        override fun onTouch(v: View, event: MotionEvent): Boolean {
+            val params = popupParams ?: return false
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downRawX = event.rawX
+                    downRawY = event.rawY
+                    startX = params.x
+                    startY = params.y
+                    moved = false
+                    handleOwnsGesture = true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    moved = true
+                    popupPinned = true
+                    popupX = startX + (event.rawX - downRawX).roundToInt()
+                    popupY = startY + (event.rawY - downRawY).roundToInt()
+                    params.x = popupX
+                    params.y = popupY
+                    val card = popupWindowView ?: return true
+                    runCatching { windowManager.updateViewLayout(card, params) }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    handleOwnsGesture = false
+                    if (moved) movePopup() // clamp inside the screen
+                }
+            }
+            return true
+        }
     }
 
     private fun showPopup() {
@@ -475,6 +715,17 @@ class OcrBallOverlay(
         )
         val pw = view.measuredWidth
         val ph = view.measuredHeight
+        if (popupPinned) {
+            // User placed the bubble themselves: keep that spot, only squeezing it
+            // back inside the screen (rotation, or a longer translation growing
+            // past the right/bottom edge).
+            popupX = popupX.coerceIn(0, max(0, screenW - pw))
+            popupY = popupY.coerceIn(0, max(0, screenH - ph))
+            params.x = popupX
+            params.y = popupY
+            runCatching { windowManager.updateViewLayout(view, params) }
+            return
+        }
         val size = sizePx()
         val margin = (12 * density).roundToInt()
         val ballLeft = centerX - size / 2
@@ -524,12 +775,114 @@ class OcrBallOverlay(
                 settings.ocrRegionOutlineAlpha,
             )
         }
+        showRegionHandle(rect)
     }
 
     fun hideRegionOutline() {
         outlineWindowView?.let { runCatching { windowManager.removeView(it) } }
         outlineWindowView = null
         outlineView = null
+        hideRegionHandle()
+    }
+
+    // ---- region move handle (bottom-right dot) ----
+
+    private fun showRegionHandle(rect: Rect) {
+        val dot = regionHandleDot ?: createRegionHandle().also { regionHandleDot = it }
+        applyHandleAppearance(settings.ocrRegionOutlineColor.toInt())
+        dot.invalidate()
+        placeRegionHandle(rect)
+    }
+
+    private fun hideRegionHandle() {
+        regionHandleWindow?.let { runCatching { windowManager.removeView(it) } }
+        regionHandleWindow = null
+        regionHandleParams = null
+        regionHandleDot = null
+        draggingRegion = false
+    }
+
+    private fun applyHandleAppearance(colorArgb: Int) {
+        val density = context.resources.displayMetrics.density
+        regionHandleDot?.background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor((0xE6 shl 24) or (colorArgb and 0x00FFFFFF))
+            setStroke((2 * density).roundToInt(), Color.argb(230, 255, 255, 255))
+        }
+    }
+
+    private fun createRegionHandle(): View {
+        val density = context.resources.displayMetrics.density
+        val windowSize = (REGION_HANDLE_TOUCH_DP * density).roundToInt()
+        val dotSize = (REGION_HANDLE_DOT_DP * density).roundToInt()
+        val dot = View(context).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                dotSize,
+                dotSize,
+                Gravity.CENTER,
+            )
+            setOnTouchListener(RegionHandleTouch())
+        }
+        val root = FrameLayout(context).apply {
+            setBackgroundColor(Color.TRANSPARENT)
+            addView(dot)
+        }
+        regionHandleWindow = root
+        regionHandleParams = overlayParams(windowSize, windowSize)
+        runCatching { windowManager.addView(root, regionHandleParams) }
+        return dot
+    }
+
+    /** 把圆点窗口的中心对到选区右下角；窗口比圆点大，留出足够的触摸范围。 */
+    private fun placeRegionHandle(rect: Rect) {
+        val root = regionHandleWindow ?: return
+        val params = regionHandleParams ?: return
+        val (screenW, screenH, density) = screenMetrics()
+        val size = (REGION_HANDLE_TOUCH_DP * density).roundToInt()
+        val half = size / 2
+        params.x = (rect.right - half).coerceIn(0, max(0, screenW - size))
+        params.y = (rect.bottom - half).coerceIn(0, max(0, screenH - size))
+        runCatching { windowManager.updateViewLayout(root, params) }
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private inner class RegionHandleTouch : View.OnTouchListener {
+        private var downRawX = 0f
+        private var downRawY = 0f
+        private val startRect = Rect()
+
+        override fun onTouch(v: View, event: MotionEvent): Boolean {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    val region = lastRegion ?: return false
+                    startRect.set(region)
+                    downRawX = event.rawX
+                    downRawY = event.rawY
+                    draggingRegion = true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (!draggingRegion) return false
+                    val (screenW, screenH, _) = screenMetrics()
+                    val dx = (event.rawX - downRawX).roundToInt()
+                    val dy = (event.rawY - downRawY).roundToInt()
+                    val moved = Rect(startRect).apply { offset(dx, dy) }
+                    // 只移动不缩放：宽度高度不变，整体夹在屏幕内。
+                    val left = moved.left.coerceIn(0, max(0, screenW - moved.width()))
+                    val top = moved.top.coerceIn(0, max(0, screenH - moved.height()))
+                    moved.offset(left - moved.left, top - moved.top)
+                    lastRegion = Rect(moved)
+                    outlineView?.setRegion(moved) // 实时跟手
+                    placeRegionHandle(moved)
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (!draggingRegion) return false
+                    draggingRegion = false
+                    lastRegion?.let { onRegionMoved(Rect(it)) }
+                }
+                else -> return false
+            }
+            return true
+        }
     }
 
     private fun createOutlineWindow() {
@@ -671,5 +1024,9 @@ class OcrBallOverlay(
         private const val MAX_FONT_SP = 28f
         /** Bubble max height as a fraction of screen height; overflow scrolls. */
         private const val POPUP_MAX_HEIGHT_FRACTION = 0.55f
+        /** Visible dot diameter of the region move handle. */
+        private const val REGION_HANDLE_DOT_DP = 22
+        /** Touch target around that dot (window size). */
+        private const val REGION_HANDLE_TOUCH_DP = 44
     }
 }

@@ -2,6 +2,7 @@ package com.xzm.realtimetranslate.service
 
 import android.app.Activity
 import android.app.Notification
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
@@ -18,6 +19,7 @@ import com.xzm.realtimetranslate.util.AppLog
 import com.xzm.realtimetranslate.util.AppLog as Log
 import android.view.Surface
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.xzm.realtimetranslate.LiveTranslateApp
 import com.xzm.realtimetranslate.R
@@ -108,6 +110,11 @@ class ScreenTextSessionService : Service() {
     @Volatile
     private var lastText = ""
 
+    /** 暂停 = 停止采集 / OCR / 翻译，但保留录屏授权、悬浮球与选区，随时可继续。
+     *  与 [stopped] 的区别：暂停不释放任何资源，也不需要用户重新授权。 */
+    @Volatile
+    private var paused = false
+
     @Volatile
     private var stopped = false
 
@@ -132,6 +139,10 @@ class ScreenTextSessionService : Service() {
             ACTION_STOP -> {
                 stopEverything(getString(R.string.ocr_stopped))
                 return START_NOT_STICKY
+            }
+            ACTION_TOGGLE_PAUSE -> {
+                setPaused(!paused)
+                return START_STICKY
             }
             ACTION_START -> {
                 val region = if (Build.VERSION.SDK_INT >= 33) {
@@ -160,6 +171,7 @@ class ScreenTextSessionService : Service() {
 
     private fun startSession(region: Rect, resultCode: Int, data: Intent) {
         stopped = false
+        paused = false
         currentRegion = region
         ScreenOcrBus.setStatus(ScreenOcrBus.Status.Starting, getString(R.string.ocr_starting))
         startAsForeground()
@@ -224,15 +236,23 @@ class ScreenTextSessionService : Service() {
             null,
         )
 
-        // 半球球 + 译文气泡：点球 → 服务内直接弹区域选择器重选，不重启投影/服务。
-        val ocrOverlay = OcrBallOverlay(this@ScreenTextSessionService) {
-            if (stopped) return@OcrBallOverlay
-            RegionSelectorOverlay(
-                this@ScreenTextSessionService,
-                onConfirm = { newRegion -> updateRegion(newRegion) },
-                onCancel = { },
-            ).show()
-        }
+        // 半球球 + 译文气泡。点球 = 暂停/继续；长按 = 菜单（暂停、重选区域、取词框、停止）。
+        // 全部在服务内处理，不重启投影、不需要重新授权。
+        val ocrOverlay = OcrBallOverlay(
+            context = this@ScreenTextSessionService,
+            onTogglePause = { setPaused(!paused) },
+            onReselectRegion = {
+                if (!stopped) {
+                    RegionSelectorOverlay(
+                        this@ScreenTextSessionService,
+                        onConfirm = { newRegion -> updateRegion(newRegion) },
+                        onCancel = { },
+                    ).show()
+                }
+            },
+            onStop = { stopEverything(getString(R.string.ocr_stopped)) },
+            onRegionMoved = { newRegion -> updateRegion(newRegion) },
+        )
         overlay = ocrOverlay
         ocrOverlay.show(currentSettings)
         // 在球旁用一条淡色细框标出当前 OCR 选区，让用户知道在翻译屏幕哪块。
@@ -308,7 +328,31 @@ class ScreenTextSessionService : Service() {
         lastHash = Long.MIN_VALUE
         lastText = ""
         overlay?.showRegionOutline(currentRegion)
-        ScreenOcrBus.setStatus(ScreenOcrBus.Status.Running, getString(R.string.ocr_region_updated))
+        ScreenOcrBus.setStatus(
+            if (paused) ScreenOcrBus.Status.Paused else ScreenOcrBus.Status.Running,
+            getString(R.string.ocr_region_updated),
+        )
+    }
+
+    /** 暂停 / 继续：只停采集、OCR 与翻译，保留录屏授权、悬浮球、选区和已显示的
+     *  译文。恢复时清掉去重状态，下一帧立即按当前画面重新识别。 */
+    private fun setPaused(value: Boolean) {
+        if (stopped || overlay == null || paused == value) return
+        paused = value
+        if (value) {
+            ScreenOcrBus.setStatus(ScreenOcrBus.Status.Paused, getString(R.string.ocr_paused))
+        } else {
+            lastHash = Long.MIN_VALUE
+            lastText = ""
+            ScreenOcrBus.setStatus(ScreenOcrBus.Status.Running, getString(R.string.ocr_resumed))
+        }
+        overlay?.setPaused(value)
+        updateNotification()
+        Toast.makeText(
+            this,
+            if (value) R.string.ocr_paused_toast else R.string.ocr_resumed_toast,
+            Toast.LENGTH_SHORT,
+        ).show()
     }
 
     private fun runOcrLoop() {
@@ -330,6 +374,7 @@ class ScreenTextSessionService : Service() {
             launch {
                 for (text in pendingText) {
                     if (stopped) break
+                    if (paused) continue // 暂停期间不花翻译额度
                     val tTranslate = SystemClock.elapsedRealtime()
                     translateAndShow(engine, text)
                     // TRANSPROF 诊断（只读埋点）：这次翻译实际花了多久。
@@ -346,6 +391,11 @@ class ScreenTextSessionService : Service() {
             // 用来判断「是不是每帧都在重发请求」。
             var idleRounds = 0
             while (isActive && !stopped) {
+                if (paused) {
+                    // 暂停：不做截图、不跑 OCR、不发请求，但仍保持循环可被恢复。
+                    delay(FRAME_INTERVAL_MS)
+                    continue
+                }
                 if (SystemClock.elapsedRealtime() < capturePausedUntil) {
                     // 旋转/折叠刚发生：投影帧还在重建，此刻裁出来的是乱帧。
                     delay(DISPLAY_PAUSE_POLL_MS)
@@ -518,31 +568,14 @@ class ScreenTextSessionService : Service() {
             Log.e(TAG, "BUG: remapped region $region out of ${newW}x$newH")
         }
         Log.i(TAG, "OCRMAP display change rot=$newRot ${newW}x$newH region=$region")
-        ScreenOcrBus.setStatus(ScreenOcrBus.Status.Running, getString(R.string.ocr_region_adjusted))
+        ScreenOcrBus.setStatus(
+            if (paused) ScreenOcrBus.Status.Paused else ScreenOcrBus.Status.Running,
+            getString(R.string.ocr_region_adjusted),
+        )
     }
 
     private fun startAsForeground() {
-        val stopIntent = Intent(this, ScreenTextSessionService::class.java).setAction(ACTION_STOP)
-        val stopPi = PendingIntent.getService(
-            this,
-            3,
-            stopIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        val openPi = PendingIntent.getActivity(
-            this,
-            2,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        val notification: Notification = NotificationCompat.Builder(this, LiveTranslateApp.CHANNEL_SUBTITLE)
-            .setContentTitle(getString(R.string.ocr_notification_title))
-            .setContentText(getString(R.string.ocr_notification_text))
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentIntent(openPi)
-            .addAction(0, getString(R.string.action_stop), stopPi)
-            .setOngoing(true)
-            .build()
+        val notification = buildNotification()
 
         // Android 14: startForeground(TYPE_MEDIA_PROJECTION) must come BEFORE
         // getMediaProjection(). The type also justifies the special-use permission.
@@ -553,9 +586,57 @@ class ScreenTextSessionService : Service() {
         }
     }
 
+    private fun buildNotification(): Notification {
+        val stopPi = PendingIntent.getService(
+            this,
+            3,
+            Intent(this, ScreenTextSessionService::class.java).setAction(ACTION_STOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val openPi = PendingIntent.getActivity(
+            this,
+            2,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val pausePi = PendingIntent.getService(
+            this,
+            4,
+            Intent(this, ScreenTextSessionService::class.java).setAction(ACTION_TOGGLE_PAUSE),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        return NotificationCompat.Builder(this, LiveTranslateApp.CHANNEL_SUBTITLE)
+            .setContentTitle(getString(R.string.ocr_notification_title))
+            .setContentText(
+                getString(
+                    if (paused) R.string.ocr_notification_paused_text
+                    else R.string.ocr_notification_text,
+                ),
+            )
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentIntent(openPi)
+            .addAction(
+                0,
+                getString(if (paused) R.string.ocr_action_resume else R.string.ocr_action_pause),
+                pausePi,
+            )
+            .addAction(0, getString(R.string.action_stop), stopPi)
+            .setOngoing(true)
+            .build()
+    }
+
+    /** Repaints the ongoing notification after a pause/resume toggle. */
+    private fun updateNotification() {
+        runCatching {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.notify(NOTIFICATION_ID, buildNotification())
+        }.onFailure { Log.w(TAG, "updateNotification failed", it) }
+    }
+
     private fun stopEverything(message: String) {
         if (stopped) return
         stopped = true
+        paused = false
         ScreenOcrBus.setStatus(ScreenOcrBus.Status.Stopped, message)
         val historyList = synchronized(ocrRecords) { ocrRecords.toList() }
         if (historyList.isNotEmpty()) {
@@ -614,6 +695,7 @@ class ScreenTextSessionService : Service() {
         private const val DISPLAY_PAUSE_POLL_MS = 100L
         const val ACTION_START = "com.xzm.realtimetranslate.action.START_SCREEN_OCR"
         const val ACTION_STOP = "com.xzm.realtimetranslate.action.STOP_SCREEN_OCR"
+        const val ACTION_TOGGLE_PAUSE = "com.xzm.realtimetranslate.action.TOGGLE_PAUSE_SCREEN_OCR"
         const val EXTRA_REGION = "region"
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_RESULT_DATA = "result_data"

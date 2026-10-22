@@ -279,10 +279,9 @@ class MainActivity : ComponentActivity() {
 
                 fun requestStartSubtitle() {
                     try {
-                        // Mutual exclusion: starting audio subtitles stops a running OCR session.
-                        if (ocrSession.status == ScreenOcrBus.Status.Running ||
-                            ocrSession.status == ScreenOcrBus.Status.Starting
-                        ) {
+                        // Mutual exclusion: starting audio subtitles stops a running OCR session
+                        // (a paused one included — it still owns the screen-capture token).
+                        if (ocrSession.status.isActive) {
                             stopOcr()
                         }
                         // 需要 Key 的引擎没填 Key 就不放行；免 Key 引擎（微软 / 谷歌免费）直接过。
@@ -328,9 +327,7 @@ class MainActivity : ComponentActivity() {
 
                 fun requestStartOcr() {
                     try {
-                        if (ocrSession.status == ScreenOcrBus.Status.Running ||
-                            ocrSession.status == ScreenOcrBus.Status.Starting
-                        ) {
+                        if (ocrSession.status.isActive) {
                             stopOcr()
                             return
                         }
