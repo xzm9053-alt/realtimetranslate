@@ -7,6 +7,7 @@ import com.xzm.realtimetranslate.LiveTranslateApp
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.AsrEngineType
 import com.xzm.realtimetranslate.translate.AsrEngine
+import com.xzm.realtimetranslate.translate.DashScopeEndpoints
 import com.xzm.realtimetranslate.translate.SpeechRecognizer
 import com.xzm.realtimetranslate.translate.SpeechRecognizerFactory
 import com.xzm.realtimetranslate.translate.TranslationEngine
@@ -189,6 +190,13 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
                 val asrType = settings.asrEngine
                 if (!app.apiKeyStore.hasKeyFor(asrType)) {
                     fail("请先在设置中填写语音识别所需的 API Key")
+                    return@launch
+                }
+                if (asrType == AsrEngineType.ALIYUN_FUN_ASR &&
+                    DashScopeEndpoints.requiresWorkspace(settings.aliyunAsrModel) &&
+                    settings.aliyunWorkspaceId.isBlank()
+                ) {
+                    fail("所选百炼模型需要业务空间 ID，请到 设置 → 语音识别引擎 填写")
                     return@launch
                 }
 

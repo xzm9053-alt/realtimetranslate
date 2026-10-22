@@ -117,4 +117,45 @@ class TextStreamBufferTest {
         // 不应退化为普通追加堆叠成 "Hello Hello world Hello world!"
         assertEquals("Hello world!", buffer.getDisplayText())
     }
+
+    /** 0 = 不分段：沿用旧行为，句子首尾相接。 */
+    @Test
+    fun testParagraphingDisabledKeepsOneLine() {
+        val buffer = TextStreamBuffer(sentencesPerParagraph = 0)
+        buffer.say("第一句")
+        buffer.say("第二句")
+        buffer.say("第三句")
+
+        assertEquals("第一句第二句第三句", buffer.getDisplayText())
+    }
+
+    /** 每 N 句另起一行；N=1 就是每句一行。 */
+    @Test
+    fun testParagraphBreakEveryNSentences() {
+        val buffer = TextStreamBuffer(sentencesPerParagraph = 2)
+        buffer.say("一")
+        buffer.say("二")
+        buffer.say("三")
+        buffer.say("四")
+
+        // 第二句定稿后换行，第四句定稿后再换行（末尾换行会被下一句紧接）
+        assertEquals("一二\n三四\n", buffer.getDisplayText())
+    }
+
+    @Test
+    fun testEmptySentenceDoesNotCountTowardsParagraph() {
+        val buffer = TextStreamBuffer(sentencesPerParagraph = 1)
+        buffer.say("一")
+        buffer.startNewEpoch() // 没有任何文本的空世代，不该多插一个换行
+        buffer.say("二")
+
+        assertEquals("一\n二\n", buffer.getDisplayText())
+    }
+
+    // 模拟「这一句说完了」：写入文本 + 切下一世代。
+    private fun TextStreamBuffer.say(text: String) {
+        val epoch = startNewEpoch()
+        appendFinal(epoch, text)
+        startNewEpoch()
+    }
 }

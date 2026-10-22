@@ -9,7 +9,6 @@ import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.ApiKeyStore
 import com.xzm.realtimetranslate.data.AsrEngineType
 import com.xzm.realtimetranslate.data.HistoryMode
-import com.xzm.realtimetranslate.data.OcrScript
 import com.xzm.realtimetranslate.data.ThinkingOffStyle
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
@@ -104,6 +103,11 @@ class SettingsViewModel(
     )
     val aliyunAsrModel: StateFlow<TextFieldValue> = _aliyunAsrModel.asStateFlow()
 
+    private val _aliyunWorkspaceId = MutableStateFlow(
+        TextFieldValue(UserSettings.Defaults.ALIYUN_WORKSPACE_ID),
+    )
+    val aliyunWorkspaceId: StateFlow<TextFieldValue> = _aliyunWorkspaceId.asStateFlow()
+
     private val _genericAsrBaseUrl = MutableStateFlow(
         TextFieldValue(UserSettings.Defaults.GENERIC_ASR_BASE_URL),
     )
@@ -187,6 +191,7 @@ class SettingsViewModel(
             _aliyunAsrModel.value = TextFieldValue(
                 s.aliyunAsrModel.ifBlank { UserSettings.Defaults.ALIYUN_ASR_MODEL },
             )
+            _aliyunWorkspaceId.value = TextFieldValue(s.aliyunWorkspaceId)
             _genericAsrBaseUrl.value = TextFieldValue(
                 s.genericAsrBaseUrl.ifBlank { UserSettings.Defaults.GENERIC_ASR_BASE_URL },
             )
@@ -319,6 +324,11 @@ class SettingsViewModel(
         update { it.copy(aliyunAsrModel = value.text.trim()) }
     }
 
+    fun updateAliyunWorkspaceId(value: TextFieldValue) {
+        _aliyunWorkspaceId.value = value
+        update { it.copy(aliyunWorkspaceId = value.text.trim()) }
+    }
+
     fun updateGenericAsrBaseUrl(value: TextFieldValue) {
         _genericAsrBaseUrl.value = value
         update { it.copy(genericAsrBaseUrl = value.text.trim()) }
@@ -340,7 +350,12 @@ class SettingsViewModel(
             AsrEngineType.LOCAL_SENSEVOICE -> Unit
             AsrEngineType.ALIYUN_FUN_ASR -> {
                 apiKeyStore.setAliyunAsrKey(_aliyunAsrKey.value.text)
-                update { it.copy(aliyunAsrModel = _aliyunAsrModel.value.text.trim()) }
+                update {
+                    it.copy(
+                        aliyunAsrModel = _aliyunAsrModel.value.text.trim(),
+                        aliyunWorkspaceId = _aliyunWorkspaceId.value.text.trim(),
+                    )
+                }
             }
             AsrEngineType.GENERIC_OPENAI -> {
                 apiKeyStore.setGenericAsrKey(_genericAsrApiKey.value.text)
@@ -382,10 +397,6 @@ class SettingsViewModel(
             )
             _asrTesting.value = false
         }
-    }
-
-    fun setOcrScript(script: OcrScript) {
-        update { it.copy(ocrScript = script) }
     }
 
     fun setHistoryMode(mode: HistoryMode) {

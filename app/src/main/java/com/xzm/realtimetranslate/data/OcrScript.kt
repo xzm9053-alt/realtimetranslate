@@ -21,12 +21,15 @@ enum class OcrScript {
     ;
 
     companion object {
-        fun fromStorage(v: String?): OcrScript {
-            // Migrate the legacy default (CHINESE_MIX, only ever auto-assigned) to
-            // AUTO so existing installs benefit from English/Japanese auto-picking
-            // without touching the setting.
-            if (v == null || v == "CHINESE_MIX") return AUTO
-            return entries.firstOrNull { it.name == v } ?: AUTO
+        /**
+         * [alreadyMigrated] separates a value the user picked from the legacy
+         * factory default: older builds wrote CHINESE_MIX for every install, so it
+         * is rewritten to AUTO exactly once, then honoured as a real choice.
+         */
+        fun fromStorage(v: String?, alreadyMigrated: Boolean = false): OcrScript {
+            val stored = entries.firstOrNull { it.name == v } ?: return AUTO
+            if (!alreadyMigrated && stored == CHINESE_MIX) return AUTO
+            return stored
         }
     }
 }

@@ -74,6 +74,13 @@ data class UserSettings(
     // ASR Engine selection and settings
     val asrEngine: AsrEngineType = Defaults.ASR_ENGINE,
     val aliyunAsrModel: String = Defaults.ALIYUN_ASR_MODEL,
+    // 阿里百炼业务空间 ID。官方已将百炼迁到业务空间专属域名
+    // ({WorkspaceId}.cn-beijing.maas.aliyuncs.com)，新模型必须走新域名。
+    // 留空时回退到旧域名 dashscope.aliyuncs.com，保证现有用户不被影响。
+    val aliyunWorkspaceId: String = Defaults.ALIYUN_WORKSPACE_ID,
+    // 译文段落排版：0 = 不分段（连续输出，保持现状）；
+    // N = 每翻完 N 句，下一句译文另起一行。翻译仍逐句进行，只改排版，不影响速度与费用。
+    val sentencesPerParagraph: Int = Defaults.SENTENCES_PER_PARAGRAPH,
     // 阿里百炼 FunASR 静音断句门槛（毫秒）：说话停顿超过此阈值即判定为句子结束并送翻。默认 400ms。
     val aliyunAsrSilenceMs: Int = Defaults.ALIYUN_ASR_SILENCE_MS,
     val genericAsrBaseUrl: String = Defaults.GENERIC_ASR_BASE_URL,
@@ -142,11 +149,15 @@ data class UserSettings(
         const val DIAGNOSTIC_LOG_CONTENT = false
         val ASR_ENGINE: AsrEngineType = AsrEngineType.LOCAL_SENSEVOICE
         const val ALIYUN_ASR_MODEL = "fun-asr-realtime"
+        const val ALIYUN_WORKSPACE_ID = ""
+        // 0 = 不分段（连续输出）；取值范围 0..SENTENCES_PER_PARAGRAPH_MAX。
+        const val SENTENCES_PER_PARAGRAPH = 0
+        const val SENTENCES_PER_PARAGRAPH_MAX = 5
         const val ALIYUN_ASR_SILENCE_MS = 200
         const val GENERIC_ASR_BASE_URL = "https://api.siliconflow.cn/v1"
         const val GENERIC_ASR_API_KEY = ""
         const val GENERIC_ASR_MODEL = "FunAudioLLM/SenseVoiceSmall"
-        const val DRAFT_TRANSLATION_PREVIEW = false
+        const val DRAFT_TRANSLATION_PREVIEW = true
         const val SILENCE_DETECTION_ENABLED = true
     }
 }

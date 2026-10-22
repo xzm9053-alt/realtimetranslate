@@ -100,6 +100,18 @@ class SubtitleOverlayController(
     private var lastInputLineCount = 0
     private var lastOutputLineCount = 0
 
+    /** 用户手动上翻回看历史时为 true，此间不抢着滚动。两栏各自独立。 */
+    private var userPausedOutputFollow = false
+    private var userPausedInputFollow = false
+
+    /** 上一帧的 scrollY，用来判断这次滚动是往哪边走的（松手后的惯性也能认出来）。 */
+    private var lastOutputScrollY = 0
+    private var lastInputScrollY = 0
+
+    /** 我们自己调用 smoothScrollTo 的时间窗口，期间不把滚动当成用户操作。 */
+    private var suppressOutputFollowUntil = 0L
+    private var suppressInputFollowUntil = 0L
+
     private var lastScreenW = 0
     private var lastScreenH = 0
 
@@ -387,13 +399,16 @@ class SubtitleOverlayController(
             isFillViewport = false
             isVerticalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
-            // Don't steal drag from grabber/resize; text area is display-only scroll
+            // 文本区可上下滑动回看历史；不抢焦点的同时保留拖动手势。
             isClickable = false
             isFocusable = false
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.MATCH_PARENT,
             )
+        }
+        inScroll.setOnScrollChangeListener { _, _, scrollY, _, _ ->
+            handleScrollChanged(inScroll, scrollY)
         }
         inputScroll = inScroll
 
@@ -445,6 +460,9 @@ class SubtitleOverlayController(
                 0,
                 1f,
             )
+        }
+        outScroll.setOnScrollChangeListener { _, _, scrollY, _, _ ->
+            handleScrollChanged(outScroll, scrollY)
         }
         outputScroll = outScroll
 
@@ -584,7 +602,7 @@ class SubtitleOverlayController(
             // to the newest line rather than jumping to the top.
             if (lineCount < previous) {
                 if (isInput) lastInputLineCount = lineCount else lastOutputLineCount = lineCount
-                scrollToShowLastLine(textView, scrollView)
+                scrollToShowLastLine(textView, scrollView, force = true)
                 return@post
             }
 
@@ -599,7 +617,47 @@ class SubtitleOverlayController(
         }
     }
 
-    private fun scrollToShowLastLine(textView: TextView, scrollView: ScrollView) {
+    /**
+     * 用户手动往上翻看历史时，暂停自动跟随最新行；翻回底部后自动恢复。
+     *
+     * 不能靠 `isPressed` 判断：手指抬起后的惯性滑动仍在滚，那时 pressed 已经是 false，
+     * 于是甩着回看会被下一条新句直接拽回底部。改成看方向——scrollY 变小就是用户在往上翻。
+     */
+    private fun handleScrollChanged(scrollView: ScrollView, scrollY: Int) {
+        val isOutput = scrollView === outputScroll
+        val suppressUntil = if (isOutput) suppressOutputFollowUntil else suppressInputFollowUntil
+        val lastY = if (isOutput) lastOutputScrollY else lastInputScrollY
+        if (isOutput) lastOutputScrollY = scrollY else lastInputScrollY = scrollY
+        if (SystemClock.uptimeMillis() < suppressUntil) return
+
+        val child = scrollView.getChildAt(0) ?: return
+        val atBottom = scrollY + scrollView.height >= child.height - 1
+        val pause = when {
+            atBottom -> false
+            scrollY < lastY -> true
+            else -> if (isOutput) userPausedOutputFollow else userPausedInputFollow
+        }
+        if (isOutput) userPausedOutputFollow = pause else userPausedInputFollow = pause
+    }
+
+    private fun isFollowPaused(scrollView: ScrollView): Boolean =
+        if (scrollView === outputScroll) userPausedOutputFollow else userPausedInputFollow
+
+    private fun markProgrammaticScroll(scrollView: ScrollView) {
+        val until = SystemClock.uptimeMillis() + FOLLOW_SUPPRESS_MS
+        if (scrollView === outputScroll) suppressOutputFollowUntil = until
+        else suppressInputFollowUntil = until
+    }
+
+    /**
+     * @param force 文本被截断变短时必须贴回底部，这时不能再尊重「用户暂停跟随」。
+     */
+    private fun scrollToShowLastLine(
+        textView: TextView,
+        scrollView: ScrollView,
+        force: Boolean = false,
+    ) {
+        if (!force && isFollowPaused(scrollView)) return
         scrollView.post {
             val layout = textView.layout ?: return@post
             if (layout.lineCount <= 0) return@post
@@ -609,6 +667,7 @@ class SubtitleOverlayController(
                 .coerceAtLeast(0)
             // Smooth-ish step: if we only grew by 1 line, this moves ~one line
             if (target != scrollView.scrollY) {
+                markProgrammaticScroll(scrollView)
                 scrollView.smoothScrollTo(0, target)
             }
         }
@@ -1280,5 +1339,8 @@ class SubtitleOverlayController(
         private const val BALL_SIZE_DP = 56
         private const val EDGE_COLLAPSE_PX = 60
         private const val COLLAPSE_ANIM_MS = 250L
+
+        /** 平滑滚动的动画窗口；窗口内的滚动事件来自我们自己，不算用户回看。 */
+        private const val FOLLOW_SUPPRESS_MS = 450L
     }
 }

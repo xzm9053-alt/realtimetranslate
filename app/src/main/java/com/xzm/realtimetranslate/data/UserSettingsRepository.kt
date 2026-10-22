@@ -52,6 +52,7 @@ class UserSettingsRepository(private val context: Context) {
         val vadMaxSpeechSec = floatPreferencesKey("vad_max_speech_sec")
         val partialTranscripts = booleanPreferencesKey("partial_transcripts")
         val ocrScript = stringPreferencesKey("ocr_script")
+        val ocrScriptMigrated = booleanPreferencesKey("ocr_script_migrated")
         val ocrRegionOutlineEnabled = booleanPreferencesKey("ocr_region_outline_enabled")
         val ocrRegionOutlineColor = longPreferencesKey("ocr_region_outline_color")
         val ocrRegionOutlineAlpha = floatPreferencesKey("ocr_region_outline_alpha")
@@ -61,6 +62,8 @@ class UserSettingsRepository(private val context: Context) {
         val diagnosticLogContent = booleanPreferencesKey("diagnostic_log_content")
         val asrEngine = stringPreferencesKey("asr_engine")
         val aliyunAsrModel = stringPreferencesKey("aliyun_asr_model")
+        val aliyunWorkspaceId = stringPreferencesKey("aliyun_workspace_id")
+        val sentencesPerParagraph = intPreferencesKey("sentences_per_paragraph")
         val aliyunAsrSilenceMs = intPreferencesKey("aliyun_asr_silence_ms")
         val genericAsrBaseUrl = stringPreferencesKey("generic_asr_base_url")
         val genericAsrApiKey = stringPreferencesKey("generic_asr_api_key")
@@ -109,6 +112,9 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.vadMaxSpeechSec] = next.vadMaxSpeechSec
             prefs[Keys.partialTranscripts] = next.partialTranscripts
             prefs[Keys.ocrScript] = next.ocrScript.name
+            // Any explicit save freezes the value: from here on it is a user choice,
+            // not the legacy factory default.
+            prefs[Keys.ocrScriptMigrated] = true
             prefs[Keys.ocrRegionOutlineEnabled] = next.ocrRegionOutlineEnabled
             prefs[Keys.ocrRegionOutlineColor] = next.ocrRegionOutlineColor
             prefs[Keys.ocrRegionOutlineAlpha] = next.ocrRegionOutlineAlpha
@@ -118,6 +124,8 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.diagnosticLogContent] = next.diagnosticLogContent
             prefs[Keys.asrEngine] = next.asrEngine.name
             prefs[Keys.aliyunAsrModel] = next.aliyunAsrModel
+            prefs[Keys.aliyunWorkspaceId] = next.aliyunWorkspaceId
+            prefs[Keys.sentencesPerParagraph] = next.sentencesPerParagraph
             prefs[Keys.aliyunAsrSilenceMs] = next.aliyunAsrSilenceMs
             prefs[Keys.genericAsrBaseUrl] = next.genericAsrBaseUrl
             prefs[Keys.genericAsrApiKey] = next.genericAsrApiKey
@@ -176,7 +184,10 @@ class UserSettingsRepository(private val context: Context) {
         vadMaxSpeechSec = this[Keys.vadMaxSpeechSec] ?: UserSettings.Defaults.VAD_MAX_SPEECH_SEC,
         partialTranscripts = this[Keys.partialTranscripts]
             ?: UserSettings.Defaults.PARTIAL_TRANSCRIPTS,
-        ocrScript = OcrScript.fromStorage(this[Keys.ocrScript]),
+        ocrScript = OcrScript.fromStorage(
+            this[Keys.ocrScript],
+            alreadyMigrated = this[Keys.ocrScriptMigrated] == true,
+        ),
         ocrRegionOutlineEnabled = this[Keys.ocrRegionOutlineEnabled]
             ?: UserSettings.Defaults.OCR_OUTLINE_ENABLED,
         ocrRegionOutlineColor = this[Keys.ocrRegionOutlineColor]
@@ -190,6 +201,9 @@ class UserSettingsRepository(private val context: Context) {
             ?: UserSettings.Defaults.DIAGNOSTIC_LOG_CONTENT,
         asrEngine = AsrEngineType.fromStorage(this[Keys.asrEngine]),
         aliyunAsrModel = this[Keys.aliyunAsrModel] ?: UserSettings.Defaults.ALIYUN_ASR_MODEL,
+        aliyunWorkspaceId = this[Keys.aliyunWorkspaceId] ?: UserSettings.Defaults.ALIYUN_WORKSPACE_ID,
+        sentencesPerParagraph = this[Keys.sentencesPerParagraph]
+            ?: UserSettings.Defaults.SENTENCES_PER_PARAGRAPH,
         aliyunAsrSilenceMs = this[Keys.aliyunAsrSilenceMs] ?: UserSettings.Defaults.ALIYUN_ASR_SILENCE_MS,
         genericAsrBaseUrl = this[Keys.genericAsrBaseUrl] ?: UserSettings.Defaults.GENERIC_ASR_BASE_URL,
         genericAsrApiKey = this[Keys.genericAsrApiKey] ?: UserSettings.Defaults.GENERIC_ASR_API_KEY,

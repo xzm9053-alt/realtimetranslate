@@ -58,7 +58,8 @@ class SubtitleSessionService : Service() {
 
     // 纯 Kotlin 流式双语文本缓冲状态机：接管增量拼接、累计重写、草稿世代隔离、CJK 智能排版与滚动截断
     private val inputBuffer = TextStreamBuffer(maxHistoryChars = 800)
-    private val outputBuffer = TextStreamBuffer(maxHistoryChars = MAX_OUTPUT_HISTORY_CHARS)
+    // 译文按设置的段落大小换行。每次会话启动时按当前设置重建。
+    private var outputBuffer = TextStreamBuffer(maxHistoryChars = MAX_OUTPUT_HISTORY_CHARS)
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -108,9 +109,7 @@ class SubtitleSessionService : Service() {
         SessionBus.setStatus(SessionBus.Status.Starting, "正在启动…")
         SessionBus.clearExport()
         inputBuffer.reset()
-        outputBuffer.reset()
         inputBuffer.startNewEpoch()
-        outputBuffer.startNewEpoch()
         captureStarted = false
         startAsForeground()
 
@@ -123,6 +122,12 @@ class SubtitleSessionService : Service() {
             // Engine-aware credential gate: engines with requiresApiKey need a key,
             // keyless ones (Microsoft / Google free) pass straight through.
             val engineType = currentSettings.translationEngine
+            // 段落大小是构造参数，必须读完成设置后才建；重置旧会话的残留状态也靠这次重建。
+            outputBuffer = TextStreamBuffer(
+                maxHistoryChars = MAX_OUTPUT_HISTORY_CHARS,
+                sentencesPerParagraph = currentSettings.sentencesPerParagraph,
+            )
+            outputBuffer.startNewEpoch()
             if (!app.apiKeyStore.hasKeyFor(engineType)) {
                 val label = getString(engineType.keyLabelRes!!)
                 SessionBus.setStatus(
@@ -207,15 +212,15 @@ class SubtitleSessionService : Service() {
                             overlay?.updateTranscripts(input = null, output = text)
                             SessionBus.setPreview(output = text)
                         }
-                        // 草稿译文：排在已定格的历史和当前句之后。它整条都可丢弃——
-                        // 带有世代校验：过期草稿绝不上屏篡改新句。
+                        // 草稿译文：排在已定格的历史和当前句之后。
+                        // 世代校验已在 RealtimeTranslationClient.draftWorker 内完成
+                        // （req.epoch != draftEpoch.get() 即丢弃），到这里必然是当前世代的合法草稿；
+                        // 这里若再用另一套计数器比较，两边起点不同会永远不相等、把草稿全丢掉。
                         is RealtimeTranslationClient.LiveEvent.OutputPartial -> {
-                            if (event.epoch == 0L || event.epoch == outputBuffer.currentEpoch) {
-                                outputBuffer.updateDraft(outputBuffer.currentEpoch, event.text)
-                                val text = outputBuffer.getDisplayText()
-                                overlay?.updateTranscripts(input = null, output = text)
-                                SessionBus.setPreview(output = text)
-                            }
+                            outputBuffer.updateDraft(outputBuffer.currentEpoch, event.text)
+                            val text = outputBuffer.getDisplayText()
+                            overlay?.updateTranscripts(input = null, output = text)
+                            SessionBus.setPreview(output = text)
                         }
                         // 新句开始：开启新世代，当前句定格进滚动历史（不清屏）。流式重写只改当前行、
                         // 不会逐段追加成上一句的重复堆叠。导出文本仍保持完整累积。

@@ -53,6 +53,7 @@ object SpeechRecognizerFactory {
                     model = settings.aliyunAsrModel,
                     language = settings.sourceLanguageCode,
                     maxSentenceSilenceMs = settings.aliyunAsrSilenceMs,
+                    workspaceId = settings.aliyunWorkspaceId,
                     onSegment = onSegment,
                     onPartial = onPartial,
                 )
@@ -95,7 +96,14 @@ object SpeechRecognizerFactory {
                     return@withContext Result.failure(Exception("请先填写 DashScope API Key"))
                 }
                 val modelName = settings.aliyunAsrModel.ifBlank { "fun-asr-realtime" }
-                testAliyunWs(apiKey, modelName)
+                if (DashScopeEndpoints.requiresWorkspace(modelName) &&
+                    settings.aliyunWorkspaceId.isBlank()
+                ) {
+                    return@withContext Result.failure(
+                        Exception("模型 [$modelName] 需要百炼业务空间 ID：请在下方填写后重试"),
+                    )
+                }
+                testAliyunWs(apiKey, modelName, settings.aliyunWorkspaceId)
             }
             AsrEngineType.GENERIC_OPENAI -> {
                 val baseUrl = settings.genericAsrBaseUrl.trim()
@@ -109,7 +117,7 @@ object SpeechRecognizerFactory {
         }
     }
 
-    private suspend fun testAliyunWs(apiKey: String, model: String): Result<String> =
+    private suspend fun testAliyunWs(apiKey: String, model: String, workspaceId: String): Result<String> =
         suspendCancellableCoroutine { cont ->
             val client = OkHttpClient.Builder()
                 .connectTimeout(6, TimeUnit.SECONDS)
@@ -117,8 +125,8 @@ object SpeechRecognizerFactory {
                 .build()
 
             val request = Request.Builder()
-                .url("wss://dashscope.aliyuncs.com/api-ws/v1/inference/")
-                .header("Authorization", "bearer ${apiKey.trim()}")
+                .url(DashScopeEndpoints.realtime(workspaceId))
+                .header("Authorization", "Bearer ${apiKey.trim()}")
                 .header("X-DashScope-DataInspection", "enable")
                 .build()
 

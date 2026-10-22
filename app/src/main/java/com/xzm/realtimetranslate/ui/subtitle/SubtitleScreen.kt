@@ -21,6 +21,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -88,8 +90,7 @@ fun SubtitleScreen(
 ) {
     val running = session.status == SessionBus.Status.Running ||
         session.status == SessionBus.Status.Starting
-    val ocrRunning = ocrSession.status == ScreenOcrBus.Status.Running ||
-        ocrSession.status == ScreenOcrBus.Status.Starting
+    val ocrRunning = ocrSession.status.isActive
 
     var picker by remember { mutableStateOf<LangPicker?>(null) }
     var selectedMode by remember(ocrRunning, running) {
@@ -320,7 +321,7 @@ fun SubtitleScreen(
                 }
             }
 
-            // 屏幕取词专属配置（语种识别、区域红框与透明度）
+            // 屏幕取词专属配置（区域红框与透明度）
             SmallTitle(
                 text = "屏幕取词配置",
                 modifier = Modifier.padding(horizontal = 24.dp),
@@ -335,35 +336,9 @@ fun SubtitleScreen(
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
-                    OptionRow(
-                        label = stringResource(R.string.ocr_script_auto),
-                        summary = stringResource(R.string.ocr_script_auto_summary),
-                        selected = settings.ocrScript == OcrScript.AUTO,
-                        onClick = { onUpdateSettings { it.copy(ocrScript = OcrScript.AUTO) } },
-                    )
-                    OptionRow(
-                        label = stringResource(R.string.ocr_script_latin),
-                        summary = stringResource(R.string.ocr_script_latin_summary),
-                        selected = settings.ocrScript == OcrScript.LATIN,
-                        onClick = { onUpdateSettings { it.copy(ocrScript = OcrScript.LATIN) } },
-                    )
-                    OptionRow(
-                        label = stringResource(R.string.ocr_script_chinese),
-                        summary = stringResource(R.string.ocr_script_chinese_summary),
-                        selected = settings.ocrScript == OcrScript.CHINESE_MIX,
-                        onClick = { onUpdateSettings { it.copy(ocrScript = OcrScript.CHINESE_MIX) } },
-                    )
-                    OptionRow(
-                        label = stringResource(R.string.ocr_script_japanese),
-                        summary = stringResource(R.string.ocr_script_japanese_summary),
-                        selected = settings.ocrScript == OcrScript.JAPANESE,
-                        onClick = { onUpdateSettings { it.copy(ocrScript = OcrScript.JAPANESE) } },
-                    )
-                    OptionRow(
-                        label = stringResource(R.string.ocr_script_korean),
-                        summary = stringResource(R.string.ocr_script_korean_summary),
-                        selected = settings.ocrScript == OcrScript.KOREAN,
-                        onClick = { onUpdateSettings { it.copy(ocrScript = OcrScript.KOREAN) } },
+                    OcrScriptRow(
+                        selected = settings.ocrScript,
+                        onSelect = { script -> onUpdateSettings { it.copy(ocrScript = script) } },
                     )
                     SettingSwitchRow(
                         title = stringResource(R.string.ocr_outline_enabled),
@@ -661,6 +636,53 @@ fun SubtitleScreen(
                     valueRange = 0.1f..0.95f,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "译文分段",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Text(
+                        text = when (settings.sentencesPerParagraph) {
+                            0 -> "不分段（连续输出）"
+                            1 -> "每句一行"
+                            else -> "每 ${settings.sentencesPerParagraph} 句一行"
+                        },
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    )
+                }
+                Slider(
+                    value = settings.sentencesPerParagraph.toFloat().coerceIn(
+                        0f,
+                        UserSettings.Defaults.SENTENCES_PER_PARAGRAPH_MAX.toFloat(),
+                    ),
+                    onValueChange = { v ->
+                        onUpdateSettings {
+                            it.copy(
+                                sentencesPerParagraph = v.roundToInt().coerceIn(
+                                    0,
+                                    UserSettings.Defaults.SENTENCES_PER_PARAGRAPH_MAX,
+                                ),
+                            )
+                        }
+                    },
+                    valueRange = 0f..UserSettings.Defaults.SENTENCES_PER_PARAGRAPH_MAX.toFloat(),
+                    steps = UserSettings.Defaults.SENTENCES_PER_PARAGRAPH_MAX - 1,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    text = "只影响字幕换行：0 = 连续输出，N = 每 N 句译文另起一行。" +
+                        "翻译仍逐句进行，不影响速度和费用；下次开始翻译时生效。",
+                    fontSize = 11.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    lineHeight = 16.sp,
+                )
             }
             Text(
                 text = stringResource(R.string.settings_bilingual),
@@ -888,6 +910,68 @@ private fun OptionRow(
             Text(text = "✓", color = Booth.Accent, fontWeight = FontWeight.Bold)
         }
     }
+}
+
+/** One compact row instead of five radio rows: the OCR script only rarely changes. */
+@Composable
+private fun OcrScriptRow(
+    selected: OcrScript,
+    onSelect: (OcrScript) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val options = OcrScript.entries
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = true }
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = "识别语种",
+                color = MiuixTheme.colorScheme.onSurface,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(selected.labelRes()),
+                    color = Booth.Accent,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = " ▾",
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                )
+            }
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = stringResource(option.labelRes()),
+                            fontSize = 14.sp,
+                            fontWeight = if (option == selected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (option == selected) Booth.Accent else MiuixTheme.colorScheme.onSurface,
+                        )
+                    },
+                    onClick = {
+                        onSelect(option)
+                        expanded = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+private fun OcrScript.labelRes(): Int = when (this) {
+    OcrScript.AUTO -> R.string.ocr_script_auto
+    OcrScript.LATIN -> R.string.ocr_script_latin
+    OcrScript.CHINESE_MIX -> R.string.ocr_script_chinese
+    OcrScript.JAPANESE -> R.string.ocr_script_japanese
+    OcrScript.KOREAN -> R.string.ocr_script_korean
 }
 
 private val SUBTITLE_COLOR_PRESETS: List<Long> = listOf(

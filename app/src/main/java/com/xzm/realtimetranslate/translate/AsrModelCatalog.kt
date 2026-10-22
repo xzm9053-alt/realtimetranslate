@@ -1,6 +1,19 @@
 package com.xzm.realtimetranslate.translate
 
 /**
+ * WebSocket protocol family a model speaks.
+ *
+ * RUN_TASK is the DashScope `run-task` duplex protocol shared by Fun-ASR,
+ * Paraformer and Qwen-Audio-ASR-Streaming.
+ * OPENAI_REALTIME is the OpenAI-Realtime-compatible protocol used by Qwen3-ASR.
+ * Qwen3-ASR is not offered yet: it needs a second recognizer implementation.
+ */
+enum class AsrProtocol {
+    RUN_TASK,
+    OPENAI_REALTIME,
+}
+
+/**
  * Metadata for selectable ASR models in Settings.
  */
 data class AsrModelPreset(
@@ -8,57 +21,69 @@ data class AsrModelPreset(
     val name: String,
     val description: String,
     val recommended: Boolean = false,
+    /** Model family, used to group the picker into a two-level menu. */
+    val group: String = "",
+    val protocol: AsrProtocol = AsrProtocol.RUN_TASK,
 )
 
 object AsrModelCatalog {
 
+    const val GROUP_FUN_ASR = "Fun-ASR"
+    const val GROUP_QWEN_AUDIO_STREAMING = "Qwen-Audio 流式"
+    const val GROUP_PARAFORMER = "Paraformer"
+
     /**
-     * 阿里云百炼（DashScope）官方支持的全部实时流式语音识别（ASR）模型全家桶清单
+     * 阿里云百炼（DashScope）实时流式语音识别模型清单。
+     *
+     * 只收录官方文档中仍在售、且支持多语种的实时模型：
+     *  - 已下线的 paraformer-realtime-v1 / -dialect-v1 / conformer-* 不再列出；
+     *  - 仅支持中文的 8k 电话模型（paraformer-realtime-8k-v2、
+     *    fun-asr-flash-8k-realtime*）不列出；
+     *  - 录音文件转写类（fun-asr、paraformer-v2、*-filetrans）不是流式，不列出；
+     *  - `*-asr-flash-message` 是短语音的同步 HTTP 接口，同样不走 run-task
+     *    WebSocket，放进来只会「连上就失败」。
      */
     val ALIYUN_REALTIME_MODELS: List<AsrModelPreset> = listOf(
         AsrModelPreset(
             id = "fun-asr-realtime",
-            name = "FunASR 实时流式（官方主力）",
-            description = "新一代主力模型，中英日韩粤多语种高精识别，超低延迟毫秒级打字机推流",
+            name = "Fun-ASR 实时（稳定版）",
+            description = "官方主力。中文含粤语吴语闽南语等方言，另支持英日韩越泰印尼马来菲印地阿拉伯法德西葡俄意荷瑞典丹芬挪希腊波兰捷克匈牙利罗马尼亚保加利亚克罗地亚斯洛伐克语",
             recommended = true,
+            group = GROUP_FUN_ASR,
+        ),
+        AsrModelPreset(
+            id = "fun-asr-realtime-2026-02-28",
+            name = "Fun-ASR 实时（2026-02-28 快照）",
+            description = "固定版本快照，中、英、日及方言。适合需要结果稳定的长期部署",
+            group = GROUP_FUN_ASR,
+        ),
+        AsrModelPreset(
+            id = "qwen-audio-3.1-asr-flash-streaming",
+            name = "Qwen-Audio 3.1 流式（最新）",
+            description = "30+ 语种及方言，支持热词与 Prompt 上下文增强，适合会议课堂等持续转写",
+            recommended = true,
+            group = GROUP_QWEN_AUDIO_STREAMING,
+        ),
+        AsrModelPreset(
+            id = "qwen-audio-3.0-asr-flash-streaming",
+            name = "Qwen-Audio 3.0 流式",
+            description = "上一代 Qwen-Audio 流式模型，30+ 语种及方言，按音频时长计费",
+            group = GROUP_QWEN_AUDIO_STREAMING,
         ),
         AsrModelPreset(
             id = "paraformer-realtime-v2",
-            name = "Paraformer v2 实时流式（高精）",
-            description = "工业级高精度流式识别模型，中英文混读优异，极高稳定性",
-            recommended = true,
-        ),
-        AsrModelPreset(
-            id = "paraformer-realtime-v1",
-            name = "Paraformer v1 实时流式（经典）",
-            description = "经典通用流式识别模型，覆盖日常中英文对话与视频音频",
-        ),
-        AsrModelPreset(
-            id = "paraformer-realtime-dialect-v1",
-            name = "Paraformer 方言专有流式模型",
-            description = "针对粤语、四川话、上海话等多方言口音深度优化的流式模型",
-        ),
-        AsrModelPreset(
-            id = "paraformer-realtime-8k-v2",
-            name = "Paraformer v2 实时流式 (8k电话)",
-            description = "针对 8kHz 电话音质或客服音频场景深度优化的实时模型",
-        ),
-        AsrModelPreset(
-            id = "paraformer-realtime-8k-v1",
-            name = "Paraformer v1 实时流式 (8k电话)",
-            description = "经典 8kHz 采样率电话音质专用流式识别模型",
-        ),
-        AsrModelPreset(
-            id = "conformer-realtime-v1",
-            name = "Conformer v1 实时流式",
-            description = "基于 Conformer 神经网络架构的经典实时语音识别模型",
-        ),
-        AsrModelPreset(
-            id = "conformer-realtime-8k-v1",
-            name = "Conformer v1 实时流式 (8k)",
-            description = "8kHz 电话采样的 Conformer 实时语音识别模型",
+            name = "Paraformer v2 实时",
+            description = "上一代工业级流式模型，中英日韩德法俄七语种。官方建议迁移到 Fun-ASR",
+            group = GROUP_PARAFORMER,
         ),
     )
+
+    /** Presets grouped by family, preserving catalog order. */
+    val ALIYUN_GROUPS: List<Pair<String, List<AsrModelPreset>>> =
+        ALIYUN_REALTIME_MODELS.groupBy { it.group }.map { it.key to it.value }
+
+    fun aliyunPreset(id: String): AsrModelPreset? =
+        ALIYUN_REALTIME_MODELS.firstOrNull { it.id == id }
 
     /**
      * 通用 OpenAI 兼容接口常用的优质语音识别模型预设（硅基流动、Groq、第三方中转等）

@@ -29,6 +29,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
@@ -99,6 +101,9 @@ import com.xzm.realtimetranslate.update.UpdateChecker
 import com.xzm.realtimetranslate.update.UpdateCheckResult
 import kotlinx.coroutines.launch
 
+/** Where Bailian hands out DashScope API keys. The old dashscope.console host is dead. */
+private const val ALIYUN_API_KEY_URL = "https://bailian.console.aliyun.com/model/settings/api-key"
+
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
@@ -143,6 +148,7 @@ fun SettingsScreen(
     val asrEngine = settings.asrEngine
     val aliyunAsrKey by viewModel.aliyunAsrKey.collectAsStateWithLifecycle()
     val aliyunAsrModel by viewModel.aliyunAsrModel.collectAsStateWithLifecycle()
+    val aliyunWorkspaceId by viewModel.aliyunWorkspaceId.collectAsStateWithLifecycle()
     val genericAsrBaseUrl by viewModel.genericAsrBaseUrl.collectAsStateWithLifecycle()
     val genericAsrApiKey by viewModel.genericAsrApiKey.collectAsStateWithLifecycle()
     val genericAsrModel by viewModel.genericAsrModel.collectAsStateWithLifecycle()
@@ -292,6 +298,8 @@ fun SettingsScreen(
             onUpdateAliyunAsrKey = viewModel::updateAliyunAsrKey,
             aliyunAsrModel = aliyunAsrModel,
             onUpdateAliyunAsrModel = viewModel::updateAliyunAsrModel,
+            aliyunWorkspaceId = aliyunWorkspaceId,
+            onUpdateAliyunWorkspaceId = viewModel::updateAliyunWorkspaceId,
             genericAsrBaseUrl = genericAsrBaseUrl,
             onUpdateGenericAsrBaseUrl = viewModel::updateGenericAsrBaseUrl,
             genericAsrApiKey = genericAsrApiKey,
@@ -1398,6 +1406,7 @@ private fun SpeechSlicingAndSilenceCard(
                     onUpdateSettings { it.copy(draftTranslationPreview = v) }
                 },
             )
+
         }
     }
 }
@@ -2017,6 +2026,132 @@ private fun EnginePickerSubScreen(
 }
 
 /**
+ * Two-level model picker: the collapsed row shows the current model; opening it lists
+ * model families, and each family opens a submenu of its models.
+ */
+@Composable
+private fun AliyunModelDropdown(
+    selectedId: String,
+    onSelect: (String) -> Unit,
+) {
+    val current = AsrModelCatalog.aliyunPreset(selectedId.trim())
+        ?: AsrModelCatalog.aliyunPreset(UserSettings.Defaults.ALIYUN_ASR_MODEL)
+    var expanded by remember { mutableStateOf(false) }
+    var openGroup by remember { mutableStateOf<String?>(null) }
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                .clickable { expanded = true; openGroup = null }
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = current?.name ?: selectedId.ifBlank { UserSettings.Defaults.ALIYUN_ASR_MODEL },
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MiuixTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = current?.id ?: selectedId,
+                    fontSize = 11.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                )
+            }
+            Icon(
+                imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                contentDescription = null,
+                tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            )
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false; openGroup = null },
+            modifier = Modifier.fillMaxWidth(0.9f),
+        ) {
+            AsrModelCatalog.ALIYUN_GROUPS.forEach { (group, presets) ->
+                val groupSelected = presets.any { it.id == current?.id }
+                DropdownMenuItem(
+                    text = {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                text = group.ifBlank { "其他" },
+                                fontSize = 14.sp,
+                                fontWeight = if (groupSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (groupSelected) Booth.Accent else MiuixTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                text = "›",
+                                fontSize = 16.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            )
+                        }
+                    },
+                    onClick = { openGroup = if (openGroup == group) null else group },
+                )
+                if (openGroup == group) {
+                    presets.forEach { preset ->
+                        val isSelected = preset.id == current?.id
+                        DropdownMenuItem(
+                            text = {
+                                Column(modifier = Modifier.padding(start = 16.dp)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    ) {
+                                        Text(
+                                            text = preset.name,
+                                            fontSize = 13.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSelected) Booth.Accent else MiuixTheme.colorScheme.onSurface,
+                                        )
+                                        if (preset.recommended) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(4.dp))
+                                                    .background(Booth.Accent)
+                                                    .padding(horizontal = 4.dp, vertical = 1.dp),
+                                            ) {
+                                                Text(
+                                                    text = "推荐",
+                                                    fontSize = 9.sp,
+                                                    color = Color.White,
+                                                    fontWeight = FontWeight.Bold,
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Text(
+                                        text = "${preset.id} · ${preset.description}",
+                                        fontSize = 11.sp,
+                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    )
+                                }
+                            },
+                            onClick = {
+                                onSelect(preset.id)
+                                expanded = false
+                                openGroup = null
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
  * 语音识别引擎配置二级页面：包含本地 SenseVoice 模型管理、阿里百炼 Key 配置、通用 OpenAI 兼容配置。
  */
 @Composable
@@ -2037,6 +2172,8 @@ private fun AsrEngineConfigSubScreen(
     onUpdateAliyunAsrKey: (TextFieldValue) -> Unit,
     aliyunAsrModel: TextFieldValue,
     onUpdateAliyunAsrModel: (TextFieldValue) -> Unit,
+    aliyunWorkspaceId: TextFieldValue,
+    onUpdateAliyunWorkspaceId: (TextFieldValue) -> Unit,
     genericAsrBaseUrl: TextFieldValue,
     onUpdateGenericAsrBaseUrl: (TextFieldValue) -> Unit,
     genericAsrApiKey: TextFieldValue,
@@ -2099,6 +2236,15 @@ private fun AsrEngineConfigSubScreen(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
+                        Text(
+                            text = "SenseVoice 是离线模型，只能识别五种语言：" +
+                                "中文、英语、日语、韩语、粤语。" +
+                                "选其他源语言时会自动回退到“自动识别”，识别结果可能不准。" +
+                                "需要其他语言请改用阿里百炼或通用引擎。",
+                            fontSize = 12.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            lineHeight = 18.sp,
+                        )
                         Text(
                             text = modelStatus.ifBlank { stringResource(R.string.settings_model_unknown) },
                             fontSize = 13.sp,
@@ -2178,78 +2324,40 @@ private fun AsrEngineConfigSubScreen(
                                 onClick = { revealKey = !revealKey },
                             )
                             TextButton(
-                                text = "去控制台获取 Key ↗",
-                                onClick = { openUrl(context, "https://dashscope.console.aliyun.com/apiKey") },
+                                text = "去百炼控制台获取 Key ↗",
+                                onClick = { openUrl(context, ALIYUN_API_KEY_URL) },
                             )
                         }
 
+                        OutlinedTextField(
+                            value = aliyunWorkspaceId,
+                            onValueChange = onUpdateAliyunWorkspaceId,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { androidx.compose.material3.Text("业务空间 ID（可选）") },
+                            placeholder = { androidx.compose.material3.Text("例如 llm-xxxxxxxx") },
+                            supportingText = {
+                                androidx.compose.material3.Text(
+                                    "留空则走旧域名；填写后改用业务空间专属域名，Qwen 系列新模型需要它才能连上",
+                                    fontSize = 11.sp,
+                                )
+                            },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = fieldColors,
+                        )
+
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "选择阿里百炼实时流式模型",
+                            text = "选择百炼实时语音识别模型",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = MiuixTheme.colorScheme.onSurface,
                         )
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            AsrModelCatalog.ALIYUN_REALTIME_MODELS.forEach { preset ->
-                                val isSelected = aliyunAsrModel.text == preset.id ||
-                                    (aliyunAsrModel.text.isBlank() && preset.id == "fun-asr-realtime")
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(
-                                            if (isSelected) Booth.Accent.copy(alpha = 0.12f)
-                                            else MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-                                        )
-                                        .clickable { onUpdateAliyunAsrModel(TextFieldValue(preset.id)) }
-                                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        ) {
-                                            Text(
-                                                text = preset.name,
-                                                fontSize = 14.sp,
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                                color = if (isSelected) Booth.Accent else MiuixTheme.colorScheme.onSurface,
-                                            )
-                                            if (preset.recommended) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .clip(RoundedCornerShape(4.dp))
-                                                        .background(Booth.Accent)
-                                                        .padding(horizontal = 4.dp, vertical = 1.dp)
-                                                ) {
-                                                    Text(
-                                                        text = "推荐",
-                                                        fontSize = 10.sp,
-                                                        color = Color.White,
-                                                        fontWeight = FontWeight.Bold,
-                                                    )
-                                                }
-                                            }
-                                        }
-                                        Text(
-                                            text = "${preset.id} · ${preset.description}",
-                                            fontSize = 12.sp,
-                                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                            lineHeight = 16.sp,
-                                        )
-                                    }
-                                    if (isSelected) {
-                                        Text(text = "✓", color = Booth.Accent, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-                        }
+                        AliyunModelDropdown(
+                            selectedId = aliyunAsrModel.text,
+                            onSelect = { onUpdateAliyunAsrModel(TextFieldValue(it)) },
+                        )
 
                         OutlinedTextField(
                             value = aliyunAsrModel,
@@ -2608,7 +2716,7 @@ private fun AsrEnginePickerSubScreen(
                             )
                             TextButton(
                                 text = "去阿里云 DashScope 控制台 ↗",
-                                onClick = { openUrl(context, "https://dashscope.console.aliyun.com/apiKey") },
+                                onClick = { openUrl(context, ALIYUN_API_KEY_URL) },
                             )
                         }
                     }

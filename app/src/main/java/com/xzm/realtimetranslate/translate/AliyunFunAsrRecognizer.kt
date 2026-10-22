@@ -19,8 +19,8 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Aliyun DashScope real-time speech recognition (FunASR/Paraformer) via full-duplex WebSocket.
- * Official endpoint: wss://dashscope.aliyuncs.com/api-ws/v1/inference/
+ * Aliyun DashScope real-time speech recognition (FunASR/Paraformer/Qwen-Audio) via
+ * full-duplex WebSocket. The endpoint follows [workspaceId], see [DashScopeEndpoints].
  *
  * Provides millisecond typewriter partial transcripts (onPartial) and automatic
  * sentence segmentation (onSegment).
@@ -30,6 +30,7 @@ class AliyunFunAsrRecognizer(
     private val model: String = "fun-asr-realtime",
     private val language: String? = null,
     private val maxSentenceSilenceMs: Int = 400,
+    private val workspaceId: String = "",
     private val onSegment: (String) -> Unit,
     private val onPartial: ((String) -> Unit)? = null,
     private val client: OkHttpClient = defaultClient(),
@@ -55,8 +56,8 @@ class AliyunFunAsrRecognizer(
         currentTaskId = UUID.randomUUID().toString().replace("-", "")
 
         val request = Request.Builder()
-            .url(WS_ENDPOINT)
-            .header("Authorization", "bearer ${apiKey.trim()}")
+            .url(DashScopeEndpoints.realtime(workspaceId))
+            .header("Authorization", "Bearer ${apiKey.trim()}")
             .header("X-DashScope-DataInspection", "enable")
             .build()
 
@@ -110,22 +111,45 @@ class AliyunFunAsrRecognizer(
                 put("task", "asr")
                 put("function", "recognition")
                 put("model", model.ifBlank { "fun-asr-realtime" })
-                put("parameters", JSONObject().apply {
-                    put("format", "pcm")
-                    put("sample_rate", 16000)
-                    put("disfluency_removal", true)
-                    // 默认 1300ms 结句过慢会导致整段 10~12 秒话积压成一句巨长文本才翻；
-                    // 动态对齐设置(如 400ms~500ms)，换气停顿即结句送翻，切片敏捷如 SenseVoice！
-                    put("max_sentence_silence", maxSentenceSilenceMs.coerceIn(200, 2000))
-                    put("multi_threshold_mode_enabled", true)
-                    if (!language.isNullOrBlank() && language != "auto") {
-                        put("language_hints", JSONArray().put(language))
-                    }
-                })
+                put("parameters", buildParameters())
                 put("input", JSONObject())
             })
         }
         ws.send(json.toString())
+    }
+
+    /**
+     * Fun-ASR / Paraformer and Qwen-Audio accept different `parameters`.
+     * Qwen-Audio rejects `disfluency_removal` and reads `language_hints` as a
+     * language allow-list rather than a dialect hint.
+     */
+    private fun buildParameters(): JSONObject = JSONObject().apply {
+        put("format", "pcm")
+        put("sample_rate", 16000)
+        // 默认 1300ms 结句过慢会导致整段 10~12 秒话积压成一句巨长文本才翻；
+        // 动态对齐设置(如 400ms~500ms)，换气停顿即结句送翻。
+        put("max_sentence_silence", maxSentenceSilenceMs.coerceIn(200, 2000))
+        put("multi_threshold_mode_enabled", true)
+        if (!isQwenAudio()) {
+            put("disfluency_removal", true)
+        }
+        languageCode()?.let { put("language_hints", JSONArray().put(it)) }
+    }
+
+    private fun isQwenAudio(): Boolean = model.startsWith("qwen-audio")
+
+    /** Qwen-Audio wants bare language codes; Fun-ASR/Paraformer accept them too. */
+    private fun languageCode(): String? {
+        val lang = language?.trim().orEmpty()
+        if (lang.isBlank() || lang == "auto") return null
+        return when {
+            lang.startsWith("zh") -> "zh"
+            lang.startsWith("en") -> "en"
+            lang.startsWith("ja") -> "ja"
+            lang.startsWith("ko") -> "ko"
+            lang.startsWith("pt") -> "pt"
+            else -> lang.substringBefore('-')
+        }
     }
 
     private fun handleServerMessage(ws: WebSocket, text: String) {
@@ -226,7 +250,6 @@ class AliyunFunAsrRecognizer(
 
     companion object {
         private const val TAG = "AliyunFunAsr"
-        private const val WS_ENDPOINT = "wss://dashscope.aliyuncs.com/api-ws/v1/inference/"
 
         private fun defaultClient(): OkHttpClient =
             OkHttpClient.Builder()

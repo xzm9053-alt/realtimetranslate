@@ -10,11 +10,19 @@ class TextStreamBuffer(
     val maxHistoryChars: Int = 800,
     val maxSentenceChars: Int = 500,
     val maxExportChars: Int = 200_000,
+    /**
+     * 每 N 句译文另起一行（像作文分段）。0 = 不分段，连续输出。
+     * 只影响展示排版，不改变翻译调用本身。
+     */
+    val sentencesPerParagraph: Int = 0,
 ) {
     private val historyText = StringBuilder()
     private val currentSentence = StringBuilder()
     private var pendingDraft: String = ""
     private val fullExport = StringBuilder()
+
+    /** 当前段落已经放了几句；达到 [sentencesPerParagraph] 时换行并归零。 */
+    private var sentencesInParagraph = 0
 
     /**
      * 当前活动世代号。每次分句切断或新句开始递增，用于废弃网络或解码乱序到达的陈旧草稿。
@@ -30,7 +38,13 @@ class TextStreamBuffer(
      */
     @Synchronized
     fun startNewEpoch(): Long {
-        finalizeCurrent()
+        if (finalizeCurrent()) {
+            sentencesInParagraph++
+            if (sentencesPerParagraph > 0 && sentencesInParagraph >= sentencesPerParagraph) {
+                historyText.append('\n')
+                sentencesInParagraph = 0
+            }
+        }
         currentEpoch++
         return currentEpoch
     }
@@ -161,18 +175,25 @@ class TextStreamBuffer(
         currentSentence.clear()
         pendingDraft = ""
         fullExport.clear()
+        sentencesInParagraph = 0
         currentEpoch = 0L
     }
 
-    private fun finalizeCurrent() {
-        if (currentSentence.isEmpty()) return
+    /** @return true 表示确实固化了一个非空句子（用于段落计数不被空句干扰）。 */
+    private fun finalizeCurrent(): Boolean {
+        if (currentSentence.isEmpty()) return false
         CjkTextSpacers.appendWithSmartSpacing(historyText, currentSentence.toString())
         currentSentence.clear()
 
         // 滚动历史防溢出截断
         if (historyText.length > maxHistoryChars) {
             historyText.delete(0, historyText.length - maxHistoryChars)
+            // 硬切可能切出以换行开头的片段，去掉孤立的前导空行。
+            while (historyText.isNotEmpty() && historyText[0] == '\n') {
+                historyText.deleteCharAt(0)
+            }
         }
+        return true
     }
 
     private fun trimExportIfNeeded() {
