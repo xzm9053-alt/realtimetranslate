@@ -245,6 +245,7 @@
     <string name="ocr_translate_failed">Translation failed</string>
     <string name="ocr_region_hint">Drag / resize the box over the text to translate</string>
     <string name="ocr_region_updated">Region updated</string>
+    <string name="ocr_region_move_mode">Move mode: drag the dot to reposition</string>
     <string name="ocr_region_adjusted">Screen rotated — long-press the ball to reselect the area</string>
     <string name="ocr_popup_close">Close</string>
     <string name="ocr_popup_drag">Drag to move the translation box</string>
@@ -324,8 +325,9 @@
     <string name="update_new_version">Latest version: %1$s</string>
 
     <!-- ASR Engines -->
-    <string name="asr_engine_local">Local SenseVoice (Offline)</string>
-    <string name="asr_engine_local_summary">On-device SenseVoice model. Zero data usage, fully private, works offline.</string>
+    <string name="asr_engine_local">On-device (sherpa-onnx)</string>
+    <string name="asr_engine_local_summary">sherpa-onnx 1.13.4 · SenseVoice int8 · Silero VAD. Fully offline, zero data. Recognizes Chinese (incl. Cantonese), English, Japanese and Korean only.</string>
+    <string name="asr_local_language_limit">The offline SenseVoice model knows five languages only: Chinese, Cantonese, English, Japanese and Korean. Any other source language silently falls back to auto-detect and may come out wrong — switch to the Aliyun or generic engine for those.</string>
     <string name="asr_engine_aliyun">Aliyun FunASR (Cloud Streaming)</string>
     <string name="asr_engine_aliyun_summary">WebSocket full-duplex real-time streaming. Millisecond typewriter subtitles.</string>
     <string name="asr_engine_generic">Generic OpenAI-compatible ASR</string>
@@ -352,4 +354,61 @@
     <string name="settings_user_guide">📖 User Guide · Quick Start</string>
     <string name="settings_user_guide_title">User Guide · Quick Start</string>
     <string name="settings_user_guide_close">Got It</string>
+
+    <string name="common_back">Back</string>
+
+    <!-- More translation tools -->
+    <string name="more_entry_title">More translation</string>
+    <string name="more_entry_summary">Video translation · Text translation</string>
+    <string name="more_title">More translation</string>
+    <string name="more_subtitle">Translate videos and text with the same engines</string>
+    <string name="more_video_title">Video translation</string>
+    <string name="more_video_summary">Pick a local video, recognize the speech, then watch it with translated subtitles</string>
+    <string name="more_text_title">Text translation</string>
+    <string name="more_text_summary">Paste a long text and translate it paragraph by paragraph</string>
+
+    <!-- Text translation -->
+    <string name="text_title">Text translation</string>
+    <string name="text_subtitle">Paste or type text; long passages are split and translated in order</string>
+    <string name="text_input_hint">Type or paste the text to translate</string>
+    <string name="text_source_lang">From</string>
+    <string name="text_target_lang">To</string>
+    <string name="text_translate">Translate</string>
+    <string name="text_stop">Stop</string>
+    <string name="text_clear">Clear</string>
+    <string name="text_copy">Copy</string>
+    <string name="text_copied">Copied</string>
+    <string name="text_save_history">Save to history</string>
+    <string name="text_saved_history">Saved</string>
+    <string name="text_output_title">Translation</string>
+    <string name="text_output_empty">The translation will appear here</string>
+    <string name="text_chunk_progress">Translating part %1$d of %2$d…</string>
+    <string name="text_need_key">This translation engine has no API key yet.</string>
+    <string name="text_open_settings">Open Settings</string>
+    <string name="text_empty_input">Enter some text first</string>
+    <string name="text_translate_failed">Translation failed: %1$s</string>
+    <string name="text_empty_result">The provider returned an empty translation. Please try again.</string>
+    <string name="text_char_count">%1$d characters</string>
+
+    <!-- Video translation -->
+    <string name="video_pick">Choose video</string>
+    <string name="video_change">Change video</string>
+    <string name="video_empty_title">No video selected</string>
+    <string name="video_empty_hint">Pick a local video to recognize its speech and generate translated subtitles</string>
+    <string name="video_local_asr_hint">Speech recognition always runs on-device with SenseVoice (fully offline) and supports Chinese (incl. Cantonese), English, Japanese and Korean only</string>
+    <string name="video_start">Recognize and translate</string>
+    <string name="video_stop">Cancel</string>
+    <string name="video_stage_extract">Extracting audio…</string>
+    <string name="video_stage_recognize">Recognized %1$d segments…</string>
+    <string name="video_need_stop_session">Live subtitles are running. Stop them first — two speech models at once would exhaust memory.</string>
+    <string name="video_need_model">The on-device model is not ready. Download it in Settings → Speech recognition.</string>
+    <string name="video_no_speech">No speech worth translating was found</string>
+    <string name="video_done">Done — %1$d subtitles</string>
+    <string name="video_failed_count">%1$d subtitles kept the original text because translation failed</string>
+    <string name="video_export_srt">Export SRT</string>
+    <string name="video_export_ok">Subtitles saved to %1$s</string>
+    <string name="video_export_fail">Export failed: %1$s</string>
+    <string name="video_srt_label">Video subtitles</string>
+    <string name="video_cues_title">Subtitles</string>
+    <string name="video_cues_empty">Sentence-by-sentence subtitles appear here once processing finishes</string>
 </resources>

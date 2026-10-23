@@ -31,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +57,7 @@ import com.xzm.realtimetranslate.ui.components.SectionCard
 import com.xzm.realtimetranslate.ui.components.SettingSwitchRow
 import com.xzm.realtimetranslate.ui.components.StatusPill
 import com.xzm.realtimetranslate.ui.components.StatusTone
+import com.xzm.realtimetranslate.ui.more.MoreScreen
 import com.xzm.realtimetranslate.ui.theme.Booth
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -87,7 +89,21 @@ fun SubtitleScreen(
     canDrawOverlays: Boolean,
     onUpdateSettings: ((UserSettings) -> UserSettings) -> Unit = {},
     onResetAppearance: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
 ) {
+    var showMore by rememberSaveable { mutableStateOf(false) }
+    if (showMore) {
+        MoreScreen(
+            onBack = { showMore = false },
+            onOpenSettings = {
+                showMore = false
+                onOpenSettings()
+            },
+            modifier = Modifier.fillMaxSize(),
+        )
+        return
+    }
+
     val running = session.status == SessionBus.Status.Running ||
         session.status == SessionBus.Status.Starting
     val ocrRunning = ocrSession.status.isActive
@@ -116,6 +132,41 @@ fun SubtitleScreen(
             title = stringResource(R.string.subtitle_title),
             subtitle = stringResource(R.string.subtitle_subtitle),
         )
+
+        // 其他翻译入口：视频翻译 / 文本翻译
+        SectionCard {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showMore = true }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(text = "🌐", fontSize = 22.sp)
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.more_entry_title),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = stringResource(R.string.more_entry_summary),
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    )
+                }
+                Text(
+                    text = "›",
+                    fontSize = 24.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                )
+            }
+        }
 
         // 顶部分段胶囊：声音同传 vs 屏幕取词
         Row(

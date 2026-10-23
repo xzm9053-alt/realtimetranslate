@@ -22,6 +22,7 @@ import android.text.method.ScrollingMovementMethod
 import com.xzm.realtimetranslate.util.AppLog as Log
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
@@ -32,8 +33,11 @@ import android.widget.TextView
 import android.widget.Toast
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.UserSettings
+import com.xzm.realtimetranslate.util.RegionBounds
+import com.xzm.realtimetranslate.util.RegionGestureMath
 import com.xzm.realtimetranslate.util.realScreenMetrics
 import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -845,11 +849,29 @@ class OcrBallOverlay(
         runCatching { windowManager.updateViewLayout(root, params) }
     }
 
+    private enum class RegionDragMode { PENDING, RESIZE, MOVE }
+
+    /**
+     * 右下角圆点：直接拖动 = 从右下角改宽高；按住 500ms 后再拖 = 整框平移。
+     * 圈外（外框窗口）是触摸穿透的，所以移动模式只能靠圆点上的长按进入。
+     */
     @SuppressLint("ClickableViewAccessibility")
     private inner class RegionHandleTouch : View.OnTouchListener {
         private var downRawX = 0f
         private var downRawY = 0f
         private val startRect = Rect()
+        private var mode = RegionDragMode.PENDING
+        /** 本次手势是否真的改过选区；长按后没动就抬手不该触发重新识别。 */
+        private var changed = false
+        private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+
+        private val longPress = Runnable {
+            if (draggingRegion && mode == RegionDragMode.PENDING) {
+                mode = RegionDragMode.MOVE
+                regionHandleDot?.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                Toast.makeText(context, R.string.ocr_region_move_mode, Toast.LENGTH_SHORT).show()
+            }
+        }
 
         override fun onTouch(v: View, event: MotionEvent): Boolean {
             when (event.actionMasked) {
@@ -858,26 +880,62 @@ class OcrBallOverlay(
                     startRect.set(region)
                     downRawX = event.rawX
                     downRawY = event.rawY
+                    mode = RegionDragMode.PENDING
+                    changed = false
                     draggingRegion = true
+                    v.postDelayed(longPress, REGION_LONG_PRESS_MS)
                 }
                 MotionEvent.ACTION_MOVE -> {
                     if (!draggingRegion) return false
-                    val (screenW, screenH, _) = screenMetrics()
                     val dx = (event.rawX - downRawX).roundToInt()
                     val dy = (event.rawY - downRawY).roundToInt()
-                    val moved = Rect(startRect).apply { offset(dx, dy) }
-                    // 只移动不缩放：宽度高度不变，整体夹在屏幕内。
-                    val left = moved.left.coerceIn(0, max(0, screenW - moved.width()))
-                    val top = moved.top.coerceIn(0, max(0, screenH - moved.height()))
-                    moved.offset(left - moved.left, top - moved.top)
-                    lastRegion = Rect(moved)
-                    outlineView?.setRegion(moved) // 实时跟手
-                    placeRegionHandle(moved)
+                    if (mode == RegionDragMode.PENDING) {
+                        // 先动手指 = 缩放；长按期间的小抖动不算，等定时器触发移动模式。
+                        if (hypot(dx.toFloat(), dy.toFloat()) <= touchSlop) return true
+                        v.removeCallbacks(longPress)
+                        mode = RegionDragMode.RESIZE
+                        regionHandleDot?.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    }
+                    val (screenW, screenH, _) = screenMetrics()
+                    val startBounds = RegionBounds(
+                        startRect.left, startRect.top, startRect.right, startRect.bottom,
+                    )
+                    val nextBounds = when (mode) {
+                        RegionDragMode.RESIZE -> RegionGestureMath.resizeFromBottomRight(
+                            startBounds, dx, dy, screenW, screenH,
+                        )
+                        RegionDragMode.MOVE -> RegionGestureMath.moveClamped(
+                            startBounds, dx, dy, screenW, screenH,
+                        )
+                        RegionDragMode.PENDING -> return true
+                    }
+                    val next = Rect(
+                        nextBounds.left, nextBounds.top, nextBounds.right, nextBounds.bottom,
+                    )
+                    if (next != lastRegion) changed = true
+                    lastRegion = next
+                    outlineView?.setRegion(next) // 实时跟手
+                    placeRegionHandle(next)
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                MotionEvent.ACTION_UP -> {
+                    v.removeCallbacks(longPress)
                     if (!draggingRegion) return false
                     draggingRegion = false
-                    lastRegion?.let { onRegionMoved(Rect(it)) }
+                    if (changed) lastRegion?.let { onRegionMoved(Rect(it)) }
+                    mode = RegionDragMode.PENDING
+                    changed = false
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    v.removeCallbacks(longPress)
+                    if (!draggingRegion) return false
+                    draggingRegion = false
+                    if (changed) {
+                        lastRegion = Rect(startRect)
+                        outlineView?.setRegion(startRect)
+                        placeRegionHandle(startRect)
+                    }
+                    mode = RegionDragMode.PENDING
+                    changed = false
                 }
                 else -> return false
             }
@@ -1028,5 +1086,7 @@ class OcrBallOverlay(
         private const val REGION_HANDLE_DOT_DP = 22
         /** Touch target around that dot (window size). */
         private const val REGION_HANDLE_TOUCH_DP = 44
+        /** 圆点上长按多久进入移动模式。 */
+        private const val REGION_LONG_PRESS_MS = 500L
     }
 }

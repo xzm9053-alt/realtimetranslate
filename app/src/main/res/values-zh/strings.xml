@@ -244,6 +244,7 @@
     <string name="ocr_translate_failed">翻译失败</string>
     <string name="ocr_region_hint">拖动 / 缩放选框，框住要翻译的文字</string>
     <string name="ocr_region_updated">区域已更新</string>
+    <string name="ocr_region_move_mode">移动模式：拖动圆点调整位置</string>
     <string name="ocr_region_adjusted">屏幕已旋转，长按悬浮球可重选区域</string>
     <string name="ocr_popup_close">关闭</string>
     <string name="ocr_popup_drag">拖动移动译文框</string>
@@ -323,8 +324,9 @@
     <string name="update_new_version">最新版本：%1$s</string>
 
     <!-- 语音识别 ASR 引擎 -->
-    <string name="asr_engine_local">本地 SenseVoice（离线）</string>
-    <string name="asr_engine_local_summary">内置阿里 SenseVoice 模型，完全离线运行，零流量消耗，隐私不出手机</string>
+    <string name="asr_engine_local">本地识别（sherpa-onnx）</string>
+    <string name="asr_engine_local_summary">sherpa-onnx 1.13.4 · SenseVoice int8 · Silero VAD。完全离线、零流量、隐私不出手机，但仅支持中/粤/英/日/韩五种语言</string>
+    <string name="asr_local_language_limit">SenseVoice 是离线模型，只认得五种语言：中文、英语、日语、韩语、粤语。选其他源语言时会自动回退为「自动识别」，结果可能不准；需要其他语种请改用阿里百炼或通用引擎。</string>
     <string name="asr_engine_aliyun">阿里百炼 FunASR（云端真流式）</string>
     <string name="asr_engine_aliyun_summary">WebSocket 全双工极速流式推流，毫秒级边说边出，国内极速直连（每月赠送免费额度）</string>
     <string name="asr_engine_generic">通用 OpenAI 兼容语音转录</string>
@@ -351,4 +353,61 @@
     <string name="settings_user_guide">📖 使用说明 · 快速上手</string>
     <string name="settings_user_guide_title">使用说明 · 快速上手</string>
     <string name="settings_user_guide_close">我知道了</string>
+
+    <string name="common_back">返回</string>
+
+    <!-- 其他翻译 -->
+    <string name="more_entry_title">其他翻译</string>
+    <string name="more_entry_summary">视频翻译 · 文本翻译</string>
+    <string name="more_title">其他翻译</string>
+    <string name="more_subtitle">用同一套引擎翻译视频与文本</string>
+    <string name="more_video_title">视频翻译</string>
+    <string name="more_video_summary">选择本地视频，自动识别语音并生成译文字幕</string>
+    <string name="more_text_title">文本翻译</string>
+    <string name="more_text_summary">粘贴长文，按段落逐段翻译</string>
+
+    <!-- 文本翻译 -->
+    <string name="text_title">文本翻译</string>
+    <string name="text_subtitle">粘贴或输入文字；超长内容会自动分段并按顺序翻译</string>
+    <string name="text_input_hint">在此输入要翻译的文本</string>
+    <string name="text_source_lang">源语言</string>
+    <string name="text_target_lang">目标语言</string>
+    <string name="text_translate">开始翻译</string>
+    <string name="text_stop">停止</string>
+    <string name="text_clear">清空</string>
+    <string name="text_copy">复制</string>
+    <string name="text_copied">已复制</string>
+    <string name="text_save_history">存入历史</string>
+    <string name="text_saved_history">已存入历史</string>
+    <string name="text_output_title">译文</string>
+    <string name="text_output_empty">译文会显示在这里</string>
+    <string name="text_chunk_progress">正在翻译第 %1$d/%2$d 段…</string>
+    <string name="text_need_key">当前翻译引擎还没有填写 Key。</string>
+    <string name="text_open_settings">去设置</string>
+    <string name="text_empty_input">请先输入要翻译的文本</string>
+    <string name="text_translate_failed">翻译失败：%1$s</string>
+    <string name="text_empty_result">服务返回了空译文，请重试</string>
+    <string name="text_char_count">%1$d 字</string>
+
+    <!-- 视频翻译 -->
+    <string name="video_pick">选择视频</string>
+    <string name="video_change">换个视频</string>
+    <string name="video_empty_title">还没有选择视频</string>
+    <string name="video_empty_hint">从本地选一个视频，识别其中的人声并生成译文字幕</string>
+    <string name="video_local_asr_hint">语音识别固定使用本地 SenseVoice（完全离线），仅支持中文（含粤语）、英语、日语、韩语</string>
+    <string name="video_start">开始识别并翻译</string>
+    <string name="video_stop">取消</string>
+    <string name="video_stage_extract">正在抽取音频…</string>
+    <string name="video_stage_recognize">已识别 %1$d 段…</string>
+    <string name="video_need_stop_session">声音同传正在运行，请先停止再处理视频（两个识别模型同时运行会占满内存）</string>
+    <string name="video_need_model">本地识别模型尚未就绪，请到「设置 → 语音识别」下载后再试</string>
+    <string name="video_no_speech">没有识别到可翻译的语音</string>
+    <string name="video_done">已完成，共 %1$d 条字幕</string>
+    <string name="video_failed_count">%1$d 条字幕翻译失败，已保留原文</string>
+    <string name="video_export_srt">导出 SRT 字幕</string>
+    <string name="video_export_ok">字幕已保存到 %1$s</string>
+    <string name="video_export_fail">导出失败：%1$s</string>
+    <string name="video_srt_label">视频译文字幕</string>
+    <string name="video_cues_title">字幕</string>
+    <string name="video_cues_empty">处理完成后，逐句字幕会显示在这里</string>
 </resources>

@@ -19,8 +19,8 @@ android {
         minSdk = 29
         targetSdk = 35
         // CI can override: -PVERSION_CODE=2 -PVERSION_NAME=0.1.1
-        versionCode = (findProperty("VERSION_CODE") as String?)?.toIntOrNull() ?: 3
-        versionName = (findProperty("VERSION_NAME") as String?) ?: "0.2.1"
+        versionCode = (findProperty("VERSION_CODE") as String?)?.toIntOrNull() ?: 4
+        versionName = (findProperty("VERSION_NAME") as String?) ?: "0.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -117,6 +117,10 @@ dependencies {
 
     // Local ASR: sherpa-onnx (SenseVoice + Silero VAD). Verify latest at https://jitpack.io/#k2-fsa/sherpa-onnx
     implementation("com.github.k2-fsa:sherpa-onnx:1.13.4")
+
+    // Video translation: playback with a Compose subtitle overlay on top.
+    implementation("androidx.media3:media3-exoplayer:1.11.1")
+    implementation("androidx.media3:media3-ui:1.11.1")
 
     // Screen-region OCR: ML Kit Text Recognition v2 (BUNDLED models — fully offline,
     // no Google Play Services, works on Chinese-market devices).

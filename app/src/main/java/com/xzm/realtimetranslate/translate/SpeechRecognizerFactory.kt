@@ -48,15 +48,26 @@ object SpeechRecognizerFactory {
             }
             AsrEngineType.ALIYUN_FUN_ASR -> {
                 val apiKey = keys.getKeyFor(AsrEngineType.ALIYUN_FUN_ASR)
-                AliyunFunAsrRecognizer(
-                    apiKey = apiKey,
-                    model = settings.aliyunAsrModel,
-                    language = settings.sourceLanguageCode,
-                    maxSentenceSilenceMs = settings.aliyunAsrSilenceMs,
-                    workspaceId = settings.aliyunWorkspaceId,
-                    onSegment = onSegment,
-                    onPartial = onPartial,
-                )
+                when (AsrModelCatalog.protocolFor(settings.aliyunAsrModel)) {
+                    AsrProtocol.RUN_TASK -> AliyunFunAsrRecognizer(
+                        apiKey = apiKey,
+                        model = settings.aliyunAsrModel,
+                        language = settings.sourceLanguageCode,
+                        maxSentenceSilenceMs = settings.aliyunAsrSilenceMs,
+                        workspaceId = settings.aliyunWorkspaceId,
+                        onSegment = onSegment,
+                        onPartial = onPartial,
+                    )
+                    AsrProtocol.OPENAI_REALTIME -> OpenAiRealtimeAsrRecognizer(
+                        apiKey = apiKey,
+                        model = settings.aliyunAsrModel,
+                        language = settings.sourceLanguageCode,
+                        maxSentenceSilenceMs = settings.aliyunAsrSilenceMs,
+                        workspaceId = settings.aliyunWorkspaceId,
+                        onSegment = onSegment,
+                        onPartial = onPartial,
+                    )
+                }
             }
             AsrEngineType.GENERIC_OPENAI -> {
                 val apiKey = keys.getKeyFor(AsrEngineType.GENERIC_OPENAI)
@@ -103,7 +114,12 @@ object SpeechRecognizerFactory {
                         Exception("模型 [$modelName] 需要百炼业务空间 ID：请在下方填写后重试"),
                     )
                 }
-                testAliyunWs(apiKey, modelName, settings.aliyunWorkspaceId)
+                when (AsrModelCatalog.protocolFor(modelName)) {
+                    AsrProtocol.RUN_TASK ->
+                        testAliyunWs(apiKey, modelName, settings.aliyunWorkspaceId)
+                    AsrProtocol.OPENAI_REALTIME ->
+                        testOpenAiRealtime(apiKey, modelName, settings.aliyunWorkspaceId)
+                }
             }
             AsrEngineType.GENERIC_OPENAI -> {
                 val baseUrl = settings.genericAsrBaseUrl.trim()
@@ -192,6 +208,63 @@ object SpeechRecognizerFactory {
                 ws.cancel()
             }
         }
+
+    /**
+     * OpenAI-Realtime handshake check: open the socket, send `session.update`, and treat
+     * `session.created` / `session.updated` as success. Any `error` event is surfaced with
+     * its original text — DashScope's field names are the part most likely to drift.
+     */
+    private suspend fun testOpenAiRealtime(
+        apiKey: String,
+        model: String,
+        workspaceId: String,
+    ): Result<String> = suspendCancellableCoroutine { cont ->
+        val client = OkHttpClient.Builder()
+            .connectTimeout(6, TimeUnit.SECONDS)
+            .readTimeout(6, TimeUnit.SECONDS)
+            .build()
+
+        val request = Request.Builder()
+            .url(DashScopeEndpoints.openAiRealtime(model, workspaceId))
+            .header("Authorization", "Bearer ${apiKey.trim()}")
+            .build()
+
+        var resumed = false
+        fun resumeOnce(res: Result<String>) {
+            if (!resumed) {
+                resumed = true
+                cont.resume(res)
+            }
+        }
+
+        val ws = client.newWebSocket(request, object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                webSocket.send(OpenAiRealtimeProtocol.sessionUpdate(model))
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                when (val event = OpenAiRealtimeProtocol.parse(text)) {
+                    is OpenAiRealtimeProtocol.Event.Ready -> {
+                        webSocket.close(1000, "test finished")
+                        resumeOnce(Result.success("✅ 阿里百炼连接成功：模型 [$model] 的 Realtime 会话已建立"))
+                    }
+                    is OpenAiRealtimeProtocol.Event.Failed -> {
+                        webSocket.close(1000, "test failed")
+                        resumeOnce(Result.failure(Exception("模型 [$model] 返回错误：${event.message}")))
+                    }
+                    else -> Unit
+                }
+            }
+
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                val code = response?.code
+                val msg = if (code != null) "HTTP $code: ${t.message}" else t.message ?: "网络连接失败"
+                resumeOnce(Result.failure(Exception(msg)))
+            }
+        })
+
+        cont.invokeOnCancellation { ws.cancel() }
+    }
 
     private fun testGenericEndpoint(baseUrl: String, apiKey: String, model: String): Result<String> {
         val client = OkHttpClient.Builder()

@@ -442,6 +442,9 @@ class MainActivity : ComponentActivity() {
                                 onResetAppearance = {
                                     scope.launch { settingsVm.resetSubtitleAppearance() }
                                 },
+                                onOpenSettings = {
+                                    scope.launch { pagerState.animateScrollToPage(1) }
+                                },
                             )
                             1 -> SettingsScreen(
                                 modifier = Modifier.fillMaxSize(),

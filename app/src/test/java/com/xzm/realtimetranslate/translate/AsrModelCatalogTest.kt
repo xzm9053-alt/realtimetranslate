@@ -21,6 +21,7 @@ class AsrModelCatalogTest {
         val recommended = models.filter { it.recommended }.map { it.id }
         assertTrue(recommended.contains("fun-asr-realtime"))
         assertTrue(recommended.contains("qwen-audio-3.1-asr-flash-streaming"))
+        assertTrue(recommended.contains("qwen3-asr-flash-realtime"))
     }
 
     /**
@@ -80,19 +81,20 @@ class AsrModelCatalogTest {
     }
 
     @Test
-    fun `every offered model speaks the run-task protocol`() {
-        models.forEach {
+    fun `Qwen3 realtime is offered through the OpenAI Realtime protocol`() {
+        val preset = AsrModelCatalog.aliyunPreset("qwen3-asr-flash-realtime")
+        assertTrue("qwen3-asr-flash-realtime must be offered", preset != null)
+        assertEquals(AsrProtocol.OPENAI_REALTIME, preset!!.protocol)
+        assertEquals(AsrProtocol.OPENAI_REALTIME, AsrModelCatalog.protocolFor(preset.id))
+
+        models.filter { it.id != "qwen3-asr-flash-realtime" }.forEach {
             assertEquals("${it.id} speaks run-task", AsrProtocol.RUN_TASK, it.protocol)
         }
     }
 
-    /**
-     * Qwen3-ASR speaks OpenAI Realtime, which needs a second recognizer. Until that
-     * exists it must not be offered, or selecting it silently fails.
-     */
     @Test
-    fun `qwen3 realtime is not offered until its protocol is implemented`() {
-        assertFalse(ids.contains("qwen3-asr-flash-realtime"))
+    fun `catalog carries the month it was last verified`() {
+        assertTrue(AsrModelCatalog.CATALOG_LAST_VERIFIED.isNotBlank())
     }
 
     /**

@@ -5,8 +5,10 @@
 An **Android real-time subtitles** app: captures audio playing on your phone (media) or the microphone, recognizes speech **on-device** with the SenseVoice model, translates it, and shows live captions in a **draggable floating overlay**.
 
 - **Fully on-device, offline ASR** — SenseVoice model (~230 MB) is bundled inside the APK; audio never leaves your phone
+- On-device recognition runs on **sherpa-onnx 1.13.4** (SenseVoice int8 + Silero VAD)
 - Translation via **DeepSeek** (streaming, high quality) or the **free Microsoft endpoint** (no key required)
 - Finished sessions are kept in **History** and can be exported as `.txt`
+- Also **More translation**: video translation (translated subtitles during playback, SRT export) and long-text translation
 
 ---
 
@@ -16,7 +18,8 @@ An **Android real-time subtitles** app: captures audio playing on your phone (me
 |------|-------------|
 | **Subtitles tab** | Source / target language (remembered), audio source, start / stop, status and preview |
 | **Audio source** | Media / microphone / media+mic (remembered; mic-only skips screen-capture permission) |
-| **On-device ASR** | Alibaba SenseVoice int8 model, bundled in the APK, unpacked on first launch, works offline |
+| **On-device ASR** | Alibaba SenseVoice int8 model (sherpa-onnx 1.13.4 + Silero VAD), bundled in the APK, unpacked on first launch, works offline |
+| **More translation** | Home entry → **Video translation** (pick a local video, recognize + translate sentence by sentence, subtitles over playback, SRT export) / **Text translation** (long text split and translated in order) |
 | **Translation engine** | DeepSeek (streaming SSE; model & API URL configurable) / Microsoft (free, no key) |
 | **Floating overlay** | Over other apps; thin top grabber to move; corner handle to resize (font size unchanged) |
 | **Display modes** | Source + translation (split panes with a divider), source only, or translation only |

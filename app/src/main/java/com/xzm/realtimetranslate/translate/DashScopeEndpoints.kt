@@ -20,4 +20,18 @@ object DashScopeEndpoints {
 
     /** Qwen-Audio only answers on the workspace host, so it needs a Workspace ID. */
     fun requiresWorkspace(model: String): Boolean = model.trim().startsWith("qwen-audio")
+
+    /**
+     * OpenAI-Realtime compatible socket used by Qwen3-ASR. The model travels in the
+     * query string rather than a run-task envelope, per the OpenAI Realtime spec.
+     */
+    fun openAiRealtime(model: String, workspaceId: String = ""): String {
+        val id = workspaceId.trim()
+        val host = if (id.isBlank()) "dashscope.aliyuncs.com" else "$id.cn-beijing.maas.aliyuncs.com"
+        val name = java.net.URLEncoder.encode(
+            model.trim().ifBlank { OpenAiRealtimeProtocol.DEFAULT_MODEL },
+            "UTF-8",
+        )
+        return "wss://$host/api-ws/v1/realtime?model=$name"
+    }
 }

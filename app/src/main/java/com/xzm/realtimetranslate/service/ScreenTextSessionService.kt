@@ -17,6 +17,7 @@ import android.os.IBinder
 import android.os.SystemClock
 import com.xzm.realtimetranslate.util.AppLog
 import com.xzm.realtimetranslate.util.AppLog as Log
+import com.xzm.realtimetranslate.util.RegionGestureMath
 import android.view.Surface
 import android.view.WindowManager
 import android.widget.Toast
@@ -687,7 +688,7 @@ class ScreenTextSessionService : Service() {
         private const val TAG = "ScreenTextSessionService"
         private const val NOTIFICATION_ID = 43
         private const val FRAME_INTERVAL_MS = 900L
-        private const val MIN_REGION_PX = 48
+        private const val MIN_REGION_PX = RegionGestureMath.MIN_REGION_PX
         /** TRANSPROF 诊断：空转多少轮汇报一次心跳（900ms × 10 ≈ 9s）。 */
         private const val IDLE_LOG_ROUNDS = 10
         /** 旋转/折叠后暂停采集的时长，避开投影帧重建期间的乱帧。 */

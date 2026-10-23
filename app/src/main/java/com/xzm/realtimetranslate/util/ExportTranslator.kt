@@ -41,11 +41,12 @@ object ExportTranslator {
     fun fileName(
         stoppedAt: LocalDateTime = LocalDateTime.now(),
         ext: String = "txt",
+        label: String = "翻译结果",
     ): String {
         val month = stoppedAt.monthValue
         val day = stoppedAt.dayOfMonth
         val hm = stoppedAt.format(DateTimeFormatter.ofPattern("HH:mm"))
-        return "${month}月${day}日-$hm-翻译结果.$ext"
+        return "${month}月${day}日-$hm-$label.$ext"
     }
 
     /**

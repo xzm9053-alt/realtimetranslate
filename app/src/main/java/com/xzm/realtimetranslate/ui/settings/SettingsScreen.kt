@@ -2237,10 +2237,13 @@ private fun AsrEngineConfigSubScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         Text(
-                            text = "SenseVoice 是离线模型，只能识别五种语言：" +
-                                "中文、英语、日语、韩语、粤语。" +
-                                "选其他源语言时会自动回退到“自动识别”，识别结果可能不准。" +
-                                "需要其他语言请改用阿里百炼或通用引擎。",
+                            text = "识别内核：sherpa-onnx 1.13.4 · SenseVoice int8 · Silero VAD（全部离线）",
+                            fontSize = 12.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            lineHeight = 18.sp,
+                        )
+                        Text(
+                            text = stringResource(R.string.asr_local_language_limit),
                             fontSize = 12.sp,
                             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                             lineHeight = 18.sp,
@@ -2357,6 +2360,13 @@ private fun AsrEngineConfigSubScreen(
                         AliyunModelDropdown(
                             selectedId = aliyunAsrModel.text,
                             onSelect = { onUpdateAliyunAsrModel(TextFieldValue(it)) },
+                        )
+                        Text(
+                            text = "模型清单随百炼官方按月更新 · 最近核对 " +
+                                AsrModelCatalog.CATALOG_LAST_VERIFIED,
+                            fontSize = 11.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            lineHeight = 16.sp,
                         )
 
                         OutlinedTextField(

@@ -33,4 +33,28 @@ class DashScopeEndpointsTest {
         assertFalse(DashScopeEndpoints.requiresWorkspace("fun-asr-realtime"))
         assertFalse(DashScopeEndpoints.requiresWorkspace("paraformer-realtime-v2"))
     }
+
+    @Test
+    fun `openai realtime endpoint carries the model in the query string`() {
+        assertEquals(
+            "wss://dashscope.aliyuncs.com/api-ws/v1/realtime?model=qwen3-asr-flash-realtime",
+            DashScopeEndpoints.openAiRealtime("qwen3-asr-flash-realtime"),
+        )
+    }
+
+    @Test
+    fun `openai realtime endpoint follows the workspace host`() {
+        assertEquals(
+            "wss://llm-abc.cn-beijing.maas.aliyuncs.com/api-ws/v1/realtime?model=qwen3-asr-flash-realtime",
+            DashScopeEndpoints.openAiRealtime("qwen3-asr-flash-realtime", " llm-abc "),
+        )
+    }
+
+    @Test
+    fun `openai realtime endpoint falls back to the default model`() {
+        assertEquals(
+            "wss://dashscope.aliyuncs.com/api-ws/v1/realtime?model=${OpenAiRealtimeProtocol.DEFAULT_MODEL}",
+            DashScopeEndpoints.openAiRealtime(""),
+        )
+    }
 }

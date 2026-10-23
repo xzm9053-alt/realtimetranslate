@@ -30,7 +30,11 @@ object AsrModelCatalog {
 
     const val GROUP_FUN_ASR = "Fun-ASR"
     const val GROUP_QWEN_AUDIO_STREAMING = "Qwen-Audio 流式"
+    const val GROUP_QWEN3_ASR = "Qwen3-ASR"
     const val GROUP_PARAFORMER = "Paraformer"
+
+    /** 最近一次对照百炼官方模型页面核对本清单的时间。官方按月调整，需定期复核。 */
+    const val CATALOG_LAST_VERIFIED = "2026-10"
 
     /**
      * 阿里云百炼（DashScope）实时流式语音识别模型清单。
@@ -40,8 +44,11 @@ object AsrModelCatalog {
      *  - 仅支持中文的 8k 电话模型（paraformer-realtime-8k-v2、
      *    fun-asr-flash-8k-realtime*）不列出；
      *  - 录音文件转写类（fun-asr、paraformer-v2、*-filetrans）不是流式，不列出；
-     *  - `*-asr-flash-message` 是短语音的同步 HTTP 接口，同样不走 run-task
-     *    WebSocket，放进来只会「连上就失败」。
+     *  - `*-asr-flash-message` 是短语音的一次性 WebSocket，不按流式分段返回结果，
+     *    放进来只会「连上就失败」。
+     *
+     * 官方模型页面：https://help.aliyun.com/zh/model-studio/asr-model
+     * 该清单会随官方按月调整，改动时同步更新 [CATALOG_LAST_VERIFIED]。
      */
     val ALIYUN_REALTIME_MODELS: List<AsrModelPreset> = listOf(
         AsrModelPreset(
@@ -71,6 +78,14 @@ object AsrModelCatalog {
             group = GROUP_QWEN_AUDIO_STREAMING,
         ),
         AsrModelPreset(
+            id = "qwen3-asr-flash-realtime",
+            name = "Qwen3-ASR 实时（30+ 语种）",
+            description = "新一代多语种实时模型，中文方言及 30+ 语言，8k/16k 采样率自适应，走 OpenAI-Realtime 协议",
+            recommended = true,
+            group = GROUP_QWEN3_ASR,
+            protocol = AsrProtocol.OPENAI_REALTIME,
+        ),
+        AsrModelPreset(
             id = "paraformer-realtime-v2",
             name = "Paraformer v2 实时",
             description = "上一代工业级流式模型，中英日韩德法俄七语种。官方建议迁移到 Fun-ASR",
@@ -84,6 +99,10 @@ object AsrModelCatalog {
 
     fun aliyunPreset(id: String): AsrModelPreset? =
         ALIYUN_REALTIME_MODELS.firstOrNull { it.id == id }
+
+    /** 目录外的自定义模型 ID 按 run-task 处理，保持旧行为。 */
+    fun protocolFor(id: String): AsrProtocol =
+        aliyunPreset(id)?.protocol ?: AsrProtocol.RUN_TASK
 
     /**
      * 通用 OpenAI 兼容接口常用的优质语音识别模型预设（硅基流动、Groq、第三方中转等）

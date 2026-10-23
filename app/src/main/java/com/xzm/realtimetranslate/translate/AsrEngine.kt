@@ -247,18 +247,11 @@ class AsrEngine(
                 stream.acceptWaveform(samples, SAMPLE_RATE)
                 recognizer.decode(stream)
                 recognizer.getResult(stream).text
-                    .replace(TAG_PATTERN, "")
-                    .trim()
             } finally {
                 stream.release()
             }
         }
-        return when {
-            text.isBlank() -> null
-            text.equals("Nose", ignoreCase = true) -> null // 噪声标记
-            text.equals("null", ignoreCase = true) -> null // 防御性边界情况
-            else -> text
-        }
+        return cleanSenseVoiceText(text)
     }
 
     companion object {
@@ -289,6 +282,20 @@ class AsrEngine(
             "ko" -> "ko"
             "yue" -> "yue"
             else -> "auto"
+        }
+
+        /**
+         * SenseVoice 原始输出 → 可显示的句子。剥掉 `<|语种|>` 一类标签，并把
+         * 模型用来表示噪声/空结果的占位词过滤成 null。视频字幕与实时同传共用。
+         */
+        fun cleanSenseVoiceText(raw: String): String? {
+            val text = raw.replace(TAG_PATTERN, "").trim()
+            return when {
+                text.isBlank() -> null
+                text.equals("Nose", ignoreCase = true) -> null // 噪声标记
+                text.equals("null", ignoreCase = true) -> null // 防御性边界情况
+                else -> text
+            }
         }
     }
 }
