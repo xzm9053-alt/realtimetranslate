@@ -7,6 +7,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.annotation.StringRes
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -53,6 +55,7 @@ import androidx.media3.ui.PlayerView
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.LanguageOption
 import com.xzm.realtimetranslate.data.SupportedLanguages
+import com.xzm.realtimetranslate.data.VideoSubtitleMode
 import com.xzm.realtimetranslate.ui.components.LanguageChip
 import com.xzm.realtimetranslate.ui.components.LanguagePickerSheet
 import com.xzm.realtimetranslate.ui.components.PageTitle
@@ -208,10 +211,41 @@ fun VideoTranslateScreen(
                 VideoPlayerBox(
                     uri = state.uri!!,
                     cues = state.cues,
+                    mode = state.subtitleMode,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
                 )
+            }
+        }
+
+        if (state.cues.isNotEmpty()) {
+            item {
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    Text(
+                        text = stringResource(R.string.video_subtitle_mode),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(bottom = 2.dp),
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        VideoSubtitleMode.entries.forEach { mode ->
+                            ModeChip(
+                                label = stringResource(videoSubtitleModeLabel(mode)),
+                                selected = state.subtitleMode == mode,
+                                onClick = { viewModel.setSubtitleMode(mode) },
+                            )
+                        }
+                    }
+                    Text(
+                        text = stringResource(R.string.video_subtitle_mode_hint),
+                        fontSize = 11.sp,
+                        lineHeight = 16.sp,
+                        color = scheme.onSurfaceVariantSummary,
+                    )
+                }
             }
         }
 
@@ -385,6 +419,7 @@ fun VideoTranslateScreen(
 private fun VideoPlayerBox(
     uri: String,
     cues: List<VideoCue>,
+    mode: VideoSubtitleMode,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -448,6 +483,7 @@ private fun VideoPlayerBox(
             SubtitleOverlay(
                 player = player,
                 cues = cues,
+                mode = mode,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(horizontal = 16.dp, vertical = 52.dp),
@@ -457,9 +493,41 @@ private fun VideoPlayerBox(
 }
 
 @Composable
+private fun ModeChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val scheme = MiuixTheme.colorScheme
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(
+                if (selected) Booth.Accent.copy(alpha = 0.15f) else scheme.surfaceVariant
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+    ) {
+        Text(
+            text = label,
+            fontSize = 13.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (selected) Booth.Accent else scheme.onSurface,
+        )
+    }
+}
+
+private fun videoSubtitleModeLabel(mode: VideoSubtitleMode): Int = when (mode) {
+    VideoSubtitleMode.TRANSLATION -> R.string.video_subtitle_translation
+    VideoSubtitleMode.SOURCE -> R.string.video_subtitle_source
+    VideoSubtitleMode.BOTH -> R.string.video_subtitle_both
+}
+
+@Composable
 private fun SubtitleOverlay(
     player: Player,
     cues: List<VideoCue>,
+    mode: VideoSubtitleMode,
     modifier: Modifier = Modifier,
 ) {
     var positionMs by remember { mutableLongStateOf(0L) }
@@ -474,17 +542,41 @@ private fun SubtitleOverlay(
     if (cues.isEmpty()) return
     val cue = cues.firstOrNull { positionMs >= it.startMs && positionMs < it.endMs } ?: return
 
-    Text(
-        text = cue.translation.ifBlank { cue.source },
-        color = Color.White,
-        fontSize = 16.sp,
-        lineHeight = 22.sp,
-        textAlign = TextAlign.Center,
+    val source = cue.source.trim()
+    val translation = cue.translation.trim()
+    val showSource = mode == VideoSubtitleMode.SOURCE ||
+        (mode == VideoSubtitleMode.BOTH && source.isNotEmpty() && source != translation)
+    val primary = when (mode) {
+        VideoSubtitleMode.SOURCE -> source.ifBlank { translation }
+        else -> translation.ifBlank { source }
+    }
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
             .background(Color.Black.copy(alpha = 0.62f))
             .padding(horizontal = 10.dp, vertical = 5.dp),
-    )
+    ) {
+        if (showSource) {
+            Text(
+                text = source,
+                color = Color.White.copy(alpha = 0.85f),
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+                textAlign = TextAlign.Center,
+            )
+        }
+        if (primary.isNotEmpty()) {
+            Text(
+                text = primary,
+                color = Color.White,
+                fontSize = 16.sp,
+                lineHeight = 22.sp,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
 }
 
 @Composable
@@ -551,3 +643,4 @@ private fun queryDisplayName(context: Context, uri: Uri): String {
     }.getOrNull()
     return name?.takeIf { it.isNotBlank() } ?: uri.lastPathSegment.orEmpty()
 }
+

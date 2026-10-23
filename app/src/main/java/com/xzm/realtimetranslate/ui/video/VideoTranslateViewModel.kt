@@ -11,6 +11,7 @@ import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.ApiKeyStore
 import com.xzm.realtimetranslate.data.SupportedLanguages
 import com.xzm.realtimetranslate.data.UserSettingsRepository
+import com.xzm.realtimetranslate.data.VideoSubtitleMode
 import com.xzm.realtimetranslate.service.SessionBus
 import com.xzm.realtimetranslate.translate.AsrEngine
 import com.xzm.realtimetranslate.translate.TranslationEngineFactory
@@ -53,6 +54,8 @@ data class VideoTranslateUiState(
     /** 压制字幕：把译文烧进画面，另存一个视频文件。 */
     val isBurning: Boolean = false,
     val burnProgress: Float = 0f,
+    /** 单语 / 双语：压制、预览、SRT 导出三处共用同一个值。 */
+    val subtitleMode: VideoSubtitleMode = VideoSubtitleMode.TRANSLATION,
 ) {
     val hasVideo: Boolean get() = uri != null
     val canStart: Boolean get() = hasVideo && !isRunning
@@ -78,7 +81,9 @@ class VideoTranslateViewModel(
             val target = settings.targetLanguageCode.takeIf { code ->
                 SupportedLanguages.targetOptions.any { it.code == code }
             } ?: "zh-Hans"
-            _state.update { it.copy(targetCode = target) }
+            _state.update {
+                it.copy(targetCode = target, subtitleMode = settings.videoSubtitleMode)
+            }
         }
     }
 
@@ -112,6 +117,13 @@ class VideoTranslateViewModel(
 
     fun setTargetLanguage(code: String) {
         _state.update { it.copy(targetCode = code) }
+    }
+
+    /** 字幕单语/双语。存盘，下次进来还是这个选择；已有的字幕不重翻，
+     * 但预览与导出立即跟着变。 */
+    fun setSubtitleMode(mode: VideoSubtitleMode) {
+        _state.update { it.copy(subtitleMode = mode) }
+        viewModelScope.launch { settingsRepository.update { it.copy(videoSubtitleMode = mode) } }
     }
 
     fun start() {
@@ -256,7 +268,7 @@ class VideoTranslateViewModel(
             val result = ExportTranslator.saveToDownloads(
                 getApplication(),
                 name,
-                SrtFormatter.format(cues),
+                SrtFormatter.format(cues, _state.value.subtitleMode),
                 "application/x-subrip",
             )
             _state.update {
@@ -314,6 +326,7 @@ class VideoTranslateViewModel(
                 source = uri,
                 cues = snapshot.cues,
                 outputFile = target,
+                mode = snapshot.subtitleMode,
                 onProgress = { fraction ->
                     if (fraction >= 0f) {
                         _state.update { it.copy(burnProgress = fraction) }

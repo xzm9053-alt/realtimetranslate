@@ -24,6 +24,8 @@ import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.ProgressHolder
 import androidx.media3.transformer.Transformer
+import com.xzm.realtimetranslate.data.VideoSubtitleMode
+import com.xzm.realtimetranslate.util.SrtFormatter
 import com.xzm.realtimetranslate.util.AppLog as Log
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.File
@@ -51,6 +53,7 @@ object SubtitleBurnIn {
         source: Uri,
         cues: List<VideoCue>,
         outputFile: File,
+        mode: VideoSubtitleMode = VideoSubtitleMode.TRANSLATION,
         onProgress: (Float) -> Unit = {},
     ): Result<File> {
         if (cues.isEmpty()) {
@@ -64,7 +67,7 @@ object SubtitleBurnIn {
             .setBackgroundFrameAnchor(0f, -0.82f)
             .build()
 
-        val effects = Effects(emptyList(), listOf(OverlayEffect(listOf(CueBitmapOverlay(cues)))))
+        val effects = Effects(emptyList(), listOf(OverlayEffect(listOf(CueBitmapOverlay(cues, mode)))))
         val item = EditedMediaItem.Builder(MediaItem.fromUri(source))
             .setEffects(effects)
             .build()
@@ -132,7 +135,10 @@ object SubtitleBurnIn {
  * disappear instead of leaving the last line stuck on screen.
  */
 @OptIn(UnstableApi::class)
-private class CueBitmapOverlay(private val cues: List<VideoCue>) : BitmapOverlay() {
+private class CueBitmapOverlay(
+    private val cues: List<VideoCue>,
+    private val mode: VideoSubtitleMode,
+) : BitmapOverlay() {
 
     private var cachedKey: String? = null
     private var cachedBitmap: Bitmap? = null
@@ -143,43 +149,77 @@ private class CueBitmapOverlay(private val cues: List<VideoCue>) : BitmapOverlay
     override fun getBitmap(presentationTimeUs: Long): Bitmap {
         val ms = presentationTimeUs / 1_000L
         val cue = cues.firstOrNull { ms >= it.startMs && ms < it.endMs }
-        val text = cue?.let { it.translation.ifBlank { it.source }.trim() }.orEmpty()
+            ?: return blank.value
+        val text = SrtFormatter.render(cue, mode)
         if (text.isEmpty()) return blank.value
 
         // Re-render only when the words change: Transformer asks for a bitmap on every
         // frame, and laying out the same line 30 times a second is wasted work.
         if (text == cachedKey) return cachedBitmap ?: blank.value
 
-        val bitmap = render(text)
+        val bitmap = render(cue!!)
         cachedKey = text
         cachedBitmap = bitmap
         return bitmap
     }
 
-    private fun render(text: String): Bitmap {
-        val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            textSize = TEXT_SIZE_PX
-            typeface = Typeface.DEFAULT_BOLD
+    /**
+     * In BOTH mode the source line is drawn smaller and dimmer than the translation,
+     * so the eye lands on the translation first — the same hierarchy the in-app
+     * preview uses.
+     */
+    private fun render(cue: VideoCue): Bitmap {
+        val source = cue.source.trim()
+        val translation = cue.translation.trim()
+
+        val lines = ArrayList<StaticLayout>(2)
+        if (mode == VideoSubtitleMode.BOTH && source.isNotEmpty() && source != translation) {
+            lines += layout(source, SOURCE_SIZE_PX, SOURCE_COLOR)
         }
-        val layout = StaticLayout.Builder
-            .obtain(SpannableString(text), 0, text.length, textPaint, MAX_TEXT_WIDTH_PX)
-            .setAlignment(Layout.Alignment.ALIGN_CENTER)
-            .setLineSpacing(0f, 1.15f)
-            .build()
+        val primary = when (mode) {
+            VideoSubtitleMode.SOURCE -> source.ifBlank { translation }
+            else -> translation.ifBlank { source }
+        }
+        if (primary.isNotEmpty()) lines += layout(primary, TEXT_SIZE_PX, Color.WHITE)
+        if (lines.isEmpty()) return blank.value
 
         val padH = (TEXT_SIZE_PX * 0.55f).toInt()
         val padV = (TEXT_SIZE_PX * 0.32f).toInt()
+        val gap = (TEXT_SIZE_PX * 0.18f).toInt()
+        val contentW = lines.maxOf { it.width }
+        val contentH = lines.sumOf { it.height } + gap * (lines.size - 1)
+
         val bitmap = Bitmap.createBitmap(
-            layout.width + padH * 2,
-            layout.height + padV * 2,
+            contentW + padH * 2,
+            contentH + padV * 2,
             Bitmap.Config.ARGB_8888,
         )
         val canvas = Canvas(bitmap)
-        canvas.drawColor(Color.argb(170, 0, 0, 0))
-        canvas.translate(padH.toFloat(), padV.toFloat())
-        layout.draw(canvas)
+        canvas.drawColor(PLATE_COLOR)
+        var y = padV.toFloat()
+        lines.forEach { line ->
+            canvas.save()
+            // Centre each line inside the plate: the two lines rarely have the same
+            // width, and left-aligning them would look like a ragged block.
+            canvas.translate(padH + (contentW - line.width) / 2f, y)
+            line.draw(canvas)
+            canvas.restore()
+            y += line.height + gap
+        }
         return bitmap
+    }
+
+    private fun layout(text: String, sizePx: Float, color: Int): StaticLayout {
+        val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.color = color
+            textSize = sizePx
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        return StaticLayout.Builder
+            .obtain(SpannableString(text), 0, text.length, paint, MAX_TEXT_WIDTH_PX)
+            .setAlignment(Layout.Alignment.ALIGN_CENTER)
+            .setLineSpacing(0f, 1.15f)
+            .build()
     }
 
     override fun release() {
@@ -193,6 +233,10 @@ private class CueBitmapOverlay(private val cues: List<VideoCue>) : BitmapOverlay
     private companion object {
         /** 100 px tall glyphs: legible at 1080p and still sane when downscaled. */
         const val TEXT_SIZE_PX = 100f
+        const val SOURCE_SIZE_PX = 72f
         const val MAX_TEXT_WIDTH_PX = 1400
+        const val PLATE_COLOR = 0xAA000000.toInt()
+        /** Slightly dimmed so the translation reads as the primary line. */
+        const val SOURCE_COLOR = 0xDDFFFFFF.toInt()
     }
 }

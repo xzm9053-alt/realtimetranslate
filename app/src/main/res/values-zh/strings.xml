@@ -415,6 +415,11 @@
     <string name="video_burn_progress">正在压制字幕… %1$d%%</string>
     <string name="video_burn_ok">带字幕视频已保存到 %1$s</string>
     <string name="video_burn_fail">压制字幕失败：%1$s</string>
+    <string name="video_subtitle_mode">字幕语言</string>
+    <string name="video_subtitle_mode_hint">预览、压制出来的视频、导出的 SRT 都按这个选择。</string>
+    <string name="video_subtitle_translation">仅译文</string>
+    <string name="video_subtitle_source">仅原文</string>
+    <string name="video_subtitle_both">双语</string>
     <string name="video_srt_label">视频译文字幕</string>
     <string name="video_cues_title">字幕</string>
     <string name="video_cues_empty">处理完成后，逐句字幕会显示在这里</string>

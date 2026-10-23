@@ -81,6 +81,11 @@ data class UserSettings(
     // 译文段落排版：0 = 不分段（连续输出，保持现状）；
     // N = 每翻完 N 句，下一句译文另起一行。翻译仍逐句进行，只改排版，不影响速度与费用。
     val sentencesPerParagraph: Int = Defaults.SENTENCES_PER_PARAGRAPH,
+    /**
+     * Which language(s) the video subtitles carry — burn-in, on-screen preview and the
+     * exported SRT all read this one value so the three never disagree.
+     */
+    val videoSubtitleMode: VideoSubtitleMode = Defaults.VIDEO_SUBTITLE_MODE,
     // 阿里百炼 FunASR 静音断句门槛（毫秒）：说话停顿超过此阈值即判定为句子结束并送翻。默认 400ms。
     val aliyunAsrSilenceMs: Int = Defaults.ALIYUN_ASR_SILENCE_MS,
     val genericAsrBaseUrl: String = Defaults.GENERIC_ASR_BASE_URL,
@@ -153,6 +158,7 @@ data class UserSettings(
         // 0 = 不分段（连续输出）；取值范围 0..SENTENCES_PER_PARAGRAPH_MAX。
         const val SENTENCES_PER_PARAGRAPH = 0
         const val SENTENCES_PER_PARAGRAPH_MAX = 5
+        val VIDEO_SUBTITLE_MODE: VideoSubtitleMode = VideoSubtitleMode.TRANSLATION
         const val ALIYUN_ASR_SILENCE_MS = 200
         const val GENERIC_ASR_BASE_URL = "https://api.siliconflow.cn/v1"
         const val GENERIC_ASR_API_KEY = ""

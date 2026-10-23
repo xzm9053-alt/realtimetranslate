@@ -64,6 +64,7 @@ class UserSettingsRepository(private val context: Context) {
         val aliyunAsrModel = stringPreferencesKey("aliyun_asr_model")
         val aliyunWorkspaceId = stringPreferencesKey("aliyun_workspace_id")
         val sentencesPerParagraph = intPreferencesKey("sentences_per_paragraph")
+        val videoSubtitleMode = stringPreferencesKey("video_subtitle_mode")
         val aliyunAsrSilenceMs = intPreferencesKey("aliyun_asr_silence_ms")
         val genericAsrBaseUrl = stringPreferencesKey("generic_asr_base_url")
         val genericAsrApiKey = stringPreferencesKey("generic_asr_api_key")
@@ -126,6 +127,7 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.aliyunAsrModel] = next.aliyunAsrModel
             prefs[Keys.aliyunWorkspaceId] = next.aliyunWorkspaceId
             prefs[Keys.sentencesPerParagraph] = next.sentencesPerParagraph
+            prefs[Keys.videoSubtitleMode] = next.videoSubtitleMode.name
             prefs[Keys.aliyunAsrSilenceMs] = next.aliyunAsrSilenceMs
             prefs[Keys.genericAsrBaseUrl] = next.genericAsrBaseUrl
             prefs[Keys.genericAsrApiKey] = next.genericAsrApiKey
@@ -204,6 +206,7 @@ class UserSettingsRepository(private val context: Context) {
         aliyunWorkspaceId = this[Keys.aliyunWorkspaceId] ?: UserSettings.Defaults.ALIYUN_WORKSPACE_ID,
         sentencesPerParagraph = this[Keys.sentencesPerParagraph]
             ?: UserSettings.Defaults.SENTENCES_PER_PARAGRAPH,
+        videoSubtitleMode = VideoSubtitleMode.fromStorage(this[Keys.videoSubtitleMode]),
         aliyunAsrSilenceMs = this[Keys.aliyunAsrSilenceMs] ?: UserSettings.Defaults.ALIYUN_ASR_SILENCE_MS,
         genericAsrBaseUrl = this[Keys.genericAsrBaseUrl] ?: UserSettings.Defaults.GENERIC_ASR_BASE_URL,
         genericAsrApiKey = this[Keys.genericAsrApiKey] ?: UserSettings.Defaults.GENERIC_ASR_API_KEY,
