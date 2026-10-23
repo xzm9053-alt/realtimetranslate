@@ -422,6 +422,10 @@
     <string name="video_subtitle_source">Source only</string>
     <string name="video_subtitle_both">Bilingual</string>
     <string name="video_srt_label">Video subtitles</string>
+    <string name="video_fullscreen">Full screen</string>
+    <string name="video_close">Close</string>
+    <string name="video_play">Play</string>
+    <string name="video_pause">Pause</string>
     <string name="video_cues_title">Subtitles</string>
     <string name="video_cues_empty">Sentence-by-sentence subtitles appear here once processing finishes</string>
 </resources>

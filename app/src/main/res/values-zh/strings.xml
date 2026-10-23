@@ -421,6 +421,10 @@
     <string name="video_subtitle_source">仅原文</string>
     <string name="video_subtitle_both">双语</string>
     <string name="video_srt_label">视频译文字幕</string>
+    <string name="video_fullscreen">全屏</string>
+    <string name="video_close">关闭</string>
+    <string name="video_play">播放</string>
+    <string name="video_pause">暂停</string>
     <string name="video_cues_title">字幕</string>
     <string name="video_cues_empty">处理完成后，逐句字幕会显示在这里</string>
 </resources>

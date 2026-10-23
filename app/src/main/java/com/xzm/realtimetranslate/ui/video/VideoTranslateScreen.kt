@@ -2,6 +2,7 @@ package com.xzm.realtimetranslate.ui.video
 
 import android.content.Context
 import android.net.Uri
+import android.view.LayoutInflater
 import android.provider.OpenableColumns
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -17,8 +18,10 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -26,7 +29,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Fullscreen
+import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,8 +45,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.IntSize
 import androidx.annotation.StringRes
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -450,6 +466,7 @@ private fun VideoPlayerBox(
     // The frame follows the video's own aspect ratio instead of a fixed 16:9 box:
     // vertical phone footage would otherwise be pillarboxed into a thin strip.
     var videoAspect by remember(uri) { mutableStateOf(16f / 9f) }
+    var fullscreen by remember(uri) { mutableStateOf(false) }
 
     Box(
         modifier = modifier
@@ -458,10 +475,12 @@ private fun VideoPlayerBox(
             .clip(RoundedCornerShape(16.dp))
             .background(Color.Black),
     ) {
-        AndroidView(
+        // Exactly one PlayerView exists at a time: the player has a single output surface,
+        // and a second view would steal it. The box keeps its measured aspect ratio while
+        // empty, so entering and leaving fullscreen does not shift the page.
+        if (!fullscreen) AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
-                    this.player = player
                     useController = true
                     setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
                     setAspectRatioListener { _, _, _ -> }
@@ -488,8 +507,186 @@ private fun VideoPlayerBox(
                     .align(Alignment.BottomCenter)
                     .padding(horizontal = 16.dp, vertical = 52.dp),
             )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.45f))
+                    .clickable { fullscreen = true }
+                    .padding(6.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Fullscreen,
+                    contentDescription = stringResource(R.string.video_fullscreen),
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         }
     }
+
+    if (fullscreen && player != null) {
+        FullscreenVideoDialog(
+            player = player,
+            cues = cues,
+            mode = mode,
+            onDismiss = { fullscreen = false },
+        )
+    }
+}
+
+/**
+ * Full-screen playback with pinch zoom, because a landscape clip is a thin strip inside
+ * the scrolling page and small text in the picture is unreadable there.
+ *
+ * The player view runs without its built-in controller: those controllers consume the
+ * touches that the zoom/pan gesture needs, and two gesture owners on one surface is a
+ * fight neither wins. Play/pause and seeking get their own row instead.
+ */
+@androidx.annotation.OptIn(UnstableApi::class)
+@Composable
+private fun FullscreenVideoDialog(
+    player: Player,
+    cues: List<VideoCue>,
+    mode: VideoSubtitleMode,
+    onDismiss: () -> Unit,
+) {
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
+    ) {
+        var zoom by remember { mutableFloatStateOf(1f) }
+        var pan by remember { mutableStateOf(Offset.Zero) }
+        var viewSize by remember { mutableStateOf(IntSize.Zero) }
+        var playing by remember { mutableStateOf(player.isPlaying) }
+        var positionMs by remember { mutableLongStateOf(0L) }
+        var durationMs by remember { mutableLongStateOf(0L) }
+
+        LaunchedEffect(player) {
+            while (true) {
+                playing = player.isPlaying
+                positionMs = runCatching { player.currentPosition }.getOrDefault(0L)
+                durationMs = runCatching { player.duration }.getOrDefault(0L).coerceAtLeast(0L)
+                delay(250L)
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .onSizeChanged { viewSize = it }
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, gesturePan, gestureZoom, _ ->
+                        val next = (zoom * gestureZoom).coerceIn(MIN_ZOOM, MAX_ZOOM)
+                        zoom = next
+                        // The picture scales about its centre, so at 2x there is half a
+                        // screen of overhang in each direction to pan through — no more.
+                        val maxX = viewSize.width * (next - 1f) / 2f
+                        val maxY = viewSize.height * (next - 1f) / 2f
+                        pan = if (next <= 1.01f) {
+                            Offset.Zero
+                        } else {
+                            Offset(
+                                (pan.x + gesturePan.x).coerceIn(-maxX, maxX),
+                                (pan.y + gesturePan.y).coerceIn(-maxY, maxY),
+                            )
+                        }
+                    }
+                },
+        ) {
+            AndroidView(
+                // Inflated from XML so the surface is a TextureView. The default
+                // SurfaceView is composited in its own layer and ignores the scale and
+                // translation set below — the pinch zoom would do nothing.
+                factory = { ctx ->
+                    LayoutInflater.from(ctx)
+                        .inflate(R.layout.view_fullscreen_player, null) as PlayerView
+                },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = zoom
+                        scaleY = zoom
+                        translationX = pan.x
+                        translationY = pan.y
+                    },
+                update = { it.player = player },
+            )
+
+            SubtitleOverlay(
+                player = player,
+                cues = cues,
+                mode = mode,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 84.dp),
+            )
+
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Close,
+                    contentDescription = stringResource(R.string.video_close),
+                    tint = Color.White,
+                )
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.45f))
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            ) {
+                IconButton(onClick = {
+                    if (player.isPlaying) player.pause() else player.play()
+                }) {
+                    Icon(
+                        imageVector = if (playing) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
+                        contentDescription = stringResource(
+                            if (playing) R.string.video_pause else R.string.video_play,
+                        ),
+                        tint = Color.White,
+                    )
+                }
+                androidx.compose.material3.Slider(
+                    value = positionMs.toFloat().coerceIn(0f, durationMs.toFloat()),
+                    onValueChange = { positionMs = it.toLong() },
+                    onValueChangeFinished = { player.seekTo(positionMs) },
+                    valueRange = 0f..durationMs.toFloat().coerceAtLeast(1f),
+                    enabled = durationMs > 0L,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = "${formatClock(positionMs)} / ${formatClock(durationMs)}",
+                    fontSize = 11.sp,
+                    color = Color.White,
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                )
+            }
+        }
+    }
+}
+
+private const val MIN_ZOOM = 1f
+private const val MAX_ZOOM = 4f
+
+private fun formatClock(millis: Long): String {
+    val total = (millis / 1000L).coerceAtLeast(0L)
+    val minutes = total / 60L
+    val seconds = total % 60L
+    return "%d:%02d".format(minutes, seconds)
 }
 
 @Composable
