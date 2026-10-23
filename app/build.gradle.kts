@@ -121,6 +121,10 @@ dependencies {
     // Video translation: playback with a Compose subtitle overlay on top.
     implementation("androidx.media3:media3-exoplayer:1.11.1")
     implementation("androidx.media3:media3-ui:1.11.1")
+    // Subtitle burn-in: Transformer re-encodes the video and draws each cue onto the
+    // frames, so the export plays back anywhere without a sidecar file.
+    implementation("androidx.media3:media3-transformer:1.11.1")
+    implementation("androidx.media3:media3-effect:1.11.1")
 
     // Screen-region OCR: ML Kit Text Recognition v2 (BUNDLED models — fully offline,
     // no Google Play Services, works on Chinese-market devices).
@@ -138,4 +142,9 @@ dependencies {
     // Plain JVM unit tests for the pure translation logic (language-code mapping,
     // HTML-entity decoding, engine capability matrix). No Android runtime involved.
     testImplementation("junit:junit:4.13.2")
+    // Instrumented tests: the subtitle burn-in path needs a real MediaCodec encoder and
+    // a real Transformer, neither of which exists on the JVM test classpath.
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:rules:1.6.1")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }

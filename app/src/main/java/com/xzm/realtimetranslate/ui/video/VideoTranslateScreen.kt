@@ -222,6 +222,18 @@ fun VideoTranslateScreen(
                     .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
+                if (state.isBurning) {
+                    ProgressBar(progress = state.burnProgress)
+                    Text(
+                        text = stringResource(
+                            R.string.video_burn_progress,
+                            (state.burnProgress * 100).toInt().coerceAtLeast(0),
+                        ),
+                        fontSize = 12.sp,
+                        color = scheme.onSurfaceVariantSummary,
+                    )
+                }
+
                 if (state.isRunning) {
                     ProgressBar(progress = state.progress)
                     Text(
@@ -265,6 +277,11 @@ fun VideoTranslateScreen(
                         text = stringResource(R.string.video_export_srt),
                         onClick = viewModel::exportSrt,
                         enabled = state.canExport,
+                    )
+                    TextButton(
+                        text = stringResource(R.string.video_burn),
+                        onClick = viewModel::burnSubtitles,
+                        enabled = state.canBurn,
                     )
                 }
             }
@@ -395,10 +412,14 @@ private fun VideoPlayerBox(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    // The frame follows the video's own aspect ratio instead of a fixed 16:9 box:
+    // vertical phone footage would otherwise be pillarboxed into a thin strip.
+    var videoAspect by remember(uri) { mutableStateOf(16f / 9f) }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .aspectRatio(16f / 9f)
+            .aspectRatio(videoAspect)
             .clip(RoundedCornerShape(16.dp))
             .background(Color.Black),
     ) {
@@ -407,10 +428,21 @@ private fun VideoPlayerBox(
                 PlayerView(ctx).apply {
                     this.player = player
                     useController = true
+                    setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+                    setAspectRatioListener { _, _, _ -> }
                 }
             },
             modifier = Modifier.fillMaxSize(),
-            update = { it.player = player },
+            update = { view ->
+                view.player = player
+                val size = player?.videoSize
+                if (size != null && size.width > 0 && size.height > 0) {
+                    val ratio = size.width * (size.pixelWidthHeightRatio.takeIf { it > 0f } ?: 1f) / size.height
+                    if (ratio > 0f && kotlin.math.abs(ratio - videoAspect) > 0.01f) {
+                        videoAspect = ratio
+                    }
+                }
+            },
         )
         if (player != null) {
             SubtitleOverlay(

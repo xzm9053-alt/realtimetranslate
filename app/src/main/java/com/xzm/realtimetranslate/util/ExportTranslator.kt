@@ -86,4 +86,47 @@ object ExportTranslator {
             }
         }
     }
+
+    /**
+     * Copies an already-written file (e.g. a Transformer export in the cache) into
+     * public Downloads.
+     *
+     * Separate from [saveToDownloads] because a re-encoded video cannot be held in a
+     * String: it is streamed from disk. The source file is left in place; the caller
+     * decides when to delete it.
+     */
+    fun publishToDownloads(
+        context: Context,
+        source: File,
+        displayName: String,
+        mimeType: String,
+    ): Result<String> = runCatching {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val values = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+                put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+            val resolver = context.contentResolver
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                ?: error("无法创建下载文件")
+            resolver.openOutputStream(uri)?.use { out ->
+                source.inputStream().use { it.copyTo(out) }
+            } ?: error("无法写入文件")
+            values.clear()
+            values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+            "Download/$displayName"
+        } else {
+            @Suppress("DEPRECATION")
+            val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            if (!dir.exists()) dir.mkdirs()
+            val file = File(dir, displayName)
+            source.inputStream().use { input ->
+                FileOutputStream(file).use { input.copyTo(it) }
+            }
+            file.absolutePath
+        }
+    }
 }

@@ -411,6 +411,11 @@
     <string name="video_export_srt">Export SRT</string>
     <string name="video_export_ok">Subtitles saved to %1$s</string>
     <string name="video_export_fail">Export failed: %1$s</string>
+    <string name="video_burn">Burn subtitles</string>
+    <string name="video_burn_label">Subtitled video</string>
+    <string name="video_burn_progress">Burning subtitles… %1$d%%</string>
+    <string name="video_burn_ok">Subtitled video saved to %1$s</string>
+    <string name="video_burn_fail">Could not burn subtitles: %1$s</string>
     <string name="video_srt_label">Video subtitles</string>
     <string name="video_cues_title">Subtitles</string>
     <string name="video_cues_empty">Sentence-by-sentence subtitles appear here once processing finishes</string>

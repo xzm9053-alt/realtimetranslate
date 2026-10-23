@@ -410,6 +410,11 @@
     <string name="video_export_srt">导出 SRT 字幕</string>
     <string name="video_export_ok">字幕已保存到 %1$s</string>
     <string name="video_export_fail">导出失败：%1$s</string>
+    <string name="video_burn">压制字幕</string>
+    <string name="video_burn_label">带字幕视频</string>
+    <string name="video_burn_progress">正在压制字幕… %1$d%%</string>
+    <string name="video_burn_ok">带字幕视频已保存到 %1$s</string>
+    <string name="video_burn_fail">压制字幕失败：%1$s</string>
     <string name="video_srt_label">视频译文字幕</string>
     <string name="video_cues_title">字幕</string>
     <string name="video_cues_empty">处理完成后，逐句字幕会显示在这里</string>

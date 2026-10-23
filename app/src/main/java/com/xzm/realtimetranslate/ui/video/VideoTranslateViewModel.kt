@@ -17,6 +17,7 @@ import com.xzm.realtimetranslate.translate.TranslationEngineFactory
 import com.xzm.realtimetranslate.util.ExportTranslator
 import com.xzm.realtimetranslate.util.ModelDownloader
 import com.xzm.realtimetranslate.util.SrtFormatter
+import com.xzm.realtimetranslate.video.SubtitleBurnIn
 import com.xzm.realtimetranslate.video.VideoCue
 import com.xzm.realtimetranslate.video.VideoTranslationPipeline
 import com.xzm.realtimetranslate.video.toVideoCue
@@ -32,6 +33,7 @@ import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.time.LocalDateTime
 
 data class VideoTranslateUiState(
@@ -48,10 +50,14 @@ data class VideoTranslateUiState(
     val failedTranslations: Int = 0,
     val error: String? = null,
     val message: String? = null,
+    /** 压制字幕：把译文烧进画面，另存一个视频文件。 */
+    val isBurning: Boolean = false,
+    val burnProgress: Float = 0f,
 ) {
     val hasVideo: Boolean get() = uri != null
     val canStart: Boolean get() = hasVideo && !isRunning
-    val canExport: Boolean get() = cues.isNotEmpty() && !isRunning
+    val canExport: Boolean get() = cues.isNotEmpty() && !isRunning && !isBurning
+    val canBurn: Boolean get() = hasVideo && cues.isNotEmpty() && !isRunning && !isBurning
 }
 
 class VideoTranslateViewModel(
@@ -264,6 +270,75 @@ class VideoTranslateViewModel(
                                 R.string.video_export_fail,
                                 e.message.orEmpty(),
                             )
+                        },
+                    ),
+                )
+            }
+        }
+    }
+
+    /**
+     * Burns the cues into a new video file next to the source.
+     *
+     * This re-encodes the whole video, so it is deliberately a separate, explicit
+     * action from [exportSrt]: the SRT is instant and lossless, this one takes as long
+     * as the video and produces a larger file — but the subtitles travel with it.
+     */
+    fun burnSubtitles() {
+        val snapshot = _state.value
+        val uri = snapshot.uri?.let(Uri::parse) ?: return
+        if (snapshot.cues.isEmpty() || snapshot.isBurning) return
+
+        viewModelScope.launch {
+            _state.update {
+                it.copy(isBurning = true, burnProgress = 0f, message = null, error = null)
+            }
+            val app = getApplication<Application>()
+            val target = withContext(Dispatchers.IO) {
+                runCatching {
+                    val name = ExportTranslator.fileName(
+                        LocalDateTime.now(),
+                        ext = "mp4",
+                        label = app.getString(R.string.video_burn_label),
+                    )
+                    // Transformer writes through a file path, not a content URI, so the
+                    // work happens in the cache and only the finished file is published.
+                    val work = File(app.cacheDir, name)
+                    if (work.exists()) work.delete()
+                    work
+                }.getOrNull()
+            } ?: return@launch
+
+            val result = SubtitleBurnIn.burn(
+                context = app,
+                source = uri,
+                cues = snapshot.cues,
+                outputFile = target,
+                onProgress = { fraction ->
+                    if (fraction >= 0f) {
+                        _state.update { it.copy(burnProgress = fraction) }
+                    }
+                },
+            )
+
+            val published = result.mapCatching { file ->
+                ExportTranslator.publishToDownloads(
+                    app,
+                    file,
+                    app.getString(R.string.video_burn_label) + ".mp4",
+                    "video/mp4",
+                ).getOrThrow()
+            }
+            published.onSuccess { target.delete() }
+
+            _state.update {
+                it.copy(
+                    isBurning = false,
+                    burnProgress = 0f,
+                    message = published.fold(
+                        onSuccess = { path -> app.getString(R.string.video_burn_ok, path) },
+                        onFailure = { e ->
+                            app.getString(R.string.video_burn_fail, e.message.orEmpty())
                         },
                     ),
                 )
