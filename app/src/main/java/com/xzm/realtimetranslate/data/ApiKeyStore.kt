@@ -136,7 +136,10 @@ class ApiKeyStore(context: Context) {
         TranslationEngineType.ZHIPU -> getZhipuKey()
         TranslationEngineType.GEMINI -> getGeminiKey()
         TranslationEngineType.OPENAI_COMPAT -> getGenericKey()
-        TranslationEngineType.MICROSOFT, TranslationEngineType.GOOGLE_FREE -> ""
+        TranslationEngineType.MICROSOFT,
+        TranslationEngineType.GOOGLE_FREE,
+        TranslationEngineType.NONE,
+        -> ""
     }
 
     fun setKeyFor(type: TranslationEngineType, value: String) {
@@ -145,7 +148,10 @@ class ApiKeyStore(context: Context) {
             TranslationEngineType.ZHIPU -> setZhipuKey(value)
             TranslationEngineType.GEMINI -> setGeminiKey(value)
             TranslationEngineType.OPENAI_COMPAT -> setGenericKey(value)
-            TranslationEngineType.MICROSOFT, TranslationEngineType.GOOGLE_FREE -> Unit
+            TranslationEngineType.MICROSOFT,
+            TranslationEngineType.GOOGLE_FREE,
+            TranslationEngineType.NONE,
+            -> Unit
         }
     }
 

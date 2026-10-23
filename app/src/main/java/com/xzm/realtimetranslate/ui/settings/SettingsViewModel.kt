@@ -438,7 +438,10 @@ class SettingsViewModel(
         TranslationEngineType.ZHIPU -> _zhipuKey.value.text
         TranslationEngineType.GEMINI -> _geminiKey.value.text
         TranslationEngineType.OPENAI_COMPAT -> _genericKey.value.text
-        TranslationEngineType.MICROSOFT, TranslationEngineType.GOOGLE_FREE -> ""
+        TranslationEngineType.MICROSOFT,
+        TranslationEngineType.GOOGLE_FREE,
+        TranslationEngineType.NONE,
+        -> ""
     }.trim()
 
     /** Same one-place exception as [draftKeyFor], for the model field. */
@@ -447,7 +450,10 @@ class SettingsViewModel(
         TranslationEngineType.ZHIPU -> _zhipuModel.value.text
         TranslationEngineType.GEMINI -> _geminiModel.value.text
         TranslationEngineType.OPENAI_COMPAT -> _genericModel.value.text
-        TranslationEngineType.MICROSOFT, TranslationEngineType.GOOGLE_FREE -> ""
+        TranslationEngineType.MICROSOFT,
+        TranslationEngineType.GOOGLE_FREE,
+        TranslationEngineType.NONE,
+        -> ""
     }.trim()
 
     /**

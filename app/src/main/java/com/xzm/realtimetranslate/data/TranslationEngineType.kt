@@ -97,6 +97,21 @@ enum class TranslationEngineType(
         titleRes = R.string.engine_generic,
         summaryRes = R.string.engine_generic_summary,
     ),
+
+    /**
+     * 只识别、不翻译：识别结果原样当作译文显示。
+     *
+     * 不联网、不需要 Key、零费用零延迟，声音同传 / 屏幕取词 / 视频字幕三条链路都
+     * 走同一个引擎接口，所以在这一处就能全部覆盖。
+     */
+    NONE(
+        apiKeyRequirement = ApiKeyRequirement.NONE,
+        isLlm = false,
+        keyLabelRes = null,
+        hasPresetModels = false,
+        titleRes = R.string.engine_none,
+        summaryRes = R.string.engine_none_summary,
+    ),
     ;
 
     /** True only when a session must not start without a stored key. */

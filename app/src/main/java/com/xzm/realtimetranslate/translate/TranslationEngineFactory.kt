@@ -44,6 +44,8 @@ object TranslationEngineFactory {
         )
         TranslationEngineType.MICROSOFT -> MicrosoftFreeTranslationEngine()
         TranslationEngineType.GOOGLE_FREE -> GoogleFreeTranslationEngine()
+        // 仅识别：原文原样返回，不发任何网络请求。
+        TranslationEngineType.NONE -> PassthroughTranslationEngine
     }
 
     /** Convenience overload: pulls the key belonging to [settings]'s engine. */

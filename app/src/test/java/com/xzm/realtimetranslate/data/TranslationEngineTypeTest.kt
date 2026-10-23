@@ -65,6 +65,13 @@ class TranslationEngineTypeTest {
         assertFalse(TranslationEngineType.OPENAI_COMPAT.requiresApiKey)
         assertTrue(TranslationEngineType.OPENAI_COMPAT.isLlm)
         assertFalse(TranslationEngineType.OPENAI_COMPAT.hasPresetModels)
+
+        // 仅识别：不能要求 Key（否则「不花钱只出原文」就自相矛盾），不是 LLM
+        // （思考开关与草稿预览对它都无意义），也没有模型可选。
+        assertFalse(TranslationEngineType.NONE.requiresApiKey)
+        assertFalse(TranslationEngineType.NONE.showsApiKeyField)
+        assertFalse(TranslationEngineType.NONE.isLlm)
+        assertFalse(TranslationEngineType.NONE.hasPresetModels)
     }
 
     @Test

@@ -1598,7 +1598,8 @@ private fun isEngineConfigured(
 ): Boolean {
     return when (engine) {
         TranslationEngineType.MICROSOFT,
-        TranslationEngineType.GOOGLE_FREE -> true
+        TranslationEngineType.GOOGLE_FREE,
+        TranslationEngineType.NONE -> true
         TranslationEngineType.DEEPSEEK -> deepSeekKey.text.isNotBlank()
         TranslationEngineType.ZHIPU -> zhipuKey.text.isNotBlank()
         TranslationEngineType.GEMINI -> geminiKey.text.isNotBlank()
@@ -1832,6 +1833,7 @@ private fun EngineConfigSubScreen(
                     }
                     TranslationEngineType.MICROSOFT -> EngineHint(R.string.settings_microsoft_desc)
                     TranslationEngineType.GOOGLE_FREE -> EngineHint(R.string.settings_google_free_desc)
+                    TranslationEngineType.NONE -> EngineHint(R.string.settings_none_desc)
                 }
             }
         }

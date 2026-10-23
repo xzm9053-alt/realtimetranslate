@@ -93,6 +93,9 @@
     <string name="settings_gemini_model_hint">Get a free key at Google AI Studio (aistudio.google.com). Google retired gemini-2.5-flash for new API users, so the presets now use the 3.x Flash line.</string>
     <string name="engine_generic">Custom API (OpenAI-compatible)</string>
     <string name="engine_generic_summary">Any OpenAI-compatible service · key optional</string>
+    <string name="engine_none">Recognize only (no translation)</string>
+    <string name="engine_none_summary">Offline transcription · no API key, no cost</string>
+    <string name="settings_none_desc">Shows what was recognized, exactly as heard, without sending it anywhere. Works for audio subtitles, screen capture and video subtitles alike; nothing is translated, so no API key or network is needed.</string>
     <string name="settings_generic_key">API Key (optional)</string>
     <string name="settings_generic_base_url">Service base URL</string>
     <string name="settings_generic_hint">Include the path prefix, e.g. https://your-relay.example.com/v1 — do not add /chat/completions (it is appended for you). Leave the key empty only for local servers that need none, such as Ollama or LM Studio.</string>

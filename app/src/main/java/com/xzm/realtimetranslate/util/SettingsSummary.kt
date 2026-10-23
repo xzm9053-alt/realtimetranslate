@@ -60,6 +60,7 @@ object SettingsSummary {
         TranslationEngineType.ZHIPU -> settings.zhipuModel
         TranslationEngineType.GEMINI -> settings.geminiModel
         TranslationEngineType.OPENAI_COMPAT -> settings.genericModel.ifBlank { "(未设置)" }
+        TranslationEngineType.NONE -> "(仅识别)"
         else -> "(不适用)"
     }
 
@@ -69,6 +70,7 @@ object SettingsSummary {
         TranslationEngineType.ZHIPU -> settings.zhipuBaseUrl
         TranslationEngineType.GEMINI -> settings.geminiBaseUrl
         TranslationEngineType.OPENAI_COMPAT -> settings.genericBaseUrl.ifBlank { "(未设置)" }
+        TranslationEngineType.NONE -> "(不联网)"
         else -> "(内置)"
     }
 
