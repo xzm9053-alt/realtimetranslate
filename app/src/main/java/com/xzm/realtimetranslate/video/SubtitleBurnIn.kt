@@ -157,7 +157,7 @@ private class CueBitmapOverlay(
         // frame, and laying out the same line 30 times a second is wasted work.
         if (text == cachedKey) return cachedBitmap ?: blank.value
 
-        val bitmap = render(cue!!)
+        val bitmap = render(cue)
         cachedKey = text
         cachedBitmap = bitmap
         return bitmap
@@ -173,12 +173,15 @@ private class CueBitmapOverlay(
         val translation = cue.translation.trim()
 
         val lines = ArrayList<StaticLayout>(2)
-        if (mode == VideoSubtitleMode.BOTH && source.isNotEmpty() && source != translation) {
-            lines += layout(source, SOURCE_SIZE_PX, SOURCE_COLOR)
-        }
         val primary = when (mode) {
             VideoSubtitleMode.SOURCE -> source.ifBlank { translation }
             else -> translation.ifBlank { source }
+        }
+        // The dim line is a second copy of the source only when the primary line is the
+        // translation. With a blank translation the primary already *is* the source, and
+        // drawing both would show the same sentence twice.
+        if (mode == VideoSubtitleMode.BOTH && translation.isNotEmpty() && source != translation) {
+            lines += layout(source, SOURCE_SIZE_PX, SOURCE_COLOR)
         }
         if (primary.isNotEmpty()) lines += layout(primary, TEXT_SIZE_PX, Color.WHITE)
         if (lines.isEmpty()) return blank.value

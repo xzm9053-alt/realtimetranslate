@@ -544,12 +544,14 @@ private fun SubtitleOverlay(
 
     val source = cue.source.trim()
     val translation = cue.translation.trim()
-    val showSource = mode == VideoSubtitleMode.SOURCE ||
-        (mode == VideoSubtitleMode.BOTH && source.isNotEmpty() && source != translation)
     val primary = when (mode) {
         VideoSubtitleMode.SOURCE -> source.ifBlank { translation }
         else -> translation.ifBlank { source }
     }
+    // The dim line only earns its place in BOTH mode, and only when it differs from the
+    // primary line; otherwise the primary already is the source and both would read the same.
+    val showSource = mode == VideoSubtitleMode.BOTH &&
+        translation.isNotEmpty() && source != translation
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
