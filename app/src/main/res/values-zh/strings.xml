@@ -327,7 +327,7 @@
     <string name="update_new_version">最新版本：%1$s</string>
 
     <!-- 语音识别 ASR 引擎 -->
-    <string name="asr_engine_local">本地识别（sherpa-onnx）</string>
+    <string name="asr_engine_local">本地识别（SenseVoice · sherpa-onnx）</string>
     <string name="asr_engine_local_summary">sherpa-onnx 1.13.4 · SenseVoice int8 · Silero VAD。完全离线、零流量、隐私不出手机，但仅支持中/粤/英/日/韩五种语言</string>
     <string name="asr_local_language_limit">SenseVoice 是离线模型，只认得五种语言：中文、英语、日语、韩语、粤语。选其他源语言时会自动回退为「自动识别」，结果可能不准；需要其他语种请改用阿里百炼或通用引擎。</string>
     <string name="asr_engine_aliyun">阿里百炼 FunASR（云端真流式）</string>

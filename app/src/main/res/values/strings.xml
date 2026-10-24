@@ -328,7 +328,7 @@
     <string name="update_new_version">Latest version: %1$s</string>
 
     <!-- ASR Engines -->
-    <string name="asr_engine_local">On-device (sherpa-onnx)</string>
+    <string name="asr_engine_local">On-device (SenseVoice · sherpa-onnx)</string>
     <string name="asr_engine_local_summary">sherpa-onnx 1.13.4 · SenseVoice int8 · Silero VAD. Fully offline, zero data. Recognizes Chinese (incl. Cantonese), English, Japanese and Korean only.</string>
     <string name="asr_local_language_limit">The offline SenseVoice model knows five languages only: Chinese, Cantonese, English, Japanese and Korean. Any other source language silently falls back to auto-detect and may come out wrong — switch to the Aliyun or generic engine for those.</string>
     <string name="asr_engine_aliyun">Aliyun FunASR (Cloud Streaming)</string>
