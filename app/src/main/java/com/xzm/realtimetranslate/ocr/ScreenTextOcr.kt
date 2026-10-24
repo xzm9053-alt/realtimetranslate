@@ -40,34 +40,66 @@ class ScreenTextOcr {
      * failure/empty. The caller keeps ownership of [bitmap]; intermediate
      * preprocessed copies are recycled here.
      */
-    suspend fun recognize(bitmap: Bitmap, script: OcrScript): String? {
-        val prepared = preprocess(bitmap)
+    suspend fun recognize(bitmap: Bitmap, script: OcrScript): String? =
+        recognizePage(bitmap, script)
+            ?.blocks
+            ?.joinToString("\n") { it.text }
+            ?.let { OcrTextProcessor.cleanAndJoinLines(it) }
+            ?.takeIf { it.isNotEmpty() }
+
+    /**
+     * Same recognition as [recognize], but keeps the per-line bounding boxes so
+     * callers can draw over the original text. Coordinates are already scaled
+     * back to [bitmap]'s own pixel space.
+     */
+    suspend fun recognizePage(bitmap: Bitmap, script: OcrScript): OcrPage? {
+        val prepared = prepare(bitmap)
         return try {
             when (script) {
-                OcrScript.AUTO -> recognizeAuto(prepared)
-                else -> recognizeWith(prepared, script)
+                OcrScript.AUTO -> recognizePageAuto(prepared)
+                else -> recognizePageWith(prepared, script)
             }
         } finally {
-            if (prepared !== bitmap) prepared.recycle()
+            if (prepared.bitmap !== bitmap) prepared.bitmap.recycle()
         }
     }
 
-    /** Runs Latin + Japanese in parallel and picks the result that matches the content. */
-    private suspend fun recognizeAuto(prepared: Bitmap): String? = coroutineScope {
-        val latin = async { recognizeWith(prepared, OcrScript.LATIN) }
-        val japanese = async { recognizeWith(prepared, OcrScript.JAPANESE) }
-        pickBest(latin.await(), japanese.await())
+    /** Runs Latin + Japanese in parallel and keeps the page that matches the content. */
+    private suspend fun recognizePageAuto(prepared: Prepared): OcrPage? = coroutineScope {
+        val latin = async { recognizePageWith(prepared, OcrScript.LATIN) }
+        val japanese = async { recognizePageWith(prepared, OcrScript.JAPANESE) }
+        pickBestPage(latin.await(), japanese.await())
     }
 
-    private suspend fun recognizeWith(prepared: Bitmap, script: OcrScript): String? {
+    private suspend fun recognizePageWith(prepared: Prepared, script: OcrScript): OcrPage? {
         val rec = ensureRecognizer(script) ?: return null
         return try {
-            val text = rec.process(InputImage.fromBitmap(prepared, 0)).await()
-            joinReadingOrder(text).takeIf { it.isNotEmpty() }
+            val text = rec.process(InputImage.fromBitmap(prepared.bitmap, 0)).await()
+            toPage(text, prepared).takeIf { it.blocks.isNotEmpty() }
         } catch (t: Throwable) {
             Log.w(TAG, "recognize failed for $script", t)
             null
         }
+    }
+
+    /** Converts ML Kit output to page-space boxes, undoing the preprocessing upscale. */
+    private fun toPage(text: Text, prepared: Prepared): OcrPage {
+        val blocks = text.textBlocks
+            .sortedWith(compareBy({ it.boundingBox?.top ?: 0 }, { it.boundingBox?.left ?: 0 }))
+            .mapNotNull { block ->
+                val lines = block.lines.mapNotNull { line ->
+                    val box = line.boundingBox ?: return@mapNotNull null
+                    val content = line.text.trim()
+                    if (content.isEmpty()) return@mapNotNull null
+                    OcrLine(
+                        text = content,
+                        rect = PixelRect(box.left, box.top, box.right, box.bottom)
+                            .scaleToSource(prepared.scaleX, prepared.scaleY),
+                    )
+                }
+                if (lines.isEmpty()) null else OcrBlock(lines)
+            }
+        return OcrPage(prepared.sourceWidth, prepared.sourceHeight, blocks)
     }
 
     /** Lazy per-script recognizer; [OcrScript.AUTO] is resolved before this is reached. */
@@ -104,21 +136,22 @@ class ScreenTextOcr {
 
     // ---- script selection (AUTO) ---------------------------------------------
 
-    /**
-     * Picks whichever recognizer output matches the content:
-     * empty side loses; presence of kana → Japanese; otherwise CJK-heavy Japanese
-     * output wins, Latin-heavy Latin output wins.
-     */
-    private fun pickBest(latin: String?, japanese: String?): String? {
-        val lt = latin?.trim().orEmpty()
-        val jt = japanese?.trim().orEmpty()
+    private fun pickBestPage(latin: OcrPage?, japanese: OcrPage?): OcrPage? {
+        val lt = latin?.let(::pageText)?.trim().orEmpty()
+        val jt = japanese?.let(::pageText)?.trim().orEmpty()
         if (lt.isEmpty() && jt.isEmpty()) return null
         if (lt.isEmpty()) return japanese
         if (jt.isEmpty()) return latin
-        if (jt.any { it in '぀'..'ヿ' }) return japanese // hiragana/katakana
+        return if (preferJapanese(jt, lt)) japanese else latin
+    }
+
+    private fun pageText(page: OcrPage): String = page.blocks.joinToString("\n") { it.text }
+
+    private fun preferJapanese(jt: String, lt: String): Boolean {
+        if (jt.any { it in '぀'..'ヿ' }) return true // hiragana/katakana
         val jpCjkRatio = jt.count(::isCjk).toFloat() / jt.length
         val latinRatio = lt.count { it.code in 0x20..0x7e }.toFloat() / lt.length
-        return if (jpCjkRatio > 0.15f && jpCjkRatio >= latinRatio) japanese else latin
+        return jpCjkRatio > 0.15f && jpCjkRatio >= latinRatio
     }
 
     /** CJK ideographs, kana, Hangul, bopomofo. */
@@ -133,13 +166,33 @@ class ScreenTextOcr {
 
     // ---- preprocessing --------------------------------------------------------
 
+    /** A preprocessed copy plus the factor needed to map boxes back to source pixels. */
+    private class Prepared(
+        val bitmap: Bitmap,
+        val scaleX: Float,
+        val scaleY: Float,
+        val sourceWidth: Int,
+        val sourceHeight: Int,
+    )
+
     /**
      * Upscales small crops to a readable text size (resolution is the top OCR
      * accuracy lever) and applies a mild grayscale + contrast boost. Threshold
      * binarization is intentionally off: ML Kit's deep models prefer natural
      * images, and over-binarizing anti-aliased UI text hurts more than it helps.
      */
-    private fun preprocess(bitmap: Bitmap): Bitmap = enhance(upscale(bitmap))
+    private fun prepare(bitmap: Bitmap): Prepared {
+        val upscaled = upscale(bitmap)
+        val enhanced = enhance(upscaled)
+        if (upscaled !== bitmap && upscaled !== enhanced) upscaled.recycle()
+        return Prepared(
+            bitmap = enhanced,
+            scaleX = enhanced.width.toFloat() / bitmap.width,
+            scaleY = enhanced.height.toFloat() / bitmap.height,
+            sourceWidth = bitmap.width,
+            sourceHeight = bitmap.height,
+        )
+    }
 
     private fun upscale(bitmap: Bitmap): Bitmap {
         val w = bitmap.width
@@ -179,22 +232,6 @@ class ScreenTextOcr {
         val paint = Paint().apply { colorFilter = ColorMatrixColorFilter(cm) }
         canvas.drawBitmap(bitmap, 0f, 0f, paint)
         return out
-    }
-
-    /** Sorts blocks top→left so a multi-line caption region reads in order. */
-    private fun joinReadingOrder(text: Text): String {
-        val blocks = text.textBlocks.sortedWith(
-            compareBy({ it.boundingBox?.top ?: 0 }, { it.boundingBox?.left ?: 0 }),
-        )
-        val sb = StringBuilder()
-        for (block in blocks) {
-            for (line in block.lines) {
-                if (sb.isNotEmpty()) sb.append('\n')
-                sb.append(line.text.trim())
-            }
-        }
-        val raw = sb.toString().trim()
-        return OcrTextProcessor.cleanAndJoinLines(raw)
     }
 
     companion object {
