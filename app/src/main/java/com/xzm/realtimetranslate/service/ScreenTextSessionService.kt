@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.content.res.Configuration
+import android.graphics.Bitmap
 import android.graphics.Rect
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
@@ -26,12 +27,20 @@ import com.xzm.realtimetranslate.LiveTranslateApp
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.HistoryEntry
 import com.xzm.realtimetranslate.data.HistoryMode
+import com.xzm.realtimetranslate.data.ScreenOcrMode
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
+import com.xzm.realtimetranslate.ocr.BackgroundColorSampler
 import com.xzm.realtimetranslate.ocr.ScreenTextCapturer
 import com.xzm.realtimetranslate.ocr.ScreenTextOcr
+import com.xzm.realtimetranslate.ocr.TextTarget
+import com.xzm.realtimetranslate.ocr.TranslationPlanner
+import com.xzm.realtimetranslate.overlay.CoverOverlayController
+import com.xzm.realtimetranslate.overlay.CoverStyle
+import com.xzm.realtimetranslate.overlay.CoverTarget
 import com.xzm.realtimetranslate.overlay.OcrBallOverlay
 import com.xzm.realtimetranslate.overlay.RegionSelectorOverlay
+import com.xzm.realtimetranslate.translate.TranslationCache
 import com.xzm.realtimetranslate.translate.TranslationEngine
 import com.xzm.realtimetranslate.translate.TranslationEngineFactory
 import com.xzm.realtimetranslate.ui.main.MainActivity
@@ -47,11 +56,15 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
 /**
@@ -78,9 +91,23 @@ class ScreenTextSessionService : Service() {
     private var capturer: ScreenTextCapturer? = null
     private var ocr: ScreenTextOcr? = null
     private var overlay: OcrBallOverlay? = null
+    private var coverOverlay: CoverOverlayController? = null
     private var settingsJob: Job? = null
     private var commandJob: Job? = null
     private var ocrJob: Job? = null
+
+    /** Region bubble vs whole-screen cover. Fixed for the lifetime of a session. */
+    @Volatile
+    private var mode: ScreenOcrMode = ScreenOcrMode.REGION
+
+    private val backgroundSampler = BackgroundColorSampler()
+
+    /** Session-scoped: re-recognizing the same screen must not re-bill the engine. */
+    private val translationCache = TranslationCache()
+
+    /** Bumped for every cover frame; a worker whose epoch is stale drops its results. */
+    @Volatile
+    private var coverEpoch = 0
 
     @Volatile
     private var currentSettings: UserSettings = UserSettings()
@@ -164,15 +191,19 @@ class ScreenTextSessionService : Service() {
                     stopSelf()
                     return START_NOT_STICKY
                 }
-                startSession(region, resultCode, data)
+                val requestedMode = intent.getStringExtra(EXTRA_MODE)
+                    ?.let { name -> runCatching { ScreenOcrMode.valueOf(name) }.getOrNull() }
+                    ?: ScreenOcrMode.REGION
+                startSession(region, resultCode, data, requestedMode)
             }
         }
         return START_STICKY
     }
 
-    private fun startSession(region: Rect, resultCode: Int, data: Intent) {
+    private fun startSession(region: Rect, resultCode: Int, data: Intent, requestedMode: ScreenOcrMode) {
         stopped = false
         paused = false
+        mode = requestedMode
         currentRegion = region
         ScreenOcrBus.setStatus(ScreenOcrBus.Status.Starting, getString(R.string.ocr_starting))
         startAsForeground()
@@ -239,25 +270,29 @@ class ScreenTextSessionService : Service() {
 
         // 半球球 + 译文气泡。点球 = 暂停/继续；长按 = 菜单（暂停、重选区域、取词框、停止）。
         // 全部在服务内处理，不重启投影、不需要重新授权。
-        val ocrOverlay = OcrBallOverlay(
-            context = this@ScreenTextSessionService,
-            onTogglePause = { setPaused(!paused) },
-            onReselectRegion = {
-                if (!stopped) {
-                    RegionSelectorOverlay(
-                        this@ScreenTextSessionService,
-                        onConfirm = { newRegion -> updateRegion(newRegion) },
-                        onCancel = { },
-                    ).show()
-                }
-            },
-            onStop = { stopEverything(getString(R.string.ocr_stopped)) },
-            onRegionMoved = { newRegion -> updateRegion(newRegion) },
-        )
-        overlay = ocrOverlay
-        ocrOverlay.show(currentSettings)
-        // 在球旁用一条淡色细框标出当前 OCR 选区，让用户知道在翻译屏幕哪块。
-        ocrOverlay.showRegionOutline(region)
+        // 全屏覆盖模式没有球也没有气泡，输出全在覆盖层上。
+        val fullscreen = mode == ScreenOcrMode.FULLSCREEN
+        if (!fullscreen) {
+            val ocrOverlay = OcrBallOverlay(
+                context = this@ScreenTextSessionService,
+                onTogglePause = { setPaused(!paused) },
+                onReselectRegion = {
+                    if (!stopped) {
+                        RegionSelectorOverlay(
+                            this@ScreenTextSessionService,
+                            onConfirm = { newRegion -> updateRegion(newRegion) },
+                            onCancel = { },
+                        ).show()
+                    }
+                },
+                onStop = { stopEverything(getString(R.string.ocr_stopped)) },
+                onRegionMoved = { newRegion -> updateRegion(newRegion) },
+            )
+            overlay = ocrOverlay
+            ocrOverlay.show(currentSettings)
+            // 在球旁用一条淡色细框标出当前 OCR 选区，让用户知道在翻译屏幕哪块。
+            ocrOverlay.showRegionOutline(region)
+        }
 
         // The virtual display must match the real (full) display size so the
         // region Rect — which lives in full-screen coordinates — maps 1:1.
@@ -268,7 +303,7 @@ class ScreenTextSessionService : Service() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) wm.currentWindowMetrics.bounds else null
         val rotation = realDisplayRotation()
         Log.i(TAG, "OCRMAP realScreen=${displayW}x$displayH dpi=$densityDpi rot=$rotation " +
-            "windowBounds=$windowBounds region=$region")
+            "windowBounds=$windowBounds region=$region mode=$mode")
         if (displayW < MIN_REGION_PX || displayH < MIN_REGION_PX) {
             ScreenOcrBus.setStatus(ScreenOcrBus.Status.Error, getString(R.string.ocr_region_invalid))
             stopEverything(getString(R.string.ocr_region_invalid))
@@ -278,19 +313,29 @@ class ScreenTextSessionService : Service() {
         // display rotated while the projection dialog was up, those numbers are
         // stale. Squeeze them back in range and carry on — never end the session
         // over an out-of-range region.
-        val usableRegion = clampRegion(region, displayW, displayH, MIN_REGION_PX)
-        if (usableRegion != region) Log.i(TAG, "OCRMAP clamped $region -> $usableRegion")
+        val usableRegion = if (fullscreen) {
+            Rect(0, 0, displayW, displayH)
+        } else {
+            clampRegion(region, displayW, displayH, MIN_REGION_PX)
+        }
+        if (!fullscreen && usableRegion != region) Log.i(TAG, "OCRMAP clamped $region -> $usableRegion")
         currentRegion = usableRegion
         regionSpaceW = displayW
         regionSpaceH = displayH
         regionSpaceRot = rotation
-        ocrOverlay.showRegionOutline(usableRegion)
+        overlay?.showRegionOutline(usableRegion)
         val capturer = ScreenTextCapturer(projection, displayW, displayH, densityDpi, null)
         this@ScreenTextSessionService.capturer = capturer
         capturer.start()
 
         val ocrEngine = ScreenTextOcr()
         ocr = ocrEngine
+
+        if (fullscreen) {
+            val cover = CoverOverlayController(this@ScreenTextSessionService)
+            cover.show(coverStyleOf(currentSettings))
+            coverOverlay = cover
+        }
 
         settingsJob = scope.launch {
             app.settingsRepository.settings.collectLatest { s ->
@@ -299,9 +344,18 @@ class ScreenTextSessionService : Service() {
             }
         }
 
-        ScreenOcrBus.setStatus(ScreenOcrBus.Status.Running, getString(R.string.ocr_running))
+        ScreenOcrBus.setStatus(
+            ScreenOcrBus.Status.Running,
+            getString(if (fullscreen) R.string.cover_notification_text else R.string.ocr_running),
+        )
         runOcrLoop()
     }
+
+    private fun coverStyleOf(settings: UserSettings): CoverStyle = CoverStyle(
+        bilingual = settings.coverBilingual,
+        fontScale = settings.coverFontScale,
+        blockStyle = settings.coverBlockStyle,
+    )
 
     /**
      * Capture loop: capture → skip unchanged frames → OCR → hand off to the
@@ -338,7 +392,7 @@ class ScreenTextSessionService : Service() {
     /** 暂停 / 继续：只停采集、OCR 与翻译，保留录屏授权、悬浮球、选区和已显示的
      *  译文。恢复时清掉去重状态，下一帧立即按当前画面重新识别。 */
     private fun setPaused(value: Boolean) {
-        if (stopped || overlay == null || paused == value) return
+        if (stopped || (overlay == null && coverOverlay == null) || paused == value) return
         paused = value
         if (value) {
             ScreenOcrBus.setStatus(ScreenOcrBus.Status.Paused, getString(R.string.ocr_paused))
@@ -388,13 +442,25 @@ class ScreenTextSessionService : Service() {
                 }
             }
 
+            // 全屏覆盖模式的帧队列：同样 conflated —— 翻译慢时只保留最新一帧，
+            // 屏幕不会在几秒前的画面上追帧。
+            val coverFrames = Channel<CoverFrame>(Channel.CONFLATED)
+            launch {
+                for (frame in coverFrames) {
+                    if (stopped) break
+                    if (paused) continue
+                    translateCoverFrame(engine, frame)
+                }
+            }
+
             // TRANSPROF 诊断（只读埋点）：空转轮次累积计数，每 10 轮汇报一次，
             // 用来判断「是不是每帧都在重发请求」。
             var idleRounds = 0
+            val frameInterval = if (mode == ScreenOcrMode.FULLSCREEN) COVER_FRAME_INTERVAL_MS else FRAME_INTERVAL_MS
             while (isActive && !stopped) {
                 if (paused) {
                     // 暂停：不做截图、不跑 OCR、不发请求，但仍保持循环可被恢复。
-                    delay(FRAME_INTERVAL_MS)
+                    delay(frameInterval)
                     continue
                 }
                 if (SystemClock.elapsedRealtime() < capturePausedUntil) {
@@ -415,28 +481,38 @@ class ScreenTextSessionService : Service() {
                 val captureMs = SystemClock.elapsedRealtime() - tCapture
                 if (frame != null && frame.hash != lastHash) {
                     lastHash = frame.hash
-                    val tOcr = SystemClock.elapsedRealtime()
-                    val text = withContext(Dispatchers.IO) {
-                        ocr?.recognize(frame.bitmap, currentSettings.ocrScript)
-                    }
-                    val ocrMs = SystemClock.elapsedRealtime() - tOcr
-                    if (!text.isNullOrBlank() && text != lastText) {
-                        lastText = text
-                        pendingText.trySend(text)
+                    if (mode == ScreenOcrMode.FULLSCREEN) {
+                        handleCoverFrame(frame.bitmap)?.let { coverFrames.trySend(it) }
                         Log.i(
                             TAG,
-                            "TRANSPROF ocrloop capture=$captureMs ocr=$ocrMs " +
-                                "ocrChars=${text.length} textChanged=true " +
+                            "TRANSPROF coverloop capture=$captureMs " +
                                 "cycle=${SystemClock.elapsedRealtime() - cycleStart}",
                         )
                         idleRounds = 0
                     } else {
-                        idleRounds++
-                        if (idleRounds % IDLE_LOG_ROUNDS == 0) {
+                        val tOcr = SystemClock.elapsedRealtime()
+                        val text = withContext(Dispatchers.IO) {
+                            ocr?.recognize(frame.bitmap, currentSettings.ocrScript)
+                        }
+                        val ocrMs = SystemClock.elapsedRealtime() - tOcr
+                        if (!text.isNullOrBlank() && text != lastText) {
+                            lastText = text
+                            pendingText.trySend(text)
                             Log.i(
                                 TAG,
-                                "TRANSPROF ocrloopidle rounds=$idleRounds hashChanged=true textChanged=false",
+                                "TRANSPROF ocrloop capture=$captureMs ocr=$ocrMs " +
+                                    "ocrChars=${text.length} textChanged=true " +
+                                    "cycle=${SystemClock.elapsedRealtime() - cycleStart}",
                             )
+                            idleRounds = 0
+                        } else {
+                            idleRounds++
+                            if (idleRounds % IDLE_LOG_ROUNDS == 0) {
+                                Log.i(
+                                    TAG,
+                                    "TRANSPROF ocrloopidle rounds=$idleRounds hashChanged=true textChanged=false",
+                                )
+                            }
                         }
                     }
                 } else {
@@ -448,11 +524,97 @@ class ScreenTextSessionService : Service() {
                         )
                     }
                 }
-                delay(FRAME_INTERVAL_MS)
+                delay(frameInterval)
             }
             // 采集循环正常退出（stopped）：关掉 Channel 让 worker 一起收尾，
             // 否则父协程会一直等这个挂在 receive 上的子协程。
             pendingText.close()
+            coverFrames.close()
+        }
+    }
+
+    /** One full-screen frame's translation units plus the color sampled behind each. */
+    private class CoverFrame(val epoch: Int, val requests: List<CoverRequest>)
+
+    private class CoverRequest(val target: TextTarget, val background: Int)
+
+    /**
+     * OCR + background sampling for one cover frame.
+     *
+     * Must finish before returning to the capture loop: [ScreenTextCapturer] reuses
+     * a single bitmap for every frame, so nothing here may hand `bitmap` to a
+     * background coroutine — it would be overwritten by the next capture mid-read.
+     */
+    private suspend fun handleCoverFrame(bitmap: Bitmap): CoverFrame? {
+        val page = withContext(Dispatchers.IO) {
+            try {
+                ocr?.recognizePage(bitmap, currentSettings.ocrScript)
+            } catch (t: Throwable) {
+                Log.w(TAG, "cover ocr failed", t)
+                null
+            }
+        } ?: return null
+        val targets = TranslationPlanner.plan(page, currentSettings.targetLanguageCode)
+        if (targets.isEmpty()) {
+            // Nothing on this screen needs translating: drop the previous blocks
+            // instead of leaving stale translations over changed content.
+            coverOverlay?.update(emptyList())
+            return null
+        }
+        val requests = withContext(Dispatchers.IO) {
+            targets.map { CoverRequest(it, backgroundSampler.sample(bitmap, it.rect)) }
+        }
+        return CoverFrame(++coverEpoch, requests)
+    }
+
+    /** Translates one frame's blocks, at most [TRANSLATE_CONCURRENCY] in flight. */
+    private suspend fun translateCoverFrame(engine: TranslationEngine, frame: CoverFrame) {
+        val cover = coverOverlay ?: return
+        val results = arrayOfNulls<CoverTarget>(frame.requests.size)
+        val semaphore = Semaphore(TRANSLATE_CONCURRENCY)
+        coroutineScope {
+            frame.requests.forEachIndexed { index, request ->
+                launch(Dispatchers.Default) {
+                    val translated = semaphore.withPermit { translateTarget(engine, request.target) }
+                    // A failure leaves the original text uncovered — never paint
+                    // "翻译失败" over someone's screen.
+                    if (translated.isNullOrBlank()) return@launch
+                    if (frame.epoch != coverEpoch) return@launch
+                    val target = CoverTarget(
+                        rect = request.target.rect.offset(currentRegion.left, currentRegion.top),
+                        text = translated,
+                        background = request.background,
+                        original = request.target.text,
+                    )
+                    val snapshot = synchronized(results) {
+                        results[index] = target
+                        results.filterNotNull()
+                    }
+                    cover.update(snapshot)
+                }
+            }
+        }
+    }
+
+    /** Cached per language pair + text, so a static screen costs nothing after the first pass. */
+    private suspend fun translateTarget(engine: TranslationEngine, target: TextTarget): String? {
+        val source = currentSettings.sourceLanguageCode
+        val dest = currentSettings.targetLanguageCode
+        val key = "$source>$dest|${target.key}"
+        translationCache.get(key)?.let { return it }
+        return try {
+            val out = engine.translate(text = target.text, sourceLang = source, targetLang = dest).last()
+            if (out.isBlank()) {
+                null
+            } else {
+                translationCache.put(key, out)
+                out
+            }
+        } catch (t: CancellationException) {
+            throw t
+        } catch (t: Throwable) {
+            Log.w(TAG, "cover translate failed chars=${target.text.length}", t)
+            null
         }
     }
 
@@ -561,6 +723,21 @@ class ScreenTextSessionService : Service() {
         }
 
         if (!geometryChanged) return // 纯 fontScale / uiMode / locale / 键盘变化
+
+        if (mode == ScreenOcrMode.FULLSCREEN) {
+            // 覆盖模式没有选区可映射：整屏重取，旧覆盖块必须清空，否则上一方向的
+            // 译文会留在屏幕中间。
+            currentRegion = Rect(0, 0, newW, newH)
+            regionSpaceW = newW
+            regionSpaceH = newH
+            regionSpaceRot = newRot
+            lastHash = Long.MIN_VALUE
+            coverEpoch++
+            coverOverlay?.reclamp()
+            Log.i(TAG, "OCRMAP cover display change rot=$newRot ${newW}x$newH")
+            return
+        }
+
         currentRegion = region
         lastHash = Long.MIN_VALUE // 换了坐标系，强制下一帧重新识别
         overlay?.showRegionOutline(region) // 必须同步，否则外框还画在旧位置
@@ -607,11 +784,19 @@ class ScreenTextSessionService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         return NotificationCompat.Builder(this, LiveTranslateApp.CHANNEL_SUBTITLE)
-            .setContentTitle(getString(R.string.ocr_notification_title))
+            .setContentTitle(
+                getString(
+                    if (mode == ScreenOcrMode.FULLSCREEN) R.string.cover_fullscreen_notification_title
+                    else R.string.ocr_notification_title,
+                ),
+            )
             .setContentText(
                 getString(
-                    if (paused) R.string.ocr_notification_paused_text
-                    else R.string.ocr_notification_text,
+                    when {
+                        paused -> R.string.ocr_notification_paused_text
+                        mode == ScreenOcrMode.FULLSCREEN -> R.string.cover_notification_text
+                        else -> R.string.ocr_notification_text
+                    },
                 ),
             )
             .setSmallIcon(R.drawable.ic_notification)
@@ -658,6 +843,9 @@ class ScreenTextSessionService : Service() {
         capturer = null
         overlay?.hide()
         overlay = null
+        coverOverlay?.hide()
+        coverOverlay = null
+        coverEpoch++
         try {
             mediaProjection?.stop()
         } catch (_: Exception) {
@@ -674,6 +862,7 @@ class ScreenTextSessionService : Service() {
         ocr?.close()
         capturer?.release()
         overlay?.hide()
+        coverOverlay?.hide()
         try {
             mediaProjection?.stop()
         } catch (_: Exception) {
@@ -688,6 +877,10 @@ class ScreenTextSessionService : Service() {
         private const val TAG = "ScreenTextSessionService"
         private const val NOTIFICATION_ID = 43
         private const val FRAME_INTERVAL_MS = 900L
+        /** Full-screen cover refresh: slower than region OCR — a whole screen costs far more. */
+        private const val COVER_FRAME_INTERVAL_MS = 1200L
+        /** Blocks translated in parallel within one cover frame. */
+        private const val TRANSLATE_CONCURRENCY = 2
         private const val MIN_REGION_PX = RegionGestureMath.MIN_REGION_PX
         /** TRANSPROF 诊断：空转多少轮汇报一次心跳（900ms × 10 ≈ 9s）。 */
         private const val IDLE_LOG_ROUNDS = 10
@@ -700,13 +893,21 @@ class ScreenTextSessionService : Service() {
         const val EXTRA_REGION = "region"
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_RESULT_DATA = "result_data"
+        const val EXTRA_MODE = "mode"
 
-        fun start(context: Context, region: Rect, resultCode: Int, data: Intent) {
+        fun start(
+            context: Context,
+            region: Rect,
+            resultCode: Int,
+            data: Intent,
+            mode: ScreenOcrMode = ScreenOcrMode.REGION,
+        ) {
             val intent = Intent(context, ScreenTextSessionService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_REGION, region)
                 putExtra(EXTRA_RESULT_CODE, resultCode)
                 putExtra(EXTRA_RESULT_DATA, data)
+                putExtra(EXTRA_MODE, mode.name)
             }
             context.startForegroundService(intent)
         }

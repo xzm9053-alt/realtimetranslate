@@ -60,6 +60,13 @@ data class UserSettings(
     val ocrRegionOutlineColor: Long = Defaults.OCR_OUTLINE_COLOR,
     // Border opacity 0.1..1.0 — "明显程度" of the outline.
     val ocrRegionOutlineAlpha: Float = Defaults.OCR_OUTLINE_ALPHA,
+    // Full-screen cover mode: paint the translation over the original text.
+    // Bilingual keeps the original in a smaller, dimmer line above the translation.
+    val coverBilingual: Boolean = Defaults.COVER_BILINGUAL,
+    // Multiplier on the auto-fit font size of a cover block (0.8..1.6).
+    val coverFontScale: Float = Defaults.COVER_FONT_SCALE,
+    // "AUTO" samples the background color behind each block; "DARK" always uses black.
+    val coverBlockStyle: String = Defaults.COVER_BLOCK_STYLE,
     // Cache of the last live model check, so dead models stay marked across restarts
     // instead of costing another round of requests. Not a user preference.
     val discoveredModels: List<String> = emptyList(),
@@ -151,6 +158,9 @@ data class UserSettings(
         const val OCR_OUTLINE_ENABLED = true
         const val OCR_OUTLINE_COLOR = 0xFF2E7CF6
         const val OCR_OUTLINE_ALPHA = 0.5f
+        const val COVER_BILINGUAL = false
+        const val COVER_FONT_SCALE = 1.0f
+        const val COVER_BLOCK_STYLE = "AUTO"
         const val DIAGNOSTIC_LOG_CONTENT = false
         val ASR_ENGINE: AsrEngineType = AsrEngineType.LOCAL_SENSEVOICE
         const val ALIYUN_ASR_MODEL = "fun-asr-realtime"

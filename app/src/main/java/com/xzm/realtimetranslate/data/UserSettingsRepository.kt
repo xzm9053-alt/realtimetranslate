@@ -56,6 +56,9 @@ class UserSettingsRepository(private val context: Context) {
         val ocrRegionOutlineEnabled = booleanPreferencesKey("ocr_region_outline_enabled")
         val ocrRegionOutlineColor = longPreferencesKey("ocr_region_outline_color")
         val ocrRegionOutlineAlpha = floatPreferencesKey("ocr_region_outline_alpha")
+        val coverBilingual = booleanPreferencesKey("cover_bilingual")
+        val coverFontScale = floatPreferencesKey("cover_font_scale")
+        val coverBlockStyle = stringPreferencesKey("cover_block_style")
         val discoveredModels = stringPreferencesKey("discovered_models")
         val modelAvailability = stringPreferencesKey("model_availability")
         val modelsCheckedAt = longPreferencesKey("models_checked_at")
@@ -119,6 +122,9 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.ocrRegionOutlineEnabled] = next.ocrRegionOutlineEnabled
             prefs[Keys.ocrRegionOutlineColor] = next.ocrRegionOutlineColor
             prefs[Keys.ocrRegionOutlineAlpha] = next.ocrRegionOutlineAlpha
+            prefs[Keys.coverBilingual] = next.coverBilingual
+            prefs[Keys.coverFontScale] = next.coverFontScale
+            prefs[Keys.coverBlockStyle] = next.coverBlockStyle
             prefs[Keys.discoveredModels] = ModelCacheCodec.encodeList(next.discoveredModels)
             prefs[Keys.modelAvailability] = ModelCacheCodec.encodeMap(next.modelAvailability)
             prefs[Keys.modelsCheckedAt] = next.modelsCheckedAt
@@ -196,6 +202,9 @@ class UserSettingsRepository(private val context: Context) {
             ?: UserSettings.Defaults.OCR_OUTLINE_COLOR,
         ocrRegionOutlineAlpha = this[Keys.ocrRegionOutlineAlpha]
             ?: UserSettings.Defaults.OCR_OUTLINE_ALPHA,
+        coverBilingual = this[Keys.coverBilingual] ?: UserSettings.Defaults.COVER_BILINGUAL,
+        coverFontScale = this[Keys.coverFontScale] ?: UserSettings.Defaults.COVER_FONT_SCALE,
+        coverBlockStyle = this[Keys.coverBlockStyle] ?: UserSettings.Defaults.COVER_BLOCK_STYLE,
         discoveredModels = ModelCacheCodec.decodeList(this[Keys.discoveredModels]),
         modelAvailability = ModelCacheCodec.decodeMap(this[Keys.modelAvailability]),
         modelsCheckedAt = this[Keys.modelsCheckedAt] ?: 0L,
