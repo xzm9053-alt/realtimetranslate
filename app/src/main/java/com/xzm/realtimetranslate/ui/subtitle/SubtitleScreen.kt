@@ -50,6 +50,7 @@ import com.xzm.realtimetranslate.data.OcrScript
 import com.xzm.realtimetranslate.data.SubtitleDisplayMode
 import com.xzm.realtimetranslate.data.SupportedLanguages
 import com.xzm.realtimetranslate.data.UserSettings
+import com.xzm.realtimetranslate.overlay.CoverView
 import com.xzm.realtimetranslate.service.ScreenOcrBus
 import com.xzm.realtimetranslate.service.SessionBus
 import com.xzm.realtimetranslate.ui.components.PageTitle
@@ -449,6 +450,66 @@ fun SubtitleScreen(
                             )
                         }
                     }
+                }
+            }
+
+            // 全屏覆盖外观：只在全屏翻译里生效，取词气泡用另一套样式。
+            SmallTitle(
+                text = stringResource(R.string.cover_appearance),
+                modifier = Modifier.padding(horizontal = 24.dp),
+            )
+            SectionCard {
+                Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                    SettingSwitchRow(
+                        title = stringResource(R.string.cover_bilingual),
+                        summary = stringResource(R.string.cover_bilingual_summary),
+                        checked = settings.coverBilingual,
+                        onCheckedChange = { v ->
+                            onUpdateSettings { it.copy(coverBilingual = v) }
+                        },
+                    )
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = stringResource(
+                                R.string.cover_font_scale,
+                                (settings.coverFontScale * 100).roundToInt(),
+                            ),
+                            fontSize = 13.sp,
+                        )
+                        Slider(
+                            value = settings.coverFontScale,
+                            onValueChange = { v ->
+                                onUpdateSettings { it.copy(coverFontScale = v) }
+                            },
+                            valueRange = 0.7f..1.6f,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    SettingSwitchRow(
+                        title = stringResource(R.string.cover_dark_block),
+                        summary = stringResource(R.string.cover_dark_block_summary),
+                        checked = settings.coverBlockStyle == CoverView.BLOCK_STYLE_DARK,
+                        onCheckedChange = { dark ->
+                            onUpdateSettings {
+                                it.copy(
+                                    coverBlockStyle = if (dark) {
+                                        CoverView.BLOCK_STYLE_DARK
+                                    } else {
+                                        UserSettings.Defaults.COVER_BLOCK_STYLE
+                                    },
+                                )
+                            }
+                        },
+                    )
+                    Text(
+                        text = stringResource(R.string.cover_requires_restart),
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
                 }
             }
         }

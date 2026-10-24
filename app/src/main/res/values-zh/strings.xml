@@ -227,6 +227,13 @@
     <string name="cover_fullscreen_notification_title">全屏翻译中</string>
     <string name="cover_notification_text">正在识别屏幕文字并覆盖原文</string>
     <string name="cover_fullscreen">🖥 全屏翻译</string>
+    <string name="cover_appearance">全屏覆盖外观</string>
+    <string name="cover_bilingual">双语显示</string>
+    <string name="cover_bilingual_summary">译文下方同时显示原文小字</string>
+    <string name="cover_font_scale">字号 %1$d%%</string>
+    <string name="cover_dark_block">深色块</string>
+    <string name="cover_dark_block_summary">关：底色取自原文背景；开：统一用深色块</string>
+    <string name="cover_requires_restart">在全屏翻译进行中调整会立即生效</string>
     <string name="cover_starting">正在启动全屏翻译…</string>
     <string name="ocr_starting">正在启动屏幕取词…</string>
     <string name="ocr_running">正在识别所选区域…</string>

@@ -45,7 +45,17 @@ class CoverOverlayController(private val context: Context) {
             val cover = view ?: return@onMain
             val (w, h, _) = context.realScreenMetrics()
             val filtered = targets.filterNot { onSystemBar(it.rect, w, h) }
-            cover.setTargets(filtered, coverStyle)
+            // System bars inset this window (frame starts at the status bar), so the
+            // view's (0,0) is not the screen's (0,0). Targets arrive in screen pixels;
+            // shift them into view space or every block lands one status-bar too low.
+            val loc = IntArray(2)
+            cover.getLocationOnScreen(loc)
+            val placed = if (loc[0] == 0 && loc[1] == 0) {
+                filtered
+            } else {
+                filtered.map { it.copy(rect = it.rect.offset(-loc[0], -loc[1])) }
+            }
+            cover.setTargets(placed, coverStyle)
         }
     }
 
@@ -85,7 +95,13 @@ class CoverOverlayController(private val context: Context) {
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
             WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED or
+            // FLAG_SECURE keeps this window out of the MediaProjection frames. Without
+            // it the cover paints over the text, the next capture reads the translation
+            // as fresh content and translates it again — forever. A secure window is
+            // omitted from non-secure virtual displays, which is exactly what we need.
+            // Side effect: the user cannot screenshot the translated screen either.
+            WindowManager.LayoutParams.FLAG_SECURE,
         PixelFormat.TRANSLUCENT,
     )
 

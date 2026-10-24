@@ -338,9 +338,19 @@ class ScreenTextSessionService : Service() {
         }
 
         settingsJob = scope.launch {
+            var lastCoverStyle = coverStyleOf(currentSettings)
             app.settingsRepository.settings.collectLatest { s ->
                 currentSettings = s
                 overlay?.updateSettings(s)
+                // Rebuilding the window is the cheapest way to restyle: the next
+                // frame re-plans from scratch and every block comes back from the
+                // translation cache, so this costs no network requests.
+                val style = coverStyleOf(s)
+                if (coverOverlay != null && style != lastCoverStyle) {
+                    lastCoverStyle = style
+                    coverEpoch++
+                    coverOverlay?.show(style)
+                }
             }
         }
 
@@ -555,6 +565,11 @@ class ScreenTextSessionService : Service() {
             }
         } ?: return null
         val targets = TranslationPlanner.plan(page, currentSettings.targetLanguageCode)
+        Log.i(
+            TAG,
+            "TRANSPROF coverplan blocks=${page.blocks.size} targets=${targets.size} " +
+                "target=${currentSettings.targetLanguageCode}",
+        )
         if (targets.isEmpty()) {
             // Nothing on this screen needs translating: drop the previous blocks
             // instead of leaving stale translations over changed content.
@@ -586,6 +601,8 @@ class ScreenTextSessionService : Service() {
                         background = request.background,
                         original = request.target.text,
                     )
+                    // Each frame replaces the whole set: a stale block from a previous
+                    // frame must not survive onto new content.
                     val snapshot = synchronized(results) {
                         results[index] = target
                         results.filterNotNull()
@@ -734,6 +751,9 @@ class ScreenTextSessionService : Service() {
             lastHash = Long.MIN_VALUE
             coverEpoch++
             coverOverlay?.reclamp()
+            // The rebuilt window starts empty, but the old view's blocks would keep
+            // the next frame's identical rects filtered out as "already painted".
+            coverOverlay?.update(emptyList())
             Log.i(TAG, "OCRMAP cover display change rot=$newRot ${newW}x$newH")
             return
         }
@@ -877,10 +897,11 @@ class ScreenTextSessionService : Service() {
         private const val TAG = "ScreenTextSessionService"
         private const val NOTIFICATION_ID = 43
         private const val FRAME_INTERVAL_MS = 900L
-        /** Full-screen cover refresh: slower than region OCR — a whole screen costs far more. */
-        private const val COVER_FRAME_INTERVAL_MS = 1200L
+        /** Full-screen cover refresh. Cached text re-paints instantly, so this is the
+         *  whole latency budget on a scrolled page — keep it short. */
+        private const val COVER_FRAME_INTERVAL_MS = 400L
         /** Blocks translated in parallel within one cover frame. */
-        private const val TRANSLATE_CONCURRENCY = 2
+        private const val TRANSLATE_CONCURRENCY = 4
         private const val MIN_REGION_PX = RegionGestureMath.MIN_REGION_PX
         /** TRANSPROF 诊断：空转多少轮汇报一次心跳（900ms × 10 ≈ 9s）。 */
         private const val IDLE_LOG_ROUNDS = 10

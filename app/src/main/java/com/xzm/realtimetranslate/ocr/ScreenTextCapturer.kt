@@ -56,6 +56,11 @@ class ScreenTextCapturer(
      *  second consumer while another capture may run. */
     private var cropBitmap: Bitmap? = null
 
+    /** Scratch buffer for [copyRegion]. A full-screen frame is 1080×2400 ≈ 10 MB of
+     *  ints; allocating that every 400 ms is ~250 MB/s of garbage and shows up as
+     *  steady GC jank. Grown on demand, never shrunk. */
+    private var pixelBuffer: IntArray = IntArray(0)
+
     /** Frame size currently obtainable. Always matches the live [ImageReader],
      *  including after a failed [resize] — callers use it as the "does the
      *  pipeline still need rebuilding" guard. */
@@ -168,6 +173,7 @@ class ScreenTextCapturer(
             runCatching { imageReader?.close() }
             imageReader = null
             cropBitmap = null
+            pixelBuffer = IntArray(0)
         }
     }
 
@@ -190,7 +196,11 @@ class ScreenTextCapturer(
             cropBitmap = bm
         }
 
-        val pixels = IntArray(w * h)
+        val pixels = if (pixelBuffer.size >= w * h) {
+            pixelBuffer
+        } else {
+            IntArray(w * h).also { pixelBuffer = it }
+        }
         val row = ByteArray(rowStride)
         var idx = 0
         var y = region.top

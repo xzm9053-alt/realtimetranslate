@@ -228,6 +228,13 @@
     <string name="cover_fullscreen_notification_title">Full-screen translation</string>
     <string name="cover_notification_text">Recognizing the screen and covering the original text</string>
     <string name="cover_fullscreen">🖥 Full-screen translate</string>
+    <string name="cover_appearance">Cover appearance</string>
+    <string name="cover_bilingual">Bilingual</string>
+    <string name="cover_bilingual_summary">Show the original in small text below the translation</string>
+    <string name="cover_font_scale">Font size %1$d%%</string>
+    <string name="cover_dark_block">Dark blocks</string>
+    <string name="cover_dark_block_summary">Off: colour sampled from the original background. On: uniform dark blocks</string>
+    <string name="cover_requires_restart">Changes apply immediately while full-screen translation is running</string>
     <string name="cover_starting">Starting full-screen translation…</string>
     <string name="ocr_starting">Starting screen OCR…</string>
     <string name="ocr_running">Recognizing selected area…</string>

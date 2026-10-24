@@ -66,6 +66,11 @@ class CoverView(context: Context) : View(context) {
             target.background
         }
         canvas.drawRoundRect(block, cornerRadius, cornerRadius, blockPaint)
+        // The block colour is sampled from whatever sits behind the text, so it can
+        // be white just as easily as black. A fixed white pen would vanish on a
+        // white page — pick the ink from the block's own luminance.
+        translationPaint.color = inkOn(blockPaint.color)
+        originalPaint.color = (inkOn(blockPaint.color) and 0x00FFFFFF) or 0xC8000000.toInt()
 
         val left = target.rect.left + textPadX
         val right = target.rect.right - textPadX
@@ -128,6 +133,15 @@ class CoverView(context: Context) : View(context) {
             baseline += lineHeight
         }
         return used
+    }
+
+    /** Near-black on light blocks, white on dark ones. */
+    private fun inkOn(background: Int): Int {
+        val r = (background shr 16) and 0xFF
+        val g = (background shr 8) and 0xFF
+        val b = background and 0xFF
+        val luminance = 0.299f * r + 0.587f * g + 0.114f * b
+        return if (luminance > 140f) 0xFF1A1A1A.toInt() else Color.WHITE
     }
 
     private fun dp(value: Float): Float =
