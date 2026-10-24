@@ -227,6 +227,8 @@
     <string name="ocr_notification_text">Recognizing the selected area and translating</string>
     <string name="cover_fullscreen_notification_title">Full-screen translation</string>
     <string name="cover_notification_text">Recognizing the screen and covering the original text</string>
+    <string name="cover_fullscreen">🖥 Full-screen translate</string>
+    <string name="cover_starting">Starting full-screen translation…</string>
     <string name="ocr_starting">Starting screen OCR…</string>
     <string name="ocr_running">Recognizing selected area…</string>
     <string name="ocr_paused">Screen OCR paused</string>

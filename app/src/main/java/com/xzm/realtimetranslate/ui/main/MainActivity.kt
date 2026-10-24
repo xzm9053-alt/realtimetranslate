@@ -45,6 +45,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xzm.realtimetranslate.LiveTranslateApp
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.AudioSourceMode
+import com.xzm.realtimetranslate.data.ScreenOcrMode
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.overlay.RegionSelectorOverlay
 import com.xzm.realtimetranslate.service.ScreenOcrBus
@@ -106,6 +107,7 @@ class MainActivity : ComponentActivity() {
                 var pendingStart by remember { mutableStateOf(false) }
                 var pendingOcrStart by remember { mutableStateOf(false) }
                 var pendingOcrRegion by remember { mutableStateOf<Rect?>(null) }
+                var pendingOcrMode by remember { mutableStateOf(ScreenOcrMode.REGION) }
                 var updateInfoToPrompt by remember { mutableStateOf<RemoteUpdateInfo?>(null) }
 
                 fun openVideoUrl(url: String) {
@@ -143,6 +145,7 @@ class MainActivity : ComponentActivity() {
                                 region = region,
                                 resultCode = result.resultCode,
                                 data = result.data!!,
+                                mode = pendingOcrMode,
                             )
                         }.onFailure {
                             Log.e(TAG, "start ocr service failed", it)
@@ -159,12 +162,16 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                fun requestOcrProjection(region: Rect) {
+                fun requestOcrProjection(region: Rect, mode: ScreenOcrMode = ScreenOcrMode.REGION) {
                     ScreenOcrBus.setStatus(
                         ScreenOcrBus.Status.Starting,
-                        getString(R.string.msg_requesting_projection),
+                        getString(
+                            if (mode == ScreenOcrMode.FULLSCREEN) R.string.cover_starting
+                            else R.string.msg_requesting_projection,
+                        ),
                     )
                     pendingOcrRegion = region
+                    pendingOcrMode = mode
                     val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
                     ocrProjectionLauncher.launch(mpm.createScreenCaptureIntent())
                 }
@@ -176,6 +183,17 @@ class MainActivity : ComponentActivity() {
                         onCancel = { /* 用户取消选区 */ },
                     )
                     selector.show()
+                }
+
+                /** Resumes an OCR start whose permissions are now granted, in the mode the user picked. */
+                fun continueOcrStart() {
+                    if (pendingOcrMode == ScreenOcrMode.FULLSCREEN) {
+                        // The service turns this placeholder into the full screen; the
+                        // selection overlay is deliberately skipped for this mode.
+                        requestOcrProjection(Rect(0, 0, 1, 1), ScreenOcrMode.FULLSCREEN)
+                    } else {
+                        showRegionSelector()
+                    }
                 }
 
                 fun stopOcr() {
@@ -225,7 +243,7 @@ class MainActivity : ComponentActivity() {
                             }
                             pendingOcrStart -> {
                                 pendingOcrStart = false
-                                showRegionSelector()
+                                continueOcrStart()
                             }
                         }
                     }
@@ -265,7 +283,7 @@ class MainActivity : ComponentActivity() {
                         pendingOcrStart = true
                         overlayLauncher.launch(PermissionUtils.overlaySettingsIntent(this))
                     } else {
-                        showRegionSelector()
+                        continueOcrStart()
                     }
                 }
 
@@ -327,6 +345,7 @@ class MainActivity : ComponentActivity() {
 
                 fun requestStartOcr() {
                     try {
+                        pendingOcrMode = ScreenOcrMode.REGION
                         if (ocrSession.status.isActive) {
                             stopOcr()
                             return
@@ -365,9 +384,61 @@ class MainActivity : ComponentActivity() {
                             overlayLauncher.launch(PermissionUtils.overlaySettingsIntent(this))
                             return
                         }
-                        showRegionSelector()
+                        continueOcrStart()
                     } catch (t: Throwable) {
                         Log.e(TAG, "requestStartOcr", t)
+                        ScreenOcrBus.setStatus(
+                            ScreenOcrBus.Status.Error,
+                            getString(R.string.msg_start_failed, t.message.orEmpty()),
+                        )
+                    }
+                }
+
+                /**
+                 * Full-screen cover mode. Same permission chain as region OCR, minus the
+                 * area selector — the whole screen is the capture area.
+                 */
+                fun requestStartFullscreen() {
+                    try {
+                        pendingOcrMode = ScreenOcrMode.FULLSCREEN
+                        // Switching modes needs a fresh projection: the token carries
+                        // nothing about the mode, but the service fixes the mode at start.
+                        if (ocrSession.status.isActive) {
+                            stopOcr()
+                        }
+                        if (session.status == SessionBus.Status.Running ||
+                            session.status == SessionBus.Status.Starting
+                        ) {
+                            scope.launch {
+                                runCatching { SessionBus.stop() }
+                                runCatching { SubtitleSessionService.stop(this@MainActivity) }
+                            }
+                        }
+                        missingEngineKeyMessage()?.let { message ->
+                            ScreenOcrBus.setStatus(ScreenOcrBus.Status.Error, message)
+                            scope.launch { pagerState.animateScrollToPage(1) }
+                            return
+                        }
+                        val needed = buildList {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                add(Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                        }.filter {
+                            ContextCompat.checkSelfPermission(this, it) !=
+                                PackageManager.PERMISSION_GRANTED
+                        }
+                        if (needed.isNotEmpty()) {
+                            ocrPermissionLauncher.launch(needed.toTypedArray())
+                            return
+                        }
+                        if (!PermissionUtils.canDrawOverlays(this)) {
+                            pendingOcrStart = true
+                            overlayLauncher.launch(PermissionUtils.overlaySettingsIntent(this))
+                            return
+                        }
+                        continueOcrStart()
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "requestStartFullscreen", t)
                         ScreenOcrBus.setStatus(
                             ScreenOcrBus.Status.Error,
                             getString(R.string.msg_start_failed, t.message.orEmpty()),
@@ -434,6 +505,7 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onOcrStart = { requestStartOcr() },
                                 onOcrStop = { stopOcr() },
+                                onFullscreenStart = { requestStartFullscreen() },
                                 onExport = { subtitleVm.exportLastSession() },
                                 canDrawOverlays = PermissionUtils.canDrawOverlays(this@MainActivity),
                                 onUpdateSettings = { transform ->

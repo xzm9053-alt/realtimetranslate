@@ -85,6 +85,7 @@ fun SubtitleScreen(
     onStop: () -> Unit,
     onOcrStart: () -> Unit,
     onOcrStop: () -> Unit,
+    onFullscreenStart: () -> Unit,
     onExport: () -> Unit,
     canDrawOverlays: Boolean,
     onUpdateSettings: ((UserSettings) -> UserSettings) -> Unit = {},
@@ -347,6 +348,20 @@ fun SubtitleScreen(
                             text = stringResource(R.string.subtitle_ocr_busy),
                             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                             fontSize = 12.sp,
+                        )
+                    }
+                    Button(
+                        onClick = onFullscreenStart,
+                        enabled = !running,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        colors = ButtonDefaults.buttonColorsPrimary(),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.cover_fullscreen),
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 16.sp,
                         )
                     }
                     if (ocrSession.inputPreview.isNotBlank() || ocrSession.outputPreview.isNotBlank()) {

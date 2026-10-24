@@ -226,6 +226,8 @@
     <string name="ocr_notification_text">正在识别所选区域并翻译</string>
     <string name="cover_fullscreen_notification_title">全屏翻译中</string>
     <string name="cover_notification_text">正在识别屏幕文字并覆盖原文</string>
+    <string name="cover_fullscreen">🖥 全屏翻译</string>
+    <string name="cover_starting">正在启动全屏翻译…</string>
     <string name="ocr_starting">正在启动屏幕取词…</string>
     <string name="ocr_running">正在识别所选区域…</string>
     <string name="ocr_paused">已暂停取词翻译</string>
