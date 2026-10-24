@@ -63,6 +63,7 @@ start-commandcode.bat
 启动-Antigravity.bat
 启动-CommandCode-DeepSeek.bat
 启动-免费DeepSeek.bat
+启动-CommandCodeGo.bat
 
 # Promo video tooling / outputs (local only, not part of the project)
 # Whole directory: it holds the promo pipeline, its renders, and .env (credentials).
