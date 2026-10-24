@@ -102,6 +102,7 @@ class VideoTranslateViewModel(
                 uri = uri.toString(),
                 displayName = displayName,
                 cues = emptyList(),
+                durationMs = 0L,
                 progress = 0f,
                 segmentsDone = 0,
                 failedTranslations = 0,
@@ -338,11 +339,15 @@ class VideoTranslateViewModel(
                 ExportTranslator.publishToDownloads(
                     app,
                     file,
-                    app.getString(R.string.video_burn_label) + ".mp4",
+                    // Keep the timestamped name built above: a fixed name would make
+                    // MediaStore append " (1)", " (2)" to every later export.
+                    file.name,
                     "video/mp4",
                 ).getOrThrow()
             }
-            published.onSuccess { target.delete() }
+            // Delete the cache copy either way — a failed publish would otherwise
+            // leave a full-length re-encoded video behind on disk.
+            target.delete()
 
             _state.update {
                 it.copy(

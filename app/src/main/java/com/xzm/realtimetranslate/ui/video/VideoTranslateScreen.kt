@@ -20,8 +20,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -184,9 +186,13 @@ fun VideoTranslateScreen(
                             if (state.hasVideo) R.string.video_change else R.string.video_pick,
                         ),
                         onClick = {
-                            if (!state.isRunning) pickVideo.launch(arrayOf("video/*"))
+                            if (!state.isRunning && !state.isBurning) {
+                                pickVideo.launch(arrayOf("video/*"))
+                            }
                         },
-                        enabled = !state.isRunning,
+                        // Swapping the source mid-burn would publish a video with the
+                        // previous file's subtitles while the page shows the new one.
+                        enabled = !state.isRunning && !state.isBurning,
                     )
                 }
             }
@@ -565,11 +571,16 @@ private fun FullscreenVideoDialog(
         var playing by remember { mutableStateOf(player.isPlaying) }
         var positionMs by remember { mutableLongStateOf(0L) }
         var durationMs by remember { mutableLongStateOf(0L) }
+        // While the user is dragging the thumb, the poll below must not overwrite the
+        // value they are setting — otherwise the slider snaps back under their finger.
+        var seeking by remember { mutableStateOf(false) }
 
         LaunchedEffect(player) {
             while (true) {
                 playing = player.isPlaying
-                positionMs = runCatching { player.currentPosition }.getOrDefault(0L)
+                if (!seeking) {
+                    positionMs = runCatching { player.currentPosition }.getOrDefault(0L)
+                }
                 durationMs = runCatching { player.duration }.getOrDefault(0L).coerceAtLeast(0L)
                 delay(250L)
             }
@@ -624,14 +635,20 @@ private fun FullscreenVideoDialog(
                 mode = mode,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
                     .padding(horizontal = 20.dp)
-                    .padding(bottom = 84.dp),
+                    // Clears the control row below it, which is itself inset by the
+                    // navigation bar; a fixed offset would collide on gesture-nav phones.
+                    .padding(bottom = 64.dp),
             )
 
             IconButton(
                 onClick = onDismiss,
+                // Edge-to-edge dialog: without the inset the button lands under the
+                // status bar. The video stays full-bleed, only the controls are inset.
                 modifier = Modifier
                     .align(Alignment.TopEnd)
+                    .statusBarsPadding()
                     .padding(8.dp),
             ) {
                 Icon(
@@ -647,6 +664,7 @@ private fun FullscreenVideoDialog(
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .background(Color.Black.copy(alpha = 0.45f))
+                    .navigationBarsPadding()
                     .padding(horizontal = 8.dp, vertical = 4.dp),
             ) {
                 IconButton(onClick = {
@@ -662,8 +680,14 @@ private fun FullscreenVideoDialog(
                 }
                 androidx.compose.material3.Slider(
                     value = positionMs.toFloat().coerceIn(0f, durationMs.toFloat()),
-                    onValueChange = { positionMs = it.toLong() },
-                    onValueChangeFinished = { player.seekTo(positionMs) },
+                    onValueChange = {
+                        seeking = true
+                        positionMs = it.toLong()
+                    },
+                    onValueChangeFinished = {
+                        player.seekTo(positionMs)
+                        seeking = false
+                    },
                     valueRange = 0f..durationMs.toFloat().coerceAtLeast(1f),
                     enabled = durationMs > 0L,
                     modifier = Modifier.weight(1f),
