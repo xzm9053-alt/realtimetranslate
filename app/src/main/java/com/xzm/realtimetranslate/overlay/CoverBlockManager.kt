@@ -65,6 +65,24 @@ class CoverBlockManager(private val maxBlocks: Int = 100) {
         }
     }
 
+    /**
+     * Removes blocks whose age exceeds [maxAgeMs].
+     * Useful for dynamic/video content where subtitles should not stick indefinitely.
+     */
+    @Synchronized
+    fun pruneStale(maxAgeMs: Long, now: Long = System.currentTimeMillis()): Int {
+        var removed = 0
+        val it = blocks.entries.iterator()
+        while (it.hasNext()) {
+            val target = it.next().value
+            if (target.createdAtMs > 0 && now - target.createdAtMs > maxAgeMs) {
+                it.remove()
+                removed++
+            }
+        }
+        return removed
+    }
+
     @Synchronized
     fun clear() {
         blocks.clear()

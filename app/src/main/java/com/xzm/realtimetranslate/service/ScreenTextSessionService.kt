@@ -28,6 +28,7 @@ import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.HistoryEntry
 import com.xzm.realtimetranslate.data.HistoryMode
 import com.xzm.realtimetranslate.data.ScreenOcrMode
+import com.xzm.realtimetranslate.ocr.PixelRect
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
 import com.xzm.realtimetranslate.ocr.BackgroundColorSampler
@@ -108,6 +109,9 @@ class ScreenTextSessionService : Service() {
 
     /** Tracks and merges active cover blocks across frames. */
     private val coverBlockManager = CoverBlockManager()
+
+    private var lastOutsideSamples: IntArray? = null
+    private val sampleGridBuffer = IntArray(SAMPLE_GRID_SIZE * SAMPLE_GRID_SIZE)
 
     /** Bumped for every cover frame; a worker whose epoch is stale drops its results. */
     @Volatile
@@ -393,6 +397,54 @@ class ScreenTextSessionService : Service() {
         }
     }
 
+    /**
+     * 计算覆盖色块外部区域的像素变化比例（0.0f..1.0f）。
+     * 仅采样落在 [paintedRects] 外部的点，避开本应用绘制的覆盖色块造成的干扰。
+     */
+    private fun computeOutsideDiffRatio(bitmap: Bitmap, paintedRects: List<PixelRect>): Float {
+        val w = bitmap.width
+        val h = bitmap.height
+        if (w <= 0 || h <= 0) return 0f
+        val stepX = maxOf(1, w / SAMPLE_GRID_SIZE)
+        val stepY = maxOf(1, h / SAMPLE_GRID_SIZE)
+
+        var idx = 0
+        var y = stepY / 2
+        while (y < h && idx < sampleGridBuffer.size) {
+            var x = stepX / 2
+            while (x < w && idx < sampleGridBuffer.size) {
+                val isInside = paintedRects.any { r ->
+                    x >= r.left && x < r.right && y >= r.top && y < r.bottom
+                }
+                sampleGridBuffer[idx++] = if (isInside) Int.MIN_VALUE else bitmap.getPixel(x, y)
+                x += stepX
+            }
+            y += stepY
+        }
+
+        val previous = lastOutsideSamples
+        if (previous == null || previous.size != idx) {
+            lastOutsideSamples = sampleGridBuffer.copyOf(idx)
+            return 0f
+        }
+
+        var validPoints = 0
+        var changedPoints = 0
+        for (i in 0 until idx) {
+            val curr = sampleGridBuffer[i]
+            val prev = previous[i]
+            if (curr != Int.MIN_VALUE && prev != Int.MIN_VALUE) {
+                validPoints++
+                if (curr != prev) {
+                    changedPoints++
+                }
+            }
+        }
+
+        lastOutsideSamples = sampleGridBuffer.copyOf(idx)
+        return if (validPoints > 0) changedPoints.toFloat() / validPoints else 0f
+    }
+
     private fun coverStyleOf(settings: UserSettings): CoverStyle = CoverStyle(
         bilingual = settings.coverBilingual,
         fontScale = settings.coverFontScale,
@@ -524,6 +576,27 @@ class ScreenTextSessionService : Service() {
                 if (frame != null && frame.hash != lastHash) {
                     lastHash = frame.hash
                     if (mode == ScreenOcrMode.FULLSCREEN) {
+                        val painted = coverBlockManager.getPaintedRects()
+                        if (painted.isNotEmpty()) {
+                            val diff = computeOutsideDiffRatio(frame.bitmap, painted)
+                            if (diff > SCREEN_CHANGE_DIFF_THRESHOLD) {
+                                Log.i(
+                                    TAG,
+                                    "TRANSPROF screen changed diff=$diff > $SCREEN_CHANGE_DIFF_THRESHOLD, clearing previous translations",
+                                )
+                                coverBlockManager.clear()
+                                coverOverlay?.update(emptyList())
+                                lastOutsideSamples = null
+                            } else if (diff in 0.01f..SCREEN_CHANGE_DIFF_THRESHOLD) {
+                                val now = SystemClock.elapsedRealtime()
+                                val pruned = coverBlockManager.pruneStale(SUBTITLE_STALE_TTL_MS, now)
+                                if (pruned > 0) {
+                                    coverOverlay?.update(coverBlockManager.getActiveTargets())
+                                }
+                            }
+                        } else {
+                            lastOutsideSamples = null
+                        }
                         handleCoverFrame(frame.bitmap)?.let { coverFrames.trySend(it) }
                         Log.i(
                             TAG,
@@ -646,6 +719,7 @@ class ScreenTextSessionService : Service() {
                         text = translated,
                         background = request.background,
                         original = request.target.text,
+                        createdAtMs = SystemClock.elapsedRealtime(),
                     )
                     coverBlockManager.updateTarget(target, request.target.key)
                     val (w, h, _) = realScreenMetrics()
@@ -914,6 +988,7 @@ class ScreenTextSessionService : Service() {
         overlay?.hide()
         overlay = null
         coverBlockManager.clear()
+        lastOutsideSamples = null
         coverOverlay?.hide()
         coverOverlay = null
         coverEpoch++
@@ -959,6 +1034,9 @@ class ScreenTextSessionService : Service() {
         /** 旋转/折叠后暂停采集的时长，避开投影帧重建期间的乱帧。 */
         private const val DISPLAY_PAUSE_MS = 500L
         private const val DISPLAY_PAUSE_POLL_MS = 100L
+        private const val SAMPLE_GRID_SIZE = 24
+        private const val SCREEN_CHANGE_DIFF_THRESHOLD = 0.15f
+        private const val SUBTITLE_STALE_TTL_MS = 3500L
         const val ACTION_START = "com.xzm.realtimetranslate.action.START_SCREEN_OCR"
         const val ACTION_STOP = "com.xzm.realtimetranslate.action.STOP_SCREEN_OCR"
         const val ACTION_TOGGLE_PAUSE = "com.xzm.realtimetranslate.action.TOGGLE_PAUSE_SCREEN_OCR"

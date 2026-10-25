@@ -89,4 +89,20 @@ class CoverBlockManagerTest {
         assertEquals(2, manager.size)
         assertEquals(listOf("2", "3"), manager.getActiveTargets().map { it.text })
     }
+
+    @Test
+    fun `pruneStale removes blocks older than maxAgeMs`() {
+        val manager = CoverBlockManager()
+        val oldTarget = CoverTarget(PixelRect(0, 0, 10, 10), "旧字幕", 0, createdAtMs = 1000L)
+        val freshTarget = CoverTarget(PixelRect(0, 20, 10, 30), "新字幕", 0, createdAtMs = 4000L)
+
+        manager.updateTarget(oldTarget)
+        manager.updateTarget(freshTarget)
+        assertEquals(2, manager.size)
+
+        val removed = manager.pruneStale(maxAgeMs = 3500L, now = 5000L)
+        assertEquals(1, removed)
+        assertEquals(1, manager.size)
+        assertEquals(listOf(freshTarget), manager.getActiveTargets())
+    }
 }

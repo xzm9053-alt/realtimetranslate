@@ -18,6 +18,7 @@ data class CoverTarget(
     val background: Int,
     /** Original text, only painted when bilingual mode is on. */
     val original: String? = null,
+    val createdAtMs: Long = 0L,
 )
 
 data class FittedText(val lines: List<String>, val fontSize: Float, val truncated: Boolean)
