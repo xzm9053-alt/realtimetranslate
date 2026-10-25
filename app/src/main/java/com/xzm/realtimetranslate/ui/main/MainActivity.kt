@@ -48,6 +48,10 @@ import com.xzm.realtimetranslate.data.AudioSourceMode
 import com.xzm.realtimetranslate.data.ScreenOcrMode
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.overlay.RegionSelectorOverlay
+import com.xzm.realtimetranslate.service.FloatingHubService
+import com.xzm.realtimetranslate.service.HubBus
+import com.xzm.realtimetranslate.service.HubCommand
+import com.xzm.realtimetranslate.service.HubMode
 import com.xzm.realtimetranslate.service.ScreenOcrBus
 import com.xzm.realtimetranslate.service.ScreenTextSessionService
 import com.xzm.realtimetranslate.service.SessionBus
@@ -106,6 +110,7 @@ class MainActivity : ComponentActivity() {
 
                 var pendingStart by remember { mutableStateOf(false) }
                 var pendingOcrStart by remember { mutableStateOf(false) }
+                var pendingHubStart by remember { mutableStateOf(false) }
                 var pendingOcrRegion by remember { mutableStateOf<Rect?>(null) }
                 var pendingOcrMode by remember { mutableStateOf(ScreenOcrMode.REGION) }
                 var updateInfoToPrompt by remember { mutableStateOf<RemoteUpdateInfo?>(null) }
@@ -244,6 +249,11 @@ class MainActivity : ComponentActivity() {
                             pendingOcrStart -> {
                                 pendingOcrStart = false
                                 continueOcrStart()
+                            }
+                            pendingHubStart -> {
+                                pendingHubStart = false
+                                settingsVm.setHubEnabled(true)
+                                FloatingHubService.start(this@MainActivity)
                             }
                         }
                     }
@@ -446,6 +456,49 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                fun toggleHub(enabled: Boolean) {
+                    if (enabled) {
+                        if (!PermissionUtils.canDrawOverlays(this@MainActivity)) {
+                            pendingHubStart = true
+                            overlayLauncher.launch(PermissionUtils.overlaySettingsIntent(this@MainActivity))
+                            return
+                        }
+                        settingsVm.setHubEnabled(true)
+                        FloatingHubService.start(this@MainActivity)
+                    } else {
+                        settingsVm.setHubEnabled(false)
+                        FloatingHubService.stop(this@MainActivity)
+                    }
+                }
+
+                LaunchedEffect(settings.hubEnabled) {
+                    if (settings.hubEnabled && PermissionUtils.canDrawOverlays(this@MainActivity)) {
+                        FloatingHubService.start(this@MainActivity)
+                    }
+                }
+
+                LaunchedEffect(Unit) {
+                    HubBus.commands.collect { cmd ->
+                        when (cmd) {
+                            is HubCommand.SwitchMode -> {
+                                when (cmd.mode) {
+                                    HubMode.VOICE -> requestStartSubtitle()
+                                    HubMode.SCREEN_REGION -> requestStartOcr()
+                                    HubMode.FULLSCREEN, HubMode.COMIC -> requestStartFullscreen()
+                                    HubMode.IDLE -> Unit
+                                }
+                            }
+                            is HubCommand.LaunchStaticMode -> {
+                                scope.launch { pagerState.animateScrollToPage(0) }
+                            }
+                            is HubCommand.CloseHub -> {
+                                toggleHub(false)
+                            }
+                            else -> Unit
+                        }
+                    }
+                }
+
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     containerColor = MiuixTheme.colorScheme.surface,
@@ -517,6 +570,7 @@ class MainActivity : ComponentActivity() {
                                 onOpenSettings = {
                                     scope.launch { pagerState.animateScrollToPage(1) }
                                 },
+                                onToggleHub = { toggleHub(it) },
                             )
                             1 -> SettingsScreen(
                                 modifier = Modifier.fillMaxSize(),

@@ -92,6 +92,7 @@ fun SubtitleScreen(
     onUpdateSettings: ((UserSettings) -> UserSettings) -> Unit = {},
     onResetAppearance: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
+    onToggleHub: (Boolean) -> Unit = {},
 ) {
     var showMore by rememberSaveable { mutableStateOf(false) }
     if (showMore) {
@@ -134,6 +135,16 @@ fun SubtitleScreen(
             title = stringResource(R.string.subtitle_title),
             subtitle = stringResource(R.string.subtitle_subtitle),
         )
+
+        // 常驻悬浮球总开关
+        SectionCard {
+            SettingSwitchRow(
+                title = stringResource(R.string.hub_switch_title),
+                summary = stringResource(R.string.hub_switch_summary),
+                checked = settings.hubEnabled,
+                onCheckedChange = { onToggleHub(it) },
+            )
+        }
 
         // 其他翻译入口：视频翻译 / 文本翻译
         SectionCard {
