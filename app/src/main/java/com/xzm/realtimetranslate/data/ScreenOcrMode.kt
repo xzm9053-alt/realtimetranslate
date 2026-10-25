@@ -7,4 +7,7 @@ enum class ScreenOcrMode {
 
     /** Capture the whole screen and paint the translation over the original text. */
     FULLSCREEN,
+
+    /** Comic mode: full screen capture with comic bubble tuning. */
+    COMIC,
 }
