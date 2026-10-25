@@ -43,4 +43,23 @@ class OcrGeometryTest {
         assertEquals(0, box.width)
         assertEquals(0, box.height)
     }
+
+    @Test
+    fun `padded expands box by given delta in all directions`() {
+        val rect = PixelRect(10, 20, 100, 200)
+        assertEquals(PixelRect(5, 15, 105, 205), rect.padded(5))
+    }
+
+    @Test
+    fun `overlapRatio measures intersection relative to smaller box`() {
+        val a = PixelRect(0, 0, 100, 100) // area 10000
+        val b = PixelRect(50, 0, 150, 100) // area 10000, overlap 50x100 = 5000 -> 0.5f
+        assertEquals(0.5f, a.overlapRatio(b), 0.001f)
+
+        val nonOverlapping = PixelRect(200, 200, 300, 300)
+        assertEquals(0f, a.overlapRatio(nonOverlapping), 0.001f)
+
+        val subset = PixelRect(10, 10, 60, 60) // area 2500, fully inside a -> 1.0f
+        assertEquals(1.0f, a.overlapRatio(subset), 0.001f)
+    }
 }

@@ -27,6 +27,17 @@ class CoverOverlayController(private val context: Context) {
     private var view: CoverView? = null
     private var coverStyle: CoverStyle = CoverStyle()
 
+    /** Screen-space rects currently painted, in the same coordinates as [CoverTarget]. */
+    @Volatile
+    private var paintedRects: List<PixelRect> = emptyList()
+
+    /**
+     * The blocks currently painted. Callers erase these from the next capture so
+     * OCR does not read our own translation back as fresh source text — that loop
+     * re-translates the same screen forever.
+     */
+    fun paintedRects(): List<PixelRect> = paintedRects
+
     fun show(style: CoverStyle) {
         onMain {
             coverStyle = style
@@ -55,6 +66,15 @@ class CoverOverlayController(private val context: Context) {
             } else {
                 filtered.map { it.copy(rect = it.rect.offset(-loc[0], -loc[1])) }
             }
+            Log.i(
+                TAG,
+                "coverupdate in=${targets.size} out=${placed.size} loc=${loc[0]},${loc[1]} " +
+                    "view=${cover.width}x${cover.height} first=${placed.firstOrNull()?.rect}",
+            )
+            // Screen coordinates, NOT the view-space `placed` rects: the capture
+            // bitmap spans the whole display, so erasing with view coords would be
+            // off by the status-bar inset.
+            paintedRects = filtered.map { it.rect }
             cover.setTargets(placed, coverStyle)
         }
     }
@@ -69,6 +89,7 @@ class CoverOverlayController(private val context: Context) {
     }
 
     fun hide() {
+        paintedRects = emptyList()
         onMain { removeWindow() }
     }
 
@@ -83,6 +104,7 @@ class CoverOverlayController(private val context: Context) {
     }
 
     private fun removeWindow() {
+        paintedRects = emptyList()
         val cover = view ?: return
         view = null
         runCatching { windowManager.removeView(cover) }
@@ -101,7 +123,9 @@ class CoverOverlayController(private val context: Context) {
             // as fresh content and translates it again — forever. A secure window is
             // omitted from non-secure virtual displays, which is exactly what we need.
             // Side effect: the user cannot screenshot the translated screen either.
-            WindowManager.LayoutParams.FLAG_SECURE,
+            // FLAG_SECURE disabled for A/B test: does MediaProjection return black
+            // frames while a secure window is on screen?
+            0,
         PixelFormat.TRANSLUCENT,
     )
 

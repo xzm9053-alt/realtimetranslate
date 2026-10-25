@@ -30,6 +30,28 @@ data class PixelRect(val left: Int, val top: Int, val right: Int, val bottom: In
 
     fun intersects(other: PixelRect): Boolean =
         left < other.right && other.left < right && top < other.bottom && other.top < bottom
+
+    fun padded(pad: Int): PixelRect = PixelRect(
+        left = left - pad,
+        top = top - pad,
+        right = right + pad,
+        bottom = bottom + pad,
+    )
+
+    val area: Int get() = width * height
+
+    fun intersectionArea(other: PixelRect): Int {
+        val xOverlap = maxOf(0, minOf(right, other.right) - maxOf(left, other.left))
+        val yOverlap = maxOf(0, minOf(bottom, other.bottom) - maxOf(top, other.top))
+        return xOverlap * yOverlap
+    }
+
+    fun overlapRatio(other: PixelRect): Float {
+        val inter = intersectionArea(other)
+        if (inter <= 0) return 0f
+        val minArea = minOf(area, other.area)
+        return if (minArea > 0) inter.toFloat() / minArea else 0f
+    }
 }
 
 data class OcrLine(val text: String, val rect: PixelRect)

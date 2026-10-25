@@ -75,7 +75,16 @@ class ScreenTextOcr {
         val rec = ensureRecognizer(script) ?: return null
         return try {
             val text = rec.process(InputImage.fromBitmap(prepared.bitmap, 0)).await()
-            toPage(text, prepared).takeIf { it.blocks.isNotEmpty() }
+            val page = toPage(text, prepared)
+            Log.i(
+                TAG,
+                "TRANSPROF ocrraw script=$script rawLen=${text.text.length} " +
+                    "rawBlocks=${text.textBlocks.size} kept=${page.blocks.size} " +
+                    "bmp=${prepared.bitmap.width}x${prepared.bitmap.height} " +
+                    "src=${prepared.sourceWidth}x${prepared.sourceHeight} " +
+                    "sx=${prepared.scaleX} sy=${prepared.scaleY}",
+            )
+            page.takeIf { it.blocks.isNotEmpty() }
         } catch (t: Throwable) {
             Log.w(TAG, "recognize failed for $script", t)
             null

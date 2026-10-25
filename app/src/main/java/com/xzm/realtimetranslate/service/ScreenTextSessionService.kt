@@ -35,6 +35,7 @@ import com.xzm.realtimetranslate.ocr.ScreenTextCapturer
 import com.xzm.realtimetranslate.ocr.ScreenTextOcr
 import com.xzm.realtimetranslate.ocr.TextTarget
 import com.xzm.realtimetranslate.ocr.TranslationPlanner
+import com.xzm.realtimetranslate.overlay.CoverBlockManager
 import com.xzm.realtimetranslate.overlay.CoverOverlayController
 import com.xzm.realtimetranslate.overlay.CoverStyle
 import com.xzm.realtimetranslate.overlay.CoverTarget
@@ -104,6 +105,9 @@ class ScreenTextSessionService : Service() {
 
     /** Session-scoped: re-recognizing the same screen must not re-bill the engine. */
     private val translationCache = TranslationCache()
+
+    /** Tracks and merges active cover blocks across frames. */
+    private val coverBlockManager = CoverBlockManager()
 
     /** Bumped for every cover frame; a worker whose epoch is stale drops its results. */
     @Volatile
@@ -349,6 +353,7 @@ class ScreenTextSessionService : Service() {
                 if (coverOverlay != null && style != lastCoverStyle) {
                     lastCoverStyle = style
                     coverEpoch++
+                    coverBlockManager.clear()
                     coverOverlay?.show(style)
                 }
             }
@@ -359,6 +364,33 @@ class ScreenTextSessionService : Service() {
             getString(if (fullscreen) R.string.cover_notification_text else R.string.ocr_running),
         )
         runOcrLoop()
+    }
+
+    /**
+     * Flattens the rects painted last frame so the recognizer sees blank there.
+     *
+     * Only regions the cover actually painted are erased, and each one is filled
+     * with the colour sampled around it, so the rest of the screen — including
+     * newly scrolled-in content — is untouched. Must run on the capture bitmap
+     * before OCR; it mutates the frame in place.
+     */
+    private fun erasePaintedRegions(bitmap: Bitmap) {
+        val rects = coverBlockManager.getPaintedRects()
+        if (rects.isEmpty() || bitmap.isRecycled) return
+        val canvas = android.graphics.Canvas(bitmap)
+        val paint = android.graphics.Paint().apply { style = android.graphics.Paint.Style.FILL }
+        // Pad by ~4-8px so CoverView's 2dp rounded rectangle padding is fully covered
+        val pad = (4 * (bitmap.density / 160f)).toInt().coerceAtLeast(4)
+        for (r in rects) {
+            val padded = r.padded(pad)
+            val left = padded.left.coerceIn(0, bitmap.width)
+            val top = padded.top.coerceIn(0, bitmap.height)
+            val right = padded.right.coerceIn(left, bitmap.width)
+            val bottom = padded.bottom.coerceIn(top, bitmap.height)
+            if (right <= left || bottom <= top) continue
+            paint.color = backgroundSampler.sample(bitmap, r)
+            canvas.drawRect(left.toFloat(), top.toFloat(), right.toFloat(), bottom.toFloat(), paint)
+        }
     }
 
     private fun coverStyleOf(settings: UserSettings): CoverStyle = CoverStyle(
@@ -556,6 +588,13 @@ class ScreenTextSessionService : Service() {
      * background coroutine — it would be overwritten by the next capture mid-read.
      */
     private suspend fun handleCoverFrame(bitmap: Bitmap): CoverFrame? {
+        // Erase what we painted last frame before recognizing. Without FLAG_SECURE
+        // (which blacks out MediaProjection on this ROM) the cover layer is part of
+        // the capture, so OCR would read our own translations as fresh source text
+        // and translate the same screen forever. Painting those rects flat leaves
+        // the original content beneath them out of the OCR input, which is exactly
+        // what we want: they are already translated and already on screen.
+        erasePaintedRegions(bitmap)
         val page = withContext(Dispatchers.IO) {
             try {
                 ocr?.recognizePage(bitmap, currentSettings.ocrScript)
@@ -563,7 +602,11 @@ class ScreenTextSessionService : Service() {
                 Log.w(TAG, "cover ocr failed", t)
                 null
             }
-        } ?: return null
+        }
+        if (page == null) {
+            Log.i(TAG, "TRANSPROF coverplan NULL (no text found on frame)")
+            return null
+        }
         val targets = TranslationPlanner.plan(page, currentSettings.targetLanguageCode)
         Log.i(
             TAG,
@@ -571,21 +614,24 @@ class ScreenTextSessionService : Service() {
                 "target=${currentSettings.targetLanguageCode}",
         )
         if (targets.isEmpty()) {
-            // Nothing on this screen needs translating: drop the previous blocks
-            // instead of leaving stale translations over changed content.
-            coverOverlay?.update(emptyList())
+            // All on-screen text is already covered or in target language.
+            // Do NOT wipe the existing overlay: those blocks are already on screen.
             return null
         }
         val requests = withContext(Dispatchers.IO) {
             targets.map { CoverRequest(it, backgroundSampler.sample(bitmap, it.rect)) }
         }
-        return CoverFrame(++coverEpoch, requests)
+        // Epoch must NOT advance per frame: a translation takes 500–1400 ms while
+        // frames arrive every 400 ms, so any per-frame bump makes every in-flight
+        // result look stale and it is silently dropped — the cover never paints.
+        // Frame-level staleness is already handled by the CONFLATED frame channel.
+        // [coverEpoch] only moves on mode switch / region change / rotation.
+        return CoverFrame(coverEpoch, requests)
     }
 
     /** Translates one frame's blocks, at most [TRANSLATE_CONCURRENCY] in flight. */
     private suspend fun translateCoverFrame(engine: TranslationEngine, frame: CoverFrame) {
         val cover = coverOverlay ?: return
-        val results = arrayOfNulls<CoverTarget>(frame.requests.size)
         val semaphore = Semaphore(TRANSLATE_CONCURRENCY)
         coroutineScope {
             frame.requests.forEachIndexed { index, request ->
@@ -601,12 +647,15 @@ class ScreenTextSessionService : Service() {
                         background = request.background,
                         original = request.target.text,
                     )
-                    // Each frame replaces the whole set: a stale block from a previous
-                    // frame must not survive onto new content.
-                    val snapshot = synchronized(results) {
-                        results[index] = target
-                        results.filterNotNull()
-                    }
+                    coverBlockManager.updateTarget(target, request.target.key)
+                    val (w, h, _) = realScreenMetrics()
+                    coverBlockManager.pruneOffscreen(w, h)
+                    val snapshot = coverBlockManager.getActiveTargets()
+                    Log.i(
+                        TAG,
+                        "TRANSPROF coverpaint epoch=${frame.epoch} cur=$coverEpoch " +
+                            "idx=$index n=${snapshot.size} rect=${target.rect} text=${target.text.take(12)}",
+                    )
                     cover.update(snapshot)
                 }
             }
@@ -750,6 +799,7 @@ class ScreenTextSessionService : Service() {
             regionSpaceRot = newRot
             lastHash = Long.MIN_VALUE
             coverEpoch++
+            coverBlockManager.clear()
             coverOverlay?.reclamp()
             // The rebuilt window starts empty, but the old view's blocks would keep
             // the next frame's identical rects filtered out as "already painted".
@@ -863,6 +913,7 @@ class ScreenTextSessionService : Service() {
         capturer = null
         overlay?.hide()
         overlay = null
+        coverBlockManager.clear()
         coverOverlay?.hide()
         coverOverlay = null
         coverEpoch++
