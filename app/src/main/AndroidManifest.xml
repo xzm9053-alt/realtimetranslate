@@ -50,6 +50,15 @@
                 android:value="Real-time screen-region OCR and translation overlay" />
         </service>
 
+        <service
+            android:name=".service.FloatingHubService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Persistent floating translation hub ball and mode launcher" />
+        </service>
+
         <!--
           Serves the diagnostic report to whichever app the user picks in the share
           sheet. The authority is built from ${applicationId} so the debug variant's

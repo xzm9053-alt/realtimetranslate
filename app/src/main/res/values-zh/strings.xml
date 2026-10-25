@@ -438,4 +438,25 @@
     <string name="video_pause">暂停</string>
     <string name="video_cues_title">字幕</string>
     <string name="video_cues_empty">处理完成后，逐句字幕会显示在这里</string>
+
+    <!-- 通用悬浮球 Hub -->
+    <string name="hub_channel_name">悬浮球常驻服务</string>
+    <string name="hub_notification_title">实时翻译悬浮球已开启</string>
+    <string name="hub_notification_text">点击管理翻译模式或退出</string>
+    <string name="hub_action_close">关闭悬浮球</string>
+    <string name="hub_switch_title">常驻悬浮球</string>
+    <string name="hub_switch_summary">在所有应用上方显示便捷操作球，聚合七大翻译功能</string>
+    <string name="hub_menu_voice">声音同传</string>
+    <string name="hub_menu_region">屏幕取词</string>
+    <string name="hub_menu_fullscreen">全屏翻译</string>
+    <string name="hub_menu_comic">漫画翻译</string>
+    <string name="hub_menu_camera">相机翻译</string>
+    <string name="hub_menu_image">图片翻译</string>
+    <string name="hub_menu_document">文档翻译</string>
+    <string name="hub_menu_show_window">显示字幕窗口</string>
+    <string name="hub_menu_hide_window">隐藏字幕窗口</string>
+    <string name="hub_menu_pause">暂停翻译</string>
+    <string name="hub_menu_resume">继续翻译</string>
+    <string name="hub_menu_stop_current">停止当前翻译</string>
+    <string name="hub_menu_close_hub">关闭常驻球</string>
 </resources>

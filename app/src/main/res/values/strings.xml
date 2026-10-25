@@ -439,4 +439,25 @@
     <string name="video_pause">Pause</string>
     <string name="video_cues_title">Subtitles</string>
     <string name="video_cues_empty">Sentence-by-sentence subtitles appear here once processing finishes</string>
+
+    <!-- Floating Hub -->
+    <string name="hub_channel_name">Floating Hub Service</string>
+    <string name="hub_notification_title">Floating Hub Active</string>
+    <string name="hub_notification_text">Tap to manage modes or close</string>
+    <string name="hub_action_close">Close Hub</string>
+    <string name="hub_switch_title">Floating Hub</string>
+    <string name="hub_switch_summary">Show a persistent floating ball to access all translation modes</string>
+    <string name="hub_menu_voice">Voice Subtitles</string>
+    <string name="hub_menu_region">Screen Region</string>
+    <string name="hub_menu_fullscreen">Fullscreen Translate</string>
+    <string name="hub_menu_comic">Comic Translate</string>
+    <string name="hub_menu_camera">Camera Translate</string>
+    <string name="hub_menu_image">Image Translate</string>
+    <string name="hub_menu_document">Document Translate</string>
+    <string name="hub_menu_show_window">Show Subtitle Window</string>
+    <string name="hub_menu_hide_window">Hide Subtitle Window</string>
+    <string name="hub_menu_pause">Pause Translation</string>
+    <string name="hub_menu_resume">Resume Translation</string>
+    <string name="hub_menu_stop_current">Stop Current Mode</string>
+    <string name="hub_menu_close_hub">Close Hub Ball</string>
 </resources>
