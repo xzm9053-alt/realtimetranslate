@@ -162,9 +162,32 @@ class ScreenTextSessionService : Service() {
         super.onCreate()
         registerComponentCallbacks(this)
         commandJob = scope.launch {
-            ScreenOcrBus.commands.collect { cmd ->
-                when (cmd) {
-                    ScreenOcrBus.Command.Stop -> stopEverything(getString(R.string.ocr_stopped))
+            launch {
+                ScreenOcrBus.commands.collect { cmd ->
+                    when (cmd) {
+                        ScreenOcrBus.Command.Stop -> stopEverything(getString(R.string.ocr_stopped))
+                    }
+                }
+            }
+            launch {
+                HubBus.commands.collect { cmd ->
+                    when (cmd) {
+                        is HubCommand.StopCurrentMode -> {
+                            if (HubBus.state.value.mode in setOf(HubMode.SCREEN_REGION, HubMode.FULLSCREEN, HubMode.COMIC)) {
+                                stopEverything(getString(R.string.ocr_stopped))
+                            }
+                        }
+                        is HubCommand.TogglePause -> {
+                            setPaused(!paused)
+                        }
+                        is HubCommand.ReselectRegion -> {
+                            reselectRegion()
+                        }
+                        is HubCommand.ToggleOutline -> {
+                            overlay?.triggerToggleOutline()
+                        }
+                        else -> Unit
+                    }
                 }
             }
         }
@@ -367,6 +390,7 @@ class ScreenTextSessionService : Service() {
             ScreenOcrBus.Status.Running,
             getString(if (fullscreen) R.string.cover_notification_text else R.string.ocr_running),
         )
+        HubBus.syncFromScreenOcr(ScreenOcrBus.Status.Running, mode)
         runOcrLoop()
     }
 
@@ -483,6 +507,16 @@ class ScreenTextSessionService : Service() {
         )
     }
 
+    private fun reselectRegion() {
+        if (!stopped && mode == ScreenOcrMode.REGION) {
+            RegionSelectorOverlay(
+                this,
+                onConfirm = { newRegion -> updateRegion(newRegion) },
+                onCancel = { },
+            ).show()
+        }
+    }
+
     /** 暂停 / 继续：只停采集、OCR 与翻译，保留录屏授权、悬浮球、选区和已显示的
      *  译文。恢复时清掉去重状态，下一帧立即按当前画面重新识别。 */
     private fun setPaused(value: Boolean) {
@@ -490,10 +524,12 @@ class ScreenTextSessionService : Service() {
         paused = value
         if (value) {
             ScreenOcrBus.setStatus(ScreenOcrBus.Status.Paused, getString(R.string.ocr_paused))
+            HubBus.syncFromScreenOcr(ScreenOcrBus.Status.Paused, mode)
         } else {
             lastHash = Long.MIN_VALUE
             lastText = ""
             ScreenOcrBus.setStatus(ScreenOcrBus.Status.Running, getString(R.string.ocr_resumed))
+            HubBus.syncFromScreenOcr(ScreenOcrBus.Status.Running, mode)
         }
         overlay?.setPaused(value)
         updateNotification()
@@ -968,6 +1004,7 @@ class ScreenTextSessionService : Service() {
         stopped = true
         paused = false
         ScreenOcrBus.setStatus(ScreenOcrBus.Status.Stopped, message)
+        HubBus.syncFromScreenOcr(ScreenOcrBus.Status.Stopped, mode)
         val historyList = synchronized(ocrRecords) { ocrRecords.toList() }
         if (historyList.isNotEmpty()) {
             val inFull = historyList.joinToString("\n\n") { it.first }

@@ -51,6 +51,7 @@ class SubtitleSessionService : Service() {
     private var settingsJob: Job? = null
     private var eventsJob: Job? = null
     private var commandJob: Job? = null
+    private var hubJob: Job? = null
 
     private var currentSettings: UserSettings = UserSettings()
     private var audioSourceMode: AudioSourceMode = AudioSourceMode.MEDIA
@@ -69,6 +70,21 @@ class SubtitleSessionService : Service() {
             SessionBus.commands.collect { cmd ->
                 when (cmd) {
                     SessionBus.Command.Stop -> stopEverything("已停止")
+                }
+            }
+        }
+        hubJob = scope.launch {
+            HubBus.commands.collect { cmd ->
+                when (cmd) {
+                    is HubCommand.SetSubtitleWindowVisible -> {
+                        if (cmd.visible) overlay?.showWindowForHub() else overlay?.hideWindowForHub()
+                    }
+                    is HubCommand.StopCurrentMode -> {
+                        if (HubBus.state.value.mode == HubMode.VOICE) {
+                            stopEverything("从悬浮球停止")
+                        }
+                    }
+                    else -> Unit
                 }
             }
         }
@@ -176,6 +192,7 @@ class SubtitleSessionService : Service() {
                         when (state) {
                             is RealtimeTranslationClient.ConnectionState.Ready -> {
                                 SessionBus.setStatus(SessionBus.Status.Running, "翻译中")
+                                HubBus.syncFromSession(SessionBus.Status.Running)
                                 startCapturePipeline(client)
                             }
                             is RealtimeTranslationClient.ConnectionState.Failed -> {
@@ -189,6 +206,7 @@ class SubtitleSessionService : Service() {
                     when (event) {
                         is RealtimeTranslationClient.LiveEvent.SetupComplete -> {
                             SessionBus.setStatus(SessionBus.Status.Running, "翻译中")
+                            HubBus.syncFromSession(SessionBus.Status.Running)
                             startCapturePipeline(client)
                         }
                         is RealtimeTranslationClient.LiveEvent.InputTranscript -> {
@@ -380,6 +398,9 @@ class SubtitleSessionService : Service() {
         mediaProjection = null
         settingsJob?.cancel()
         eventsJob?.cancel()
+        hubJob?.cancel()
+        hubJob = null
+        HubBus.syncFromSession(SessionBus.Status.Stopped)
         captureStarted = false
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -395,6 +416,9 @@ class SubtitleSessionService : Service() {
             mediaProjection?.stop()
         } catch (_: Exception) {
         }
+        hubJob?.cancel()
+        hubJob = null
+        HubBus.syncFromSession(SessionBus.Status.Stopped)
         scope.cancel()
         ioScope.cancel()
         super.onDestroy()

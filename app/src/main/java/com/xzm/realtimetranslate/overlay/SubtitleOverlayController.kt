@@ -911,6 +911,27 @@ class SubtitleOverlayController(
         unlockPillView = null
     }
 
+    fun hideWindowForHub() {
+        val root = rootView ?: return
+        if (root.visibility != View.GONE) {
+            triggerHaptic()
+            root.visibility = View.GONE
+            com.xzm.realtimetranslate.service.HubBus.setSubtitleWindowVisible(false)
+        }
+    }
+
+    fun showWindowForHub() {
+        val root = rootView ?: return
+        if (root.visibility != View.VISIBLE) {
+            triggerHaptic()
+            if (isCollapsed) {
+                expand()
+            }
+            root.visibility = View.VISIBLE
+            com.xzm.realtimetranslate.service.HubBus.setSubtitleWindowVisible(true)
+        }
+    }
+
     /**
      * 拖动松手时判定贴边：窗口左边缘贴边→折叠到左；右边缘贴边→折叠到右。
      * 返回是否已触发折叠（触发则上层不再 persist，避免小球几何覆盖窗口位置）。
@@ -921,10 +942,20 @@ class SubtitleOverlayController(
         val (screenW, _, _) = screenMetrics()
         return when {
             params.x <= EDGE_COLLAPSE_PX -> {
-                fold(BallView.SIDE_LEFT); true
+                if (com.xzm.realtimetranslate.service.HubBus.state.value.isHubEnabled) {
+                    hideWindowForHub()
+                } else {
+                    fold(BallView.SIDE_LEFT)
+                }
+                true
             }
             screenW - (params.x + params.width) <= EDGE_COLLAPSE_PX -> {
-                fold(BallView.SIDE_RIGHT); true
+                if (com.xzm.realtimetranslate.service.HubBus.state.value.isHubEnabled) {
+                    hideWindowForHub()
+                } else {
+                    fold(BallView.SIDE_RIGHT)
+                }
+                true
             }
             else -> false
         }

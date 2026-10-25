@@ -122,6 +122,20 @@ class OcrBallOverlay(
     }
     private var callbacksRegistered = false
 
+    var hubModeEnabled: Boolean = false
+        set(value) {
+            field = value
+            if (value) {
+                ballWindowView?.visibility = View.GONE
+            } else {
+                ballWindowView?.visibility = View.VISIBLE
+            }
+        }
+
+    fun triggerToggleOutline() {
+        toggleRegionOutline()
+    }
+
     fun show(initial: UserSettings) {
         if (ballWindowView != null) return
         settings = initial
@@ -149,6 +163,10 @@ class OcrBallOverlay(
         val root = FrameLayout(context).apply {
             setBackgroundColor(Color.TRANSPARENT)
             addView(ball)
+        }
+        if (hubModeEnabled || com.xzm.realtimetranslate.service.HubBus.state.value.isHubEnabled) {
+            hubModeEnabled = true
+            root.visibility = View.GONE
         }
         ballWindowView = root
         windowManager.addView(root, params)
