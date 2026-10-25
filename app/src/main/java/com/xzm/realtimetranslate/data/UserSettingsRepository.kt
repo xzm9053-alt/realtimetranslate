@@ -74,6 +74,7 @@ class UserSettingsRepository(private val context: Context) {
         val genericAsrModel = stringPreferencesKey("generic_asr_model")
         val draftTranslationPreview = booleanPreferencesKey("draft_translation_preview")
         val silenceDetectionEnabled = booleanPreferencesKey("silence_detection_enabled")
+        val hubEnabled = booleanPreferencesKey("hub_enabled")
     }
 
     val settings: Flow<UserSettings> = context.dataStore.data.map { prefs ->
@@ -140,6 +141,7 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.genericAsrModel] = next.genericAsrModel
             prefs[Keys.draftTranslationPreview] = next.draftTranslationPreview
             prefs[Keys.silenceDetectionEnabled] = next.silenceDetectionEnabled
+            prefs[Keys.hubEnabled] = next.hubEnabled
         }
     }
 
@@ -224,6 +226,8 @@ class UserSettingsRepository(private val context: Context) {
             ?: UserSettings.Defaults.DRAFT_TRANSLATION_PREVIEW,
         silenceDetectionEnabled = this[Keys.silenceDetectionEnabled]
             ?: UserSettings.Defaults.SILENCE_DETECTION_ENABLED,
+        hubEnabled = this[Keys.hubEnabled]
+            ?: UserSettings.Defaults.HUB_ENABLED,
     )
 
     /** Migrate the pre-3-option boolean: true→BOTH, false/absent→TRANSLATION. */

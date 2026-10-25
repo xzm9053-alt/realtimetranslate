@@ -103,6 +103,8 @@ data class UserSettings(
     val draftTranslationPreview: Boolean = Defaults.DRAFT_TRANSLATION_PREVIEW,
     // 静音检测告警：持续 10 秒绝对静音时输出日志与柔性提示，排查内录受限或麦克风故障。
     val silenceDetectionEnabled: Boolean = Defaults.SILENCE_DETECTION_ENABLED,
+    // 常驻悬浮球开关：在所有 App 上方显示便捷悬浮球，承载多模式切换。
+    val hubEnabled: Boolean = Defaults.HUB_ENABLED,
 ) {
     object Defaults {
         // Kept for schema compatibility; the engine now reads DeepSeek settings directly.
@@ -175,6 +177,7 @@ data class UserSettings(
         const val GENERIC_ASR_MODEL = "FunAudioLLM/SenseVoiceSmall"
         const val DRAFT_TRANSLATION_PREVIEW = true
         const val SILENCE_DETECTION_ENABLED = true
+        const val HUB_ENABLED = false
     }
 }
 

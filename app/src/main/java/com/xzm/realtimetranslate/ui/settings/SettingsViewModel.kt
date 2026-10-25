@@ -520,6 +520,11 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.update(transform) }
     }
 
+    fun setHubEnabled(enabled: Boolean) {
+        update { it.copy(hubEnabled = enabled) }
+        com.xzm.realtimetranslate.service.HubBus.setHubEnabled(enabled)
+    }
+
     fun resetSubtitleAppearance() {
         viewModelScope.launch { settingsRepository.resetSubtitleAppearance() }
     }
