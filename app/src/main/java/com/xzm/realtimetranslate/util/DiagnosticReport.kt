@@ -45,6 +45,8 @@ object DiagnosticReport {
         val lines: List<String>,
         /** Tail of `content.log`, only when the user turned content logging on. */
         val contentLines: List<String>? = null,
+        /** [AudioCaptureSummary.describe] output, or null when no session has run. */
+        val audioCapture: String? = null,
     )
 
     fun build(input: Input): String = buildString {
@@ -64,6 +66,11 @@ object DiagnosticReport {
 
         append("\n---------- 设置 ----------\n")
         append(input.settings.trimEnd('\n')).append('\n')
+
+        if (!input.audioCapture.isNullOrBlank()) {
+            append("\n---------- 音频采集 ----------\n")
+            append(input.audioCapture.trimEnd('\n')).append('\n')
+        }
 
         append("\n---------- 崩溃记录 ----------\n")
         if (input.crash.isNullOrBlank()) {

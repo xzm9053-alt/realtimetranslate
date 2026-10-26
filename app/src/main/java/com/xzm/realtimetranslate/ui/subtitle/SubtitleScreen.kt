@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xzm.realtimetranslate.R
+import com.xzm.realtimetranslate.audio.CaptureState
 import com.xzm.realtimetranslate.data.AudioSourceMode
 import com.xzm.realtimetranslate.data.LanguageOption
 import com.xzm.realtimetranslate.data.OcrScript
@@ -272,6 +273,11 @@ fun SubtitleScreen(
                             )
                         }
                         StatusPill(label = statusLabel, tone = tone)
+                    }
+
+                    // 实时电平：条子在动 = 内录确实通了。这是「怎么看有没有内录」的直接答案。
+                    if (running) {
+                        AudioLevelRow(level = session.audioLevel, state = session.captureState)
                     }
 
                     if (session.message.isNotBlank()) {
@@ -961,6 +967,52 @@ fun SubtitleScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AudioLevelRow(level: Float, state: CaptureState) {
+    val scheme = MiuixTheme.colorScheme
+    val (labelRes, dotColor) = when (state) {
+        CaptureState.STARTING -> R.string.audio_level_starting to scheme.onSurfaceVariantSummary
+        CaptureState.FLOWING -> R.string.audio_level_flowing to Color(0xFF34C759)
+        CaptureState.QUIET -> R.string.audio_level_quiet to scheme.onSurfaceVariantSummary
+        CaptureState.DIGITAL_SILENCE -> R.string.audio_level_digital_silence to Color(0xFFFF5C5C)
+        CaptureState.STALLED -> R.string.audio_level_stalled to Color(0xFFFF5C5C)
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(scheme.surfaceVariant),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(level.coerceIn(0f, 1f))
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(if (state == CaptureState.FLOWING) Color(0xFF34C759) else scheme.onSurfaceVariantSummary),
+            )
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(6.dp)
+                    .height(6.dp)
+                    .clip(CircleShape)
+                    .background(dotColor),
+            )
+            Text(
+                text = stringResource(labelRes),
+                fontSize = 12.sp,
+                color = scheme.onSurfaceVariantSummary,
+            )
         }
     }
 }

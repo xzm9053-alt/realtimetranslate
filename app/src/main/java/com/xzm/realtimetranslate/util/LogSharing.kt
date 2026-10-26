@@ -6,6 +6,7 @@ import androidx.core.content.FileProvider
 import com.xzm.realtimetranslate.BuildConfig
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.UserSettings
+import com.xzm.realtimetranslate.service.SessionBus
 import java.io.File
 
 /**
@@ -45,6 +46,12 @@ object LogSharing {
             } else {
                 null
             },
+            audioCapture = AudioCaptureSummary.describe(
+                mode = settings.audioSourceMode,
+                state = SessionBus.state.value.captureState,
+                peakRms = SessionBus.peakRms(),
+                projectionActivated = SessionBus.projectionActivated,
+            ),
         )
 
         val dir = File(context.cacheDir, DIR)

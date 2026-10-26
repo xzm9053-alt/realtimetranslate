@@ -7,41 +7,169 @@ import org.junit.Test
 
 class AudioSilenceDetectorTest {
 
-    @Test
-    fun testSilenceDetectionTriggerAndRecovery() {
-        var alertCount = 0
-        var restoredCount = 0
+    /** 可推进的时钟，避免用 Thread.sleep 把单测拖慢。 */
+    private class FakeClock(var now: Long = 1_000L) : () -> Long {
+        override fun invoke(): Long = now
+        fun advance(ms: Long) { now += ms }
+    }
 
+    private fun silent(count: Int = 1600) = ShortArray(count) { 0 }
+
+    /** 底噪：非零但低于阈值。 */
+    private fun quiet(count: Int = 1600) = ShortArray(count) { if (it % 2 == 0) 10 else -10 }
+
+    private fun loud(count: Int = 1600) = ShortArray(count) { if (it % 2 == 0) 2000 else -2000 }
+
+    @Test
+    fun testDigitalSilenceReportedAsDigitalNotQuiet() {
+        val clock = FakeClock()
+        val states = mutableListOf<CaptureState>()
+        var alerts = 0
         val detector = AudioSilenceDetector(
-            audioSourceTag = "TestAudio",
+            audioSourceTag = "TestMedia",
             silenceThresholdRms = 15.0f,
-            warningDurationMs = 100L, // 单元测试缩短阈值
-            onSilenceAlert = { _, _ -> alertCount++ },
-            onSoundRestored = { _ -> restoredCount++ },
+            warningDurationMs = 10_000L,
+            zeroDurationMs = 3_000L,
+            onSilenceAlert = { _, _ -> alerts++ },
+            onStateChanged = { state, _ -> states.add(state) },
+            timeProvider = clock,
         )
 
-        val silentBuffer = ShortArray(1600) { 0 }
-        // 初始无告警
-        detector.processPcm(silentBuffer, silentBuffer.size)
-        assertEquals(0.0, detector.currentRms, 0.001)
-        assertFalse(detector.isAlertTriggered)
+        detector.processPcm(silent(), 1600)
+        clock.advance(3_100L)
+        detector.processPcm(silent(), 1600)
 
-        // 等待超过 100ms
-        Thread.sleep(120L)
-        detector.processPcm(silentBuffer, silentBuffer.size)
+        assertEquals(CaptureState.DIGITAL_SILENCE, detector.currentState)
+        assertEquals(1, alerts)
+        assertTrue(states.contains(CaptureState.DIGITAL_SILENCE))
+    }
+
+    @Test
+    fun testQuietIsNotReportedAsError() {
+        val clock = FakeClock()
+        var alerts = 0
+        val detector = AudioSilenceDetector(
+            audioSourceTag = "TestMedia",
+            silenceThresholdRms = 15.0f,
+            warningDurationMs = 10_000L,
+            zeroDurationMs = 3_000L,
+            onSilenceAlert = { _, _ -> alerts++ },
+            timeProvider = clock,
+        )
+
+        detector.processPcm(quiet(), 1600)
+        clock.advance(11_000L)
+        detector.processPcm(quiet(), 1600)
+
+        assertEquals(CaptureState.QUIET, detector.currentState)
+        assertEquals("quiet must never raise the digital-silence alert", 0, alerts)
+    }
+
+    @Test
+    fun testDigitalSilenceBelowThresholdDurationDoesNotAlert() {
+        val clock = FakeClock()
+        var alerts = 0
+        val detector = AudioSilenceDetector(
+            audioSourceTag = "TestMedia",
+            zeroDurationMs = 3_000L,
+            onSilenceAlert = { _, _ -> alerts++ },
+            timeProvider = clock,
+        )
+
+        detector.processPcm(silent(), 1600)
+        clock.advance(2_000L)
+        detector.processPcm(silent(), 1600)
+
+        assertFalse(detector.isAlertTriggered)
+        assertEquals(0, alerts)
+    }
+
+    @Test
+    fun testSoundRestoredFiresOnceAndResets() {
+        val clock = FakeClock()
+        var restored = 0
+        val detector = AudioSilenceDetector(
+            audioSourceTag = "TestMedia",
+            zeroDurationMs = 3_000L,
+            onSoundRestored = { restored++ },
+            timeProvider = clock,
+        )
+
+        detector.processPcm(silent(), 1600)
+        clock.advance(3_100L)
+        detector.processPcm(silent(), 1600)
         assertTrue(detector.isAlertTriggered)
-        assertEquals(1, alertCount)
 
-        // 持续静音不重复触发
-        detector.processPcm(silentBuffer, silentBuffer.size)
-        assertEquals(1, alertCount)
+        detector.processPcm(loud(), 1600)
+        detector.processPcm(loud(), 1600)
 
-        // 声音恢复（高能量正弦波或噪声）
-        val loudBuffer = ShortArray(1600) { (it % 500 * 10).toShort() }
-        detector.processPcm(loudBuffer, loudBuffer.size)
-        assertTrue(detector.currentRms > 15.0)
+        assertEquals(1, restored)
         assertFalse(detector.isAlertTriggered)
-        assertEquals(1, restoredCount)
+    }
+
+    @Test
+    fun testAlertCanRetriggerAfterRecovery() {
+        val clock = FakeClock()
+        var alerts = 0
+        val detector = AudioSilenceDetector(
+            audioSourceTag = "TestMedia",
+            zeroDurationMs = 3_000L,
+            onSilenceAlert = { _, _ -> alerts++ },
+            timeProvider = clock,
+        )
+
+        detector.processPcm(silent(), 1600)
+        clock.advance(3_100L)
+        detector.processPcm(silent(), 1600)
+        assertEquals(1, alerts)
+
+        detector.processPcm(loud(), 1600)
+        clock.advance(1_000L)
+
+        // 出过声之后需要更长的零才算真断（8s）。
+        detector.processPcm(silent(), 1600)
+        clock.advance(8_100L)
+        detector.processPcm(silent(), 1600)
+        assertEquals("latch must reset so a second silence alerts again", 2, alerts)
+    }
+
+    @Test
+    fun testShortGapAfterSoundDoesNotAlert() {
+        val clock = FakeClock()
+        var alerts = 0
+        val detector = AudioSilenceDetector(
+            audioSourceTag = "TestMedia",
+            zeroDurationMs = 3_000L,
+            onSilenceAlert = { _, _ -> alerts++ },
+            timeProvider = clock,
+        )
+
+        detector.processPcm(loud(), 1600)
+        detector.processPcm(silent(), 1600)
+        clock.advance(4_000L)
+        detector.processPcm(silent(), 1600)
+
+        assertEquals("a 4s playback gap must not be reported as digital silence", 0, alerts)
+        assertFalse(detector.isAlertTriggered)
+    }
+
+    @Test
+    fun testRmsExactlyAtThresholdIsNotSilent() {
+        val clock = FakeClock()
+        val detector = AudioSilenceDetector(
+            audioSourceTag = "TestMedia",
+            silenceThresholdRms = 15.0f,
+            warningDurationMs = 10_000L,
+            timeProvider = clock,
+        )
+        // RMS 恰好 15.0：每个采样都是 15 或 -15。
+        val atThreshold = ShortArray(1600) { if (it % 2 == 0) 15 else -15 }
+        detector.processPcm(atThreshold, 1600)
+        clock.advance(11_000L)
+        detector.processPcm(atThreshold, 1600)
+
+        assertEquals(CaptureState.FLOWING, detector.currentState)
+        assertFalse(detector.isAlertTriggered)
     }
 
     @Test

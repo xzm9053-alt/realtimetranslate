@@ -15,6 +15,8 @@ import com.xzm.realtimetranslate.util.AppLog as Log
 import androidx.core.app.NotificationCompat
 import com.xzm.realtimetranslate.LiveTranslateApp
 import com.xzm.realtimetranslate.R
+import com.xzm.realtimetranslate.audio.AudioLevel
+import com.xzm.realtimetranslate.audio.CaptureState
 import com.xzm.realtimetranslate.audio.MicAudioCapturer
 import com.xzm.realtimetranslate.audio.PcmMixer
 import com.xzm.realtimetranslate.audio.SystemAudioCapturer
@@ -191,7 +193,7 @@ class SubtitleSessionService : Service() {
                     client.connectionState.collect { state ->
                         when (state) {
                             is RealtimeTranslationClient.ConnectionState.Ready -> {
-                                SessionBus.setStatus(SessionBus.Status.Running, "翻译中")
+                                SessionBus.setStatus(SessionBus.Status.Running, getString(R.string.status_translating))
                                 HubBus.syncFromSession(SessionBus.Status.Running)
                                 startCapturePipeline(client)
                             }
@@ -205,7 +207,7 @@ class SubtitleSessionService : Service() {
                 client.events.collect { event ->
                     when (event) {
                         is RealtimeTranslationClient.LiveEvent.SetupComplete -> {
-                            SessionBus.setStatus(SessionBus.Status.Running, "翻译中")
+                            SessionBus.setStatus(SessionBus.Status.Running, getString(R.string.status_translating))
                             HubBus.syncFromSession(SessionBus.Status.Running)
                             startCapturePipeline(client)
                         }
@@ -279,10 +281,30 @@ class SubtitleSessionService : Service() {
     private fun startCapturePipeline(client: RealtimeTranslationClient) {
         if (captureStarted) return
         captureStarted = true
+        SessionBus.setAudio(0f, CaptureState.STARTING)
+
         val silenceCallback: (Long, String) -> Unit = { _, src ->
             if (currentSettings.silenceDetectionEnabled) {
-                val hint = if (src.contains("Media")) "未检测到系统声音（当前应用可能限制内录）" else "未检测到麦克风输入"
-                SessionBus.setStatus(SessionBus.Status.Running, "翻译中 · $hint")
+                val hint = if (src.contains("Media")) {
+                    getString(R.string.audio_hint_media_silent)
+                } else {
+                    getString(R.string.audio_hint_mic_silent)
+                }
+                SessionBus.setStatus(SessionBus.Status.Running, "$hint")
+            }
+        }
+        // 声音回来就把状态改回去 —— 否则「未检测到声音」会永远挂在那里。
+        val restoredCallback: (String) -> Unit = {
+            SessionBus.setStatus(SessionBus.Status.Running, getString(R.string.status_translating))
+        }
+        val levelCallback: (CaptureState, Double) -> Unit = { state, rms ->
+            SessionBus.noteRms(rms)
+            SessionBus.setAudio(AudioLevel.normalize(rms), state)
+            if (state == CaptureState.STALLED && currentSettings.silenceDetectionEnabled) {
+                SessionBus.setStatus(
+                    SessionBus.Status.Running,
+                    getString(R.string.audio_hint_stalled),
+                )
             }
         }
         try {
@@ -290,12 +312,23 @@ class SubtitleSessionService : Service() {
                 AudioSourceMode.MEDIA -> {
                     val projection = mediaProjection
                         ?: throw IllegalStateException("缺少 MediaProjection")
-                    val cap = SystemAudioCapturer(ioScope, onSilenceAlert = silenceCallback)
+                    val cap = SystemAudioCapturer(
+                        ioScope,
+                        onSilenceAlert = silenceCallback,
+                        onSoundRestored = restoredCallback,
+                        onLevel = levelCallback,
+                    )
                     mediaCapturer = cap
                     cap.start(projection) { pcm -> client.sendPcm16le(pcm, 16_000) }
+                    SessionBus.projectionActivated = cap.projectionActivated
                 }
                 AudioSourceMode.MIC -> {
-                    val mic = MicAudioCapturer(ioScope, onSilenceAlert = silenceCallback)
+                    val mic = MicAudioCapturer(
+                        ioScope,
+                        onSilenceAlert = silenceCallback,
+                        onSoundRestored = restoredCallback,
+                        onLevel = levelCallback,
+                    )
                     micCapturer = mic
                     mic.start { pcm -> client.sendPcm16le(pcm, 16_000) }
                 }
@@ -304,15 +337,26 @@ class SubtitleSessionService : Service() {
                         ?: throw IllegalStateException("缺少 MediaProjection")
                     val mixer = PcmMixer { mixed -> client.sendPcm16le(mixed, 16_000) }
                     pcmMixer = mixer
-                    val media = SystemAudioCapturer(ioScope, onSilenceAlert = silenceCallback)
+                    val media = SystemAudioCapturer(
+                        ioScope,
+                        onSilenceAlert = silenceCallback,
+                        onSoundRestored = restoredCallback,
+                        onLevel = levelCallback,
+                    )
                     mediaCapturer = media
                     media.start(projection) { pcm -> mixer.offerMedia(pcm) }
-                    val mic = MicAudioCapturer(ioScope, onSilenceAlert = silenceCallback)
+                    SessionBus.projectionActivated = media.projectionActivated
+                    val mic = MicAudioCapturer(
+                        ioScope,
+                        onSilenceAlert = silenceCallback,
+                        onSoundRestored = restoredCallback,
+                        onLevel = levelCallback,
+                    )
                     micCapturer = mic
                     mic.start { pcm -> mixer.offerMic(pcm) }
                 }
             }
-            SessionBus.setStatus(SessionBus.Status.Running, "翻译中 · 等待声音…")
+            SessionBus.setStatus(SessionBus.Status.Running, getString(R.string.status_waiting_sound))
         } catch (e: Exception) {
             Log.e(TAG, "capture start failed", e)
             SessionBus.setStatus(SessionBus.Status.Error, e.message ?: "音频采集启动失败")

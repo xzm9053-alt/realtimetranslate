@@ -1,5 +1,6 @@
 package com.xzm.realtimetranslate.service
 
+import com.xzm.realtimetranslate.audio.CaptureState
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -28,6 +29,10 @@ object SessionBus {
         val lastInputFull: String = "",
         val lastOutputFull: String = "",
         val canExport: Boolean = false,
+        /** 0f..1f，对数刻度的实时音量，供字幕页电平条使用。 */
+        val audioLevel: Float = 0f,
+        /** 采集链路状态；区分「安静」与「数字静音」。 */
+        val captureState: CaptureState = CaptureState.STARTING,
     )
 
     private val _state = MutableStateFlow(UiState())
@@ -47,6 +52,25 @@ object SessionBus {
     fun setStatus(status: Status, message: String = "") {
         _state.value = _state.value.copy(status = status, message = message)
     }
+
+    fun setAudio(level: Float, state: CaptureState) {
+        if (state == CaptureState.STARTING) peakRmsValue = 0.0
+        _state.value = _state.value.copy(audioLevel = level, captureState = state)
+    }
+
+    /** 本次会话的峰值 RMS，写进诊断报告用。 */
+    @Volatile
+    private var peakRmsValue: Double = 0.0
+
+    fun noteRms(rms: Double) {
+        if (rms > peakRmsValue) peakRmsValue = rms
+    }
+
+    fun peakRms(): Double = peakRmsValue
+
+    /** 投影是否真正被激活过（建了 VirtualDisplay）。 */
+    @Volatile
+    var projectionActivated: Boolean? = null
 
     fun setPreview(input: String? = null, output: String? = null) {
         _state.value = _state.value.copy(

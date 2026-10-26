@@ -56,6 +56,16 @@
     <string name="status_idle">Idle</string>
     <string name="status_starting">Starting</string>
     <string name="status_running">Translating</string>
+    <string name="status_translating">Translating</string>
+    <string name="status_waiting_sound">Translating · waiting for audio…</string>
+    <string name="audio_hint_media_silent">No system audio received. Confirm the target app is playing; for live or call apps, switch to the microphone.</string>
+    <string name="audio_hint_mic_silent">The microphone is not receiving input — check whether another app is using it.</string>
+    <string name="audio_hint_stalled">Capture started but is not receiving data. Stop and start again.</string>
+    <string name="audio_level_starting">Waiting for capture to start…</string>
+    <string name="audio_level_flowing">Capturing · level</string>
+    <string name="audio_level_quiet">Connected · no sound</string>
+    <string name="audio_level_digital_silence">Receiving digital silence</string>
+    <string name="audio_level_stalled">No capture data</string>
     <string name="status_error">Error</string>
     <string name="status_stopped">Stopped</string>
 
@@ -180,7 +190,7 @@
     <string name="settings_draft_translation_preview_title">Draft translation preview</string>
     <string name="settings_draft_translation_preview_summary">Off by default (zero flickering, saves 85%+ API tokens, translates settled sentences). Turn on if you want debounced interim translation previews while speaking.</string>
     <string name="settings_silence_detection_title">Silence diagnostic alert</string>
-    <string name="settings_silence_detection_summary">Gives a gentle notice if audio capture receives continuous silence for 10s, diagnosing apps that block system audio recording.</string>
+    <string name="settings_silence_detection_summary">The subtitle page shows a live audio level bar, and explains the cause when capture receives only digital silence (projection not activated, or the app blocks recording).</string>
 
     <string name="settings_appearance">Subtitle appearance</string>
     <string name="settings_font_size">Font size %1$d sp · system default font</string>
