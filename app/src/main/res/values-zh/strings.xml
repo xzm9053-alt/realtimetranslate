@@ -372,13 +372,40 @@
 
     <!-- 其他翻译 -->
     <string name="more_entry_title">其他翻译</string>
-    <string name="more_entry_summary">视频翻译 · 文本翻译</string>
+    <string name="more_entry_summary">相机 · 图片 · 视频 · 文本</string>
     <string name="more_title">其他翻译</string>
-    <string name="more_subtitle">用同一套引擎翻译视频与文本</string>
+    <string name="more_subtitle">拍照、选图、视频或文本，都走同一套识别与翻译</string>
+    <string name="more_camera_title">相机翻译</string>
+    <string name="more_camera_summary">拍一张照片，译文直接盖在原文上</string>
+    <string name="more_image_title">图片翻译</string>
+    <string name="more_image_summary">从相册选一张图，就地盖住原文并保存</string>
     <string name="more_video_title">视频翻译</string>
     <string name="more_video_summary">选择本地视频，自动识别语音并生成译文字幕</string>
     <string name="more_text_title">文本翻译</string>
     <string name="more_text_summary">粘贴长文，按段落逐段翻译</string>
+
+    <!-- 相机 / 图片翻译 -->
+    <string name="image_title">图片翻译</string>
+    <string name="image_subtitle">识别图中文字，把译文就地盖在原文上</string>
+    <string name="image_source_camera">拍照</string>
+    <string name="image_source_gallery">相册</string>
+    <string name="image_take_photo">📷 拍一张照片</string>
+    <string name="image_pick_gallery">🖼️ 从相册选一张</string>
+    <string name="image_working">正在识别与翻译…</string>
+    <string name="image_showing_translated">当前：译文版（点一下看原文）</string>
+    <string name="image_showing_original">当前：原文版（点一下看译文）</string>
+    <string name="image_save">保存到相册</string>
+    <string name="image_share">分享</string>
+    <string name="image_source_label">原文</string>
+    <string name="image_translation_label">译文</string>
+    <string name="image_saved">已保存到 %1$s</string>
+    <string name="image_save_failed">保存失败</string>
+    <string name="image_failed">翻译失败</string>
+    <string name="image_decode_failed">无法读取这张图片</string>
+    <string name="image_nothing_to_translate">图中没有需要翻译的文字（已是目标语言）</string>
+    <string name="image_need_key_title">还没有填写翻译 Key</string>
+    <string name="image_need_key_body">图片翻译需要一个可用的翻译引擎。去设置里选一个免 Key 的引擎（微软 / 谷歌免费），或填上 Key。</string>
+    <string name="image_open_settings">去设置</string>
 
     <!-- 文本翻译 -->
     <string name="text_title">文本翻译</string>

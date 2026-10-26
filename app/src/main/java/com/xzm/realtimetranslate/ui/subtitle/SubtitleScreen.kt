@@ -27,6 +27,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -53,6 +54,7 @@ import com.xzm.realtimetranslate.data.UserSettings
 import com.xzm.realtimetranslate.overlay.CoverView
 import com.xzm.realtimetranslate.service.ScreenOcrBus
 import com.xzm.realtimetranslate.service.SessionBus
+import com.xzm.realtimetranslate.service.StaticModeTarget
 import com.xzm.realtimetranslate.ui.components.PageTitle
 import com.xzm.realtimetranslate.ui.components.SectionCard
 import com.xzm.realtimetranslate.ui.components.SettingSwitchRow
@@ -93,8 +95,17 @@ fun SubtitleScreen(
     onResetAppearance: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onToggleHub: (Boolean) -> Unit = {},
+    staticLaunch: StaticModeTarget? = null,
+    onStaticLaunchConsumed: () -> Unit = {},
 ) {
     var showMore by rememberSaveable { mutableStateOf(false) }
+
+    // The floating ball asks for a tool page while this screen may not even be
+    // composed yet; open the More sheet and let it route to the right sub-page.
+    LaunchedEffect(staticLaunch) {
+        if (staticLaunch != null) showMore = true
+    }
+
     if (showMore) {
         MoreScreen(
             onBack = { showMore = false },
@@ -102,6 +113,8 @@ fun SubtitleScreen(
                 showMore = false
                 onOpenSettings()
             },
+            initialStaticTarget = staticLaunch,
+            onInitialTargetConsumed = onStaticLaunchConsumed,
             modifier = Modifier.fillMaxSize(),
         )
         return

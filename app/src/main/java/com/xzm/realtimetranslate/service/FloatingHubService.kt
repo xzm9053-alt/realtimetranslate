@@ -40,6 +40,7 @@ class FloatingHubService : Service() {
             HubBus.commands.collect { cmd ->
                 when (cmd) {
                     HubCommand.CloseHub -> stopSelf()
+                    is HubCommand.LaunchStaticMode -> launchStatic(cmd.target)
                     else -> Unit
                 }
             }
@@ -51,6 +52,26 @@ class FloatingHubService : Service() {
                 overlay?.updateState(state)
             }
         }
+    }
+
+    /**
+     * Opens a static tool (camera / gallery / documents) in the main activity.
+     *
+     * Started from the service, not from the activity's command collector: HubBus
+     * commands are a plain SharedFlow with no replay, so while the app is in the
+     * background — exactly when the floating ball is being used — there is no
+     * collector alive and the command would be dropped without a trace.
+     *
+     * Any running live session is stopped first. A screen cover drawn over this
+     * app's own UI would both hide the picture and feed the cover back into OCR.
+     */
+    private fun launchStatic(target: StaticModeTarget) {
+        HubBus.postCommand(HubCommand.StopCurrentMode)
+        val intent = Intent(this, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            putExtra(EXTRA_STATIC_MODE, target.name)
+        }
+        runCatching { startActivity(intent) }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -105,6 +126,9 @@ class FloatingHubService : Service() {
         private const val NOTIFICATION_ID = 55
         const val ACTION_START = "com.xzm.realtimetranslate.action.START_HUB"
         const val ACTION_STOP = "com.xzm.realtimetranslate.action.STOP_HUB"
+
+        /** Set by [launchStatic]; read by MainActivity to open the matching tool page. */
+        const val EXTRA_STATIC_MODE = "com.xzm.realtimetranslate.extra.STATIC_MODE"
 
         fun start(context: Context) {
             val intent = Intent(context, FloatingHubService::class.java).setAction(ACTION_START)

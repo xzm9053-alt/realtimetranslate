@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -27,8 +28,13 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xzm.realtimetranslate.LiveTranslateApp
 import com.xzm.realtimetranslate.R
+import com.xzm.realtimetranslate.service.StaticModeTarget
 import com.xzm.realtimetranslate.ui.components.PageTitle
 import com.xzm.realtimetranslate.ui.components.SectionCard
+import com.xzm.realtimetranslate.ui.image.ImageSource
+import com.xzm.realtimetranslate.ui.image.ImageTranslateScreen
+import com.xzm.realtimetranslate.ui.image.ImageTranslateViewModel
+import com.xzm.realtimetranslate.ui.image.ImageTranslateViewModelFactory
 import com.xzm.realtimetranslate.ui.text.TextTranslateScreen
 import com.xzm.realtimetranslate.ui.text.TextTranslateViewModel
 import com.xzm.realtimetranslate.ui.text.TextTranslateViewModelFactory
@@ -42,17 +48,24 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 private const val PAGE_HUB = 0
 private const val PAGE_TEXT = 1
 private const val PAGE_VIDEO = 2
+private const val PAGE_IMAGE = 3
 
 /**
- * "其他翻译"入口下的二级页面：一个 Hub，加文本翻译与视频翻译两个子页。
+ * "其他翻译"入口下的二级页面：一个 Hub，加文本 / 视频 / 图片三个子页。
  *
  * 沿用项目现有的手写导航（rememberSaveable + BackHandler），不引入 Navigation-Compose。
+ *
+ * [initialStaticTarget] 来自悬浮球菜单（相机 / 图片）：一进来就落在对应子页，
+ * 并带着那个来源预选（拍照 or 相册）。消费后回调 [onInitialTargetConsumed]，
+ * 否则每次重组都会被拉回同一页。
  */
 @Composable
 fun MoreScreen(
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    initialStaticTarget: StaticModeTarget? = null,
+    onInitialTargetConsumed: () -> Unit = {},
 ) {
     var page by rememberSaveable { mutableIntStateOf(PAGE_HUB) }
     val app = LocalContext.current.applicationContext as LiveTranslateApp
@@ -73,6 +86,32 @@ fun MoreScreen(
             app.modelManager,
         ),
     )
+    val imageVm: ImageTranslateViewModel = viewModel(
+        factory = ImageTranslateViewModelFactory(
+            app,
+            app.settingsRepository,
+            app.apiKeyStore,
+            app.historyRepository,
+        ),
+    )
+
+    // Must come after imageVm: the ball's request carries which picker to preselect.
+    LaunchedEffect(initialStaticTarget) {
+        when (initialStaticTarget) {
+            StaticModeTarget.CAMERA -> {
+                imageVm.setSource(ImageSource.CAMERA)
+                page = PAGE_IMAGE
+            }
+            StaticModeTarget.IMAGE -> {
+                imageVm.setSource(ImageSource.GALLERY)
+                page = PAGE_IMAGE
+            }
+            // Documents (P5) are not implemented yet; stay on the hub rather than
+            // opening a page that cannot do anything.
+            StaticModeTarget.DOCUMENT, null -> Unit
+        }
+        if (initialStaticTarget != null) onInitialTargetConsumed()
+    }
 
     when (page) {
         PAGE_TEXT -> TextTranslateScreen(
@@ -87,10 +126,24 @@ fun MoreScreen(
             onOpenSettings = onOpenSettings,
             modifier = modifier,
         )
+        PAGE_IMAGE -> ImageTranslateScreen(
+            viewModel = imageVm,
+            onBack = { page = PAGE_HUB },
+            onOpenSettings = onOpenSettings,
+            modifier = modifier,
+        )
         else -> MoreHub(
             onBack = onBack,
             onOpenText = { page = PAGE_TEXT },
             onOpenVideo = { page = PAGE_VIDEO },
+            onOpenCamera = {
+                imageVm.setSource(ImageSource.CAMERA)
+                page = PAGE_IMAGE
+            },
+            onOpenImage = {
+                imageVm.setSource(ImageSource.GALLERY)
+                page = PAGE_IMAGE
+            },
             modifier = modifier,
         )
     }
@@ -101,6 +154,8 @@ private fun MoreHub(
     onBack: () -> Unit,
     onOpenText: () -> Unit,
     onOpenVideo: () -> Unit,
+    onOpenCamera: () -> Unit,
+    onOpenImage: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     BackHandler(enabled = true) { onBack() }
@@ -120,6 +175,18 @@ private fun MoreHub(
             TextButton(text = stringResource(R.string.common_back), onClick = onBack)
         }
 
+        HubEntry(
+            emoji = "📷",
+            title = stringResource(R.string.more_camera_title),
+            summary = stringResource(R.string.more_camera_summary),
+            onClick = onOpenCamera,
+        )
+        HubEntry(
+            emoji = "🖼️",
+            title = stringResource(R.string.more_image_title),
+            summary = stringResource(R.string.more_image_summary),
+            onClick = onOpenImage,
+        )
         HubEntry(
             emoji = "🎬",
             title = stringResource(R.string.more_video_title),

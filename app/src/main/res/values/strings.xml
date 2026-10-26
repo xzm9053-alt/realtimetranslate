@@ -373,13 +373,40 @@
 
     <!-- More translation tools -->
     <string name="more_entry_title">More translation</string>
-    <string name="more_entry_summary">Video translation · Text translation</string>
+    <string name="more_entry_summary">Camera · Image · Video · Text</string>
     <string name="more_title">More translation</string>
-    <string name="more_subtitle">Translate videos and text with the same engines</string>
+    <string name="more_subtitle">Camera, gallery, video or text — all through the same recognition and translation</string>
+    <string name="more_camera_title">Camera translation</string>
+    <string name="more_camera_summary">Take a photo and the translation is painted over the original text</string>
+    <string name="more_image_title">Image translation</string>
+    <string name="more_image_summary">Pick a picture from the gallery, replace the text in place, then save it</string>
     <string name="more_video_title">Video translation</string>
     <string name="more_video_summary">Pick a local video, recognize the speech, then watch it with translated subtitles</string>
     <string name="more_text_title">Text translation</string>
     <string name="more_text_summary">Paste a long text and translate it paragraph by paragraph</string>
+
+    <!-- Camera / image translation -->
+    <string name="image_title">Image translation</string>
+    <string name="image_subtitle">Recognize the text in a picture and paint the translation over it</string>
+    <string name="image_source_camera">Camera</string>
+    <string name="image_source_gallery">Gallery</string>
+    <string name="image_take_photo">📷 Take a photo</string>
+    <string name="image_pick_gallery">🖼️ Pick from gallery</string>
+    <string name="image_working">Recognizing and translating…</string>
+    <string name="image_showing_translated">Showing: translated (tap to see the original)</string>
+    <string name="image_showing_original">Showing: original (tap to see the translation)</string>
+    <string name="image_save">Save to gallery</string>
+    <string name="image_share">Share</string>
+    <string name="image_source_label">Original</string>
+    <string name="image_translation_label">Translation</string>
+    <string name="image_saved">Saved to %1$s</string>
+    <string name="image_save_failed">Could not save</string>
+    <string name="image_failed">Translation failed</string>
+    <string name="image_decode_failed">Could not read that picture</string>
+    <string name="image_nothing_to_translate">No text needed translating — it is already in the target language</string>
+    <string name="image_need_key_title">No translation key yet</string>
+    <string name="image_need_key_body">Image translation needs a working engine. Pick a keyless engine (Microsoft / Google free) in Settings, or enter a key.</string>
+    <string name="image_open_settings">Open settings</string>
 
     <!-- Text translation -->
     <string name="text_title">Text translation</string>

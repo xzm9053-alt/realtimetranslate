@@ -1,10 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Only the diagnostic report is shareable, and only from the cache directory it is
-  generated into. Nothing in filesDir (logs, models, history) is exposed.
+  Only two cache subdirectories are shareable, never filesDir (logs, models,
+  history). "diagnostics" holds the report handed to the share sheet; "shared"
+  holds the temporary file the system camera writes into and the picture handed
+  to the share sheet from image translation.
 -->
 <paths>
     <cache-path
         name="diagnostics"
         path="diagnostics/" />
+    <cache-path
+        name="shared"
+        path="shared/" />
 </paths>

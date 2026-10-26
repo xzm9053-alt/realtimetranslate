@@ -55,6 +55,7 @@ import com.xzm.realtimetranslate.service.HubMode
 import com.xzm.realtimetranslate.service.ScreenOcrBus
 import com.xzm.realtimetranslate.service.ScreenTextSessionService
 import com.xzm.realtimetranslate.service.SessionBus
+import com.xzm.realtimetranslate.service.StaticModeTarget
 import com.xzm.realtimetranslate.service.SubtitleSessionService
 import com.xzm.realtimetranslate.ui.components.UpdateDialog
 import com.xzm.realtimetranslate.ui.history.HistoryScreen
@@ -79,9 +80,37 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 class MainActivity : ComponentActivity() {
+
+    /**
+     * A camera / gallery / document launch requested from the floating ball.
+     *
+     * Carried through a field rather than only through HubBus: the ball posts the
+     * command while this activity may not exist at all, so the service starts us
+     * with an extra instead. Both entry points (cold start and onNewIntent) land
+     * here.
+     */
+    private val staticLaunch = mutableStateOf<StaticModeTarget?>(null)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleStaticLaunch(intent)
+    }
+
+    /** Consumes [FloatingHubService.EXTRA_STATIC_MODE] if present; unknown values are ignored. */
+    private fun handleStaticLaunch(intent: Intent?) {
+        val raw = intent?.getStringExtra(FloatingHubService.EXTRA_STATIC_MODE) ?: return
+        // Clear it so a configuration change or a later onNewIntent does not reopen
+        // the page after the user has navigated away from it.
+        intent.removeExtra(FloatingHubService.EXTRA_STATIC_MODE)
+        val target = StaticModeTarget.entries.firstOrNull { it.name == raw } ?: return
+        staticLaunch.value = target
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        handleStaticLaunch(intent)
         val app = application as LiveTranslateApp
 
         setContent {
@@ -489,7 +518,10 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             is HubCommand.LaunchStaticMode -> {
-                                scope.launch { pagerState.animateScrollToPage(0) }
+                                // Handled by FloatingHubService (it starts this activity with
+                                // an extra). Reaching here means the ball posted while we were
+                                // in the foreground; route it the same way.
+                                staticLaunch.value = cmd.target
                             }
                             is HubCommand.CloseHub -> {
                                 toggleHub(false)
@@ -571,6 +603,8 @@ class MainActivity : ComponentActivity() {
                                     scope.launch { pagerState.animateScrollToPage(1) }
                                 },
                                 onToggleHub = { toggleHub(it) },
+                                staticLaunch = staticLaunch.value,
+                                onStaticLaunchConsumed = { staticLaunch.value = null },
                             )
                             1 -> SettingsScreen(
                                 modifier = Modifier.fillMaxSize(),
