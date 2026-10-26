@@ -221,10 +221,10 @@ class MainActivity : ComponentActivity() {
 
                 /** Resumes an OCR start whose permissions are now granted, in the mode the user picked. */
                 fun continueOcrStart() {
-                    if (pendingOcrMode == ScreenOcrMode.FULLSCREEN) {
+                    if (pendingOcrMode == ScreenOcrMode.FULLSCREEN || pendingOcrMode == ScreenOcrMode.COMIC) {
                         // The service turns this placeholder into the full screen; the
                         // selection overlay is deliberately skipped for this mode.
-                        requestOcrProjection(Rect(0, 0, 1, 1), ScreenOcrMode.FULLSCREEN)
+                        requestOcrProjection(Rect(0, 0, 1, 1), pendingOcrMode)
                     } else {
                         showRegionSelector()
                     }
@@ -437,9 +437,9 @@ class MainActivity : ComponentActivity() {
                  * Full-screen cover mode. Same permission chain as region OCR, minus the
                  * area selector — the whole screen is the capture area.
                  */
-                fun requestStartFullscreen() {
+                fun requestStartFullscreen(targetMode: ScreenOcrMode = ScreenOcrMode.FULLSCREEN) {
                     try {
-                        pendingOcrMode = ScreenOcrMode.FULLSCREEN
+                        pendingOcrMode = targetMode
                         // Switching modes needs a fresh projection: the token carries
                         // nothing about the mode, but the service fixes the mode at start.
                         if (ocrSession.status.isActive) {
@@ -513,7 +513,8 @@ class MainActivity : ComponentActivity() {
                                 when (cmd.mode) {
                                     HubMode.VOICE -> requestStartSubtitle()
                                     HubMode.SCREEN_REGION -> requestStartOcr()
-                                    HubMode.FULLSCREEN, HubMode.COMIC -> requestStartFullscreen()
+                                    HubMode.FULLSCREEN -> requestStartFullscreen(ScreenOcrMode.FULLSCREEN)
+                                    HubMode.COMIC -> requestStartFullscreen(ScreenOcrMode.COMIC)
                                     HubMode.IDLE -> Unit
                                 }
                             }
@@ -590,7 +591,8 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onOcrStart = { requestStartOcr() },
                                 onOcrStop = { stopOcr() },
-                                onFullscreenStart = { requestStartFullscreen() },
+                                onFullscreenStart = { requestStartFullscreen(ScreenOcrMode.FULLSCREEN) },
+                                onComicStart = { requestStartFullscreen(ScreenOcrMode.COMIC) },
                                 onExport = { subtitleVm.exportLastSession() },
                                 canDrawOverlays = PermissionUtils.canDrawOverlays(this@MainActivity),
                                 onUpdateSettings = { transform ->

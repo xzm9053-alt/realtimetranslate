@@ -74,4 +74,69 @@ class TranslationPlannerTest {
     fun `empty page yields no targets`() {
         assertTrue(TranslationPlanner.plan(OcrPage(1080, 2400, emptyList()), "zh").isEmpty())
     }
+
+    @Test
+    fun `comic mode sorts vertical Japanese lines right to left`() {
+        // Right column: x 200..240, Left column: x 150..190
+        val p = page(
+            block(
+                "左の行" to PixelRect(150, 50, 190, 250),
+                "右の行" to PixelRect(200, 50, 240, 250),
+            ),
+        )
+        val targets = TranslationPlanner.planComic(p, "zh")
+        assertEquals(1, targets.size)
+        // Right to Left: 右の行 should come before 左の行, and joined seamlessly
+        assertEquals("右の行左の行", targets[0].text)
+        assertEquals(PixelRect(150, 50, 240, 250), targets[0].rect)
+    }
+
+    @Test
+    fun `comic mode merges adjacent vertical blocks into single speech bubble`() {
+        // Two adjacent columns recognized by OCR as separate blocks in one bubble
+        val p = page(
+            block("何者だ" to PixelRect(300, 100, 340, 260)),
+            block("お前…" to PixelRect(350, 100, 390, 260)),
+        )
+        val targets = TranslationPlanner.planComic(p, "zh")
+        assertEquals(1, targets.size)
+        assertEquals("お前…何者だ", targets[0].text)
+        assertEquals(PixelRect(300, 100, 390, 260), targets[0].rect)
+    }
+
+    @Test
+    fun `comic mode filters out huge sound effects without dialogue punctuation`() {
+        val p = page(
+            // Regular dialogue: font size ~37px per char, has punctuation
+            block("逃げろ！" to PixelRect(100, 100, 140, 250)),
+            // Giant SFX: font size 100px per char, Katakana without punctuation
+            block("ドォン" to PixelRect(500, 500, 700, 800)),
+        )
+        val targets = TranslationPlanner.planComic(p, "zh")
+        assertEquals(1, targets.size)
+        assertEquals("逃げろ！", targets[0].text)
+    }
+
+    @Test
+    fun `comic mode keeps short dialogue with punctuation`() {
+        val p = page(
+            block("だめ！" to PixelRect(100, 100, 140, 220)),
+        )
+        val targets = TranslationPlanner.planComic(p, "zh")
+        assertEquals(1, targets.size)
+        assertEquals("だめ！", targets[0].text)
+    }
+
+    @Test
+    fun `comic mode seamlessly joins CJK lines without spaces`() {
+        val p = page(
+            block(
+                "といいな" to PixelRect(150, 50, 190, 180),
+                "明日は晴れる" to PixelRect(200, 50, 240, 200),
+            ),
+        )
+        val targets = TranslationPlanner.planComic(p, "zh")
+        assertEquals(1, targets.size)
+        assertEquals("明日は晴れるといいな", targets[0].text)
+    }
 }

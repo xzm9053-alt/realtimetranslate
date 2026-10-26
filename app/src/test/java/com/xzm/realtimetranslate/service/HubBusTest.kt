@@ -49,6 +49,13 @@ class HubBusTest {
 
         HubBus.syncFromScreenOcr(ScreenOcrBus.Status.Stopped, ScreenOcrMode.FULLSCREEN)
         assertEquals(HubMode.IDLE, HubBus.state.value.mode)
+
+        HubBus.syncFromScreenOcr(ScreenOcrBus.Status.Running, ScreenOcrMode.COMIC)
+        assertEquals(HubMode.COMIC, HubBus.state.value.mode)
+
+        HubBus.syncFromScreenOcr(ScreenOcrBus.Status.Paused, ScreenOcrMode.COMIC)
+        assertTrue(HubBus.state.value.isPaused)
+        assertEquals(HubMode.COMIC, HubBus.state.value.mode)
     }
 
     @Test

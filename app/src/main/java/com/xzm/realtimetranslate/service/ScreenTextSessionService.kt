@@ -301,8 +301,8 @@ class ScreenTextSessionService : Service() {
 
         // 半球球 + 译文气泡。点球 = 暂停/继续；长按 = 菜单（暂停、重选区域、取词框、停止）。
         // 全部在服务内处理，不重启投影、不需要重新授权。
-        // 全屏覆盖模式没有球也没有气泡，输出全在覆盖层上。
-        val fullscreen = mode == ScreenOcrMode.FULLSCREEN
+        // 全屏/漫画覆盖模式没有独立取词球和小气泡，输出全在覆盖层上。
+        val fullscreen = mode == ScreenOcrMode.FULLSCREEN || mode == ScreenOcrMode.COMIC
         if (!fullscreen) {
             val ocrOverlay = OcrBallOverlay(
                 context = this@ScreenTextSessionService,
@@ -586,7 +586,8 @@ class ScreenTextSessionService : Service() {
             // TRANSPROF 诊断（只读埋点）：空转轮次累积计数，每 10 轮汇报一次，
             // 用来判断「是不是每帧都在重发请求」。
             var idleRounds = 0
-            val frameInterval = if (mode == ScreenOcrMode.FULLSCREEN) COVER_FRAME_INTERVAL_MS else FRAME_INTERVAL_MS
+            val isCoverMode = mode == ScreenOcrMode.FULLSCREEN || mode == ScreenOcrMode.COMIC
+            val frameInterval = if (isCoverMode) COVER_FRAME_INTERVAL_MS else FRAME_INTERVAL_MS
             while (isActive && !stopped) {
                 if (paused) {
                     // 暂停：不做截图、不跑 OCR、不发请求，但仍保持循环可被恢复。
@@ -611,7 +612,7 @@ class ScreenTextSessionService : Service() {
                 val captureMs = SystemClock.elapsedRealtime() - tCapture
                 if (frame != null && frame.hash != lastHash) {
                     lastHash = frame.hash
-                    if (mode == ScreenOcrMode.FULLSCREEN) {
+                    if (isCoverMode) {
                         val painted = coverBlockManager.getPaintedRects()
                         if (painted.isNotEmpty()) {
                             val diff = computeOutsideDiffRatio(frame.bitmap, painted)
@@ -716,7 +717,11 @@ class ScreenTextSessionService : Service() {
             Log.i(TAG, "TRANSPROF coverplan NULL (no text found on frame)")
             return null
         }
-        val targets = TranslationPlanner.plan(page, currentSettings.targetLanguageCode)
+        val targets = if (mode == ScreenOcrMode.COMIC) {
+            TranslationPlanner.planComic(page, currentSettings.targetLanguageCode)
+        } else {
+            TranslationPlanner.plan(page, currentSettings.targetLanguageCode)
+        }
         Log.i(
             TAG,
             "TRANSPROF coverplan blocks=${page.blocks.size} targets=${targets.size} " +

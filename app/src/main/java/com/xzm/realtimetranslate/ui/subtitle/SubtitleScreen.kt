@@ -90,6 +90,7 @@ fun SubtitleScreen(
     onOcrStart: () -> Unit,
     onOcrStop: () -> Unit,
     onFullscreenStart: () -> Unit,
+    onComicStart: () -> Unit = {},
     onExport: () -> Unit,
     canDrawOverlays: Boolean,
     onUpdateSettings: ((UserSettings) -> UserSettings) -> Unit = {},
@@ -391,6 +392,20 @@ fun SubtitleScreen(
                     ) {
                         Text(
                             text = stringResource(R.string.cover_fullscreen),
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 16.sp,
+                        )
+                    }
+                    Button(
+                        onClick = onComicStart,
+                        enabled = !running,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        colors = ButtonDefaults.buttonColorsPrimary(),
+                    ) {
+                        Text(
+                            text = "📚 " + stringResource(R.string.hub_menu_comic),
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 16.sp,
                         )
