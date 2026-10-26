@@ -224,7 +224,11 @@ class ScreenTextCapturer(
         return bm
     }
 
-    /** Coarse sampled content hash — cheap, just enough to skip identical frames. */
+    /**
+     * Coarse sampled content hash — cheap, just enough to skip identical frames.
+     * Quantizes RGB to 5 bits per channel (mask 0x00F8F8F8) to ignore subpixel
+     * antialiasing and GPU composition jitter on static screens.
+     */
     private fun coarseHash(bitmap: Bitmap): Long {
         var hash = 0L
         val stepX = maxOf(1, bitmap.width / 24)
@@ -233,7 +237,9 @@ class ScreenTextCapturer(
         while (y < bitmap.height) {
             var x = 0
             while (x < bitmap.width) {
-                hash = hash * 31 + bitmap.getPixel(x, y).toLong()
+                val pixel = bitmap.getPixel(x, y)
+                val quantized = pixel and 0x00F8F8F8
+                hash = hash * 31 + quantized.toLong()
                 x += stepX
             }
             y += stepY

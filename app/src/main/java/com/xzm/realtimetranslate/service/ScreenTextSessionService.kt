@@ -32,6 +32,7 @@ import com.xzm.realtimetranslate.ocr.PixelRect
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
 import com.xzm.realtimetranslate.ocr.BackgroundColorSampler
+import com.xzm.realtimetranslate.ocr.OcrTextProcessor
 import com.xzm.realtimetranslate.ocr.ScreenTextCapturer
 import com.xzm.realtimetranslate.ocr.ScreenTextOcr
 import com.xzm.realtimetranslate.ocr.TextTarget
@@ -647,7 +648,7 @@ class ScreenTextSessionService : Service() {
                             ocr?.recognize(frame.bitmap, currentSettings.ocrScript)
                         }
                         val ocrMs = SystemClock.elapsedRealtime() - tOcr
-                        if (!text.isNullOrBlank() && text != lastText) {
+                        if (!text.isNullOrBlank() && !isEquivalentText(text, lastText)) {
                             lastText = text
                             pendingText.trySend(text)
                             Log.i(
@@ -801,14 +802,24 @@ class ScreenTextSessionService : Service() {
 
     private suspend fun translateAndShow(engine: TranslationEngine, text: String) {
         val overlay = overlay ?: return
-        overlay.updateTranscripts(input = text, output = null)
         ScreenOcrBus.setPreview(input = text)
+
+        val source = currentSettings.sourceLanguageCode
+        val dest = currentSettings.targetLanguageCode
+        val cacheKey = "$source>$dest|${text.trim()}"
+        val cached = translationCache.get(cacheKey)
+        if (cached != null) {
+            overlay.updateTranscripts(input = text, output = cached)
+            ScreenOcrBus.setPreview(input = text, output = cached)
+            return
+        }
+
         var outText = ""
         try {
             engine.translate(
                 text = text,
-                sourceLang = currentSettings.sourceLanguageCode,
-                targetLang = currentSettings.targetLanguageCode,
+                sourceLang = source,
+                targetLang = dest,
             ).collect { fragment ->
                 if (stopped) return@collect
                 outText = fragment
@@ -821,6 +832,7 @@ class ScreenTextSessionService : Service() {
                 AppLog.content(TAG, "ocr ${text.take(500)} → ${outText.take(500)}")
             }
             if (outText.isNotBlank()) {
+                translationCache.put(cacheKey, outText)
                 synchronized(ocrRecords) {
                     if (ocrRecords.isEmpty() || ocrRecords.last().first != text || ocrRecords.last().second != outText) {
                         ocrRecords.add(text to outText)
@@ -841,6 +853,9 @@ class ScreenTextSessionService : Service() {
             }
         }
     }
+
+    private fun isEquivalentText(a: String, b: String): Boolean =
+        OcrTextProcessor.isEquivalent(a, b)
 
     private fun regionFits(region: Rect, displayW: Int, displayH: Int): Boolean =
         region.left >= 0 && region.top >= 0 &&

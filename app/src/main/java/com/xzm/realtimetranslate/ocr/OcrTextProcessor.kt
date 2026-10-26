@@ -82,4 +82,66 @@ object OcrTextProcessor {
         }
         return sb.toString()
     }
+
+    /**
+     * 判断两段跨帧 OCR 文本在语义上是否等价，用于过滤屏幕不动时的微小 OCR 抖动。
+     * - 忽略空白与换行差异
+     * - 忽略末尾标点（.,!?~…）与符号漂移
+     * - 针对较长句子，容忍不超过 2 字符的 OCR 识别字形微小跳变（>=88% 相似度）
+     */
+    fun isEquivalent(a: String, b: String): Boolean {
+        if (a == b) return true
+        if (a.isBlank() || b.isBlank()) return false
+        val cleanA = a.trim()
+        val cleanB = b.trim()
+        if (cleanA == cleanB) return true
+
+        // 提取字符核心（字母与汉字数字，忽略标点符号和空格的波动）
+        val coreA = cleanA.filter { it.isLetterOrDigit() }.lowercase()
+        val coreB = cleanB.filter { it.isLetterOrDigit() }.lowercase()
+        if (coreA == coreB) return true
+        if (coreA.isEmpty() || coreB.isEmpty()) return false
+
+        // 边界字符 1~2 字符噪点（例如开头/末尾少识别了一个小标点或单字符）
+        val diffLen = kotlin.math.abs(coreA.length - coreB.length)
+        if (diffLen <= 2 && (coreA.startsWith(coreB) || coreB.startsWith(coreA) || coreA.endsWith(coreB) || coreB.endsWith(coreA))) {
+            return true
+        }
+
+        // 长文本编辑距离容忍（例如 20+ 字符的长句中由于子像素渲染偶尔有一个字符置信度微变）
+        val maxLen = maxOf(coreA.length, coreB.length)
+        if (maxLen >= 8) {
+            val dist = levenshteinDistance(coreA, coreB, maxDist = 3)
+            if (dist <= 2 && (1f - dist.toFloat() / maxLen) >= 0.88f) {
+                return true
+            }
+        }
+        return false
+    }
+
+    fun levenshteinDistance(s1: String, s2: String, maxDist: Int = Int.MAX_VALUE): Int {
+        val len1 = s1.length
+        val len2 = s2.length
+        if (kotlin.math.abs(len1 - len2) > maxDist) return maxDist + 1
+        var prev = IntArray(len2 + 1) { it }
+        var curr = IntArray(len2 + 1)
+        for (i in 1..len1) {
+            curr[0] = i
+            var minInRow = curr[0]
+            for (j in 1..len2) {
+                val cost = if (s1[i - 1] == s2[j - 1]) 0 else 1
+                curr[j] = minOf(
+                    prev[j] + 1,       // deletion
+                    curr[j - 1] + 1,   // insertion
+                    prev[j - 1] + cost, // substitution
+                )
+                minInRow = minOf(minInRow, curr[j])
+            }
+            if (minInRow > maxDist) return maxDist + 1
+            val temp = prev
+            prev = curr
+            curr = temp
+        }
+        return prev[len2]
+    }
 }

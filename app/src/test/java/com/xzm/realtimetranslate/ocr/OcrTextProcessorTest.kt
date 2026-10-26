@@ -49,4 +49,32 @@ class OcrTextProcessorTest {
         val result = OcrTextProcessor.cleanAndJoinLines(raw)
         assertEquals("我们在使用 Claude Code 进行项目开发", result)
     }
+
+    @Test
+    fun testIsEquivalentIdenticalAndWhitespace() {
+        assert(OcrTextProcessor.isEquivalent("Hello world", "Hello world"))
+        assert(OcrTextProcessor.isEquivalent("Hello world", "  Hello  world\n"))
+    }
+
+    @Test
+    fun testIsEquivalentPunctuationJitter() {
+        // Trailing or minor punctuation variance should be treated as equivalent
+        assert(OcrTextProcessor.isEquivalent("Attack on Titan.", "Attack on Titan"))
+        assert(OcrTextProcessor.isEquivalent("こんにちは、世界！", "こんにちは世界"))
+        assert(OcrTextProcessor.isEquivalent("What are you doing?", "What are you doing"))
+    }
+
+    @Test
+    fun testIsEquivalentMinorOcrCharJitterInSentence() {
+        // 1-character OCR confusion in a longer sentence
+        assert(OcrTextProcessor.isEquivalent("The quick brown fox jumps", "The quick brown fox jump5"))
+    }
+
+    @Test
+    fun testIsEquivalentDifferentText() {
+        // Genuinely different sentences must return false
+        assert(!OcrTextProcessor.isEquivalent("Hello world", "Goodbye world"))
+        assert(!OcrTextProcessor.isEquivalent("今日は晴れ", "明日は雨"))
+        assert(!OcrTextProcessor.isEquivalent("", "Hello"))
+    }
 }

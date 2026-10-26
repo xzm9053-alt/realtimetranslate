@@ -94,7 +94,12 @@ class ScreenTextOcr {
     /** Converts ML Kit output to page-space boxes, undoing the preprocessing upscale. */
     private fun toPage(text: Text, prepared: Prepared): OcrPage {
         val blocks = text.textBlocks
-            .sortedWith(compareBy({ it.boundingBox?.top ?: 0 }, { it.boundingBox?.left ?: 0 }))
+            .sortedWith(
+                compareBy(
+                    { (it.boundingBox?.top ?: 0) / LINE_BAND_PX },
+                    { it.boundingBox?.left ?: 0 },
+                ),
+            )
             .mapNotNull { block ->
                 val lines = block.lines.mapNotNull { line ->
                     val box = line.boundingBox ?: return@mapNotNull null
@@ -252,5 +257,7 @@ class ScreenTextOcr {
         private const val MAX_SCALE = 2f
         /** Mild contrast boost (1 = identity). */
         private const val CONTRAST = 1.15f
+        /** Vertical band height to prevent adjacent blocks from flip-flopping order. */
+        private const val LINE_BAND_PX = 14
     }
 }
