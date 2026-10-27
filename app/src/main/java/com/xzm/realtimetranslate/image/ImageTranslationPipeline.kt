@@ -71,7 +71,10 @@ class ImageTranslationPipeline(private val ocr: ScreenTextOcr) {
             )
         }
 
-        val planned = TranslationPlanner.plan(page, settings.targetLanguageCode)
+        // Paragraph planning, same as the live full-screen cover: ML Kit emits one
+        // block per wrapped line, and translating those one by one hands the engine
+        // half-sentences that come back disconnected.
+        val planned = TranslationPlanner.planParagraphs(page, settings.targetLanguageCode)
         val skipped = page.blocks.size - planned.size
         Log.i(
             TAG,
@@ -114,6 +117,7 @@ class ImageTranslationPipeline(private val ocr: ScreenTextOcr) {
                                 text = translated,
                                 background = backgroundSampler.sample(original, target.rect),
                                 original = target.text,
+                                sourceLineHeight = target.sourceLineHeight,
                             )
                         }
                     }

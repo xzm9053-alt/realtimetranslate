@@ -19,6 +19,11 @@ data class CoverTarget(
     /** Original text, only painted when bilingual mode is on. */
     val original: String? = null,
     val createdAtMs: Long = 0L,
+    /**
+     * Height of one original line, in the same pixels as [rect]. The translation is
+     * sized from this so it matches the text it replaces; 0 falls back to [rect].
+     */
+    val sourceLineHeight: Float = 0f,
 )
 
 data class FittedText(val lines: List<String>, val fontSize: Float, val truncated: Boolean)

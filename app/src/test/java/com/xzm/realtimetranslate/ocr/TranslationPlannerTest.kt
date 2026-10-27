@@ -75,6 +75,99 @@ class TranslationPlannerTest {
         assertTrue(TranslationPlanner.plan(OcrPage(1080, 2400, emptyList()), "zh").isEmpty())
     }
 
+    // ---- paragraph planning (fullscreen cover) --------------------------------
+
+    @Test
+    fun `consecutive lines of one paragraph are merged into a single target`() {
+        // ML Kit often splits a wrapped sentence into several blocks; each block is
+        // only half a sentence, so translating them one by one loses the context.
+        val p = page(
+            block("Many students want to" to PixelRect(40, 100, 900, 150)),
+            block("do well in English, but they" to PixelRect(40, 160, 950, 210)),
+            block("do not know how to start." to PixelRect(40, 220, 880, 270)),
+        )
+        val targets = TranslationPlanner.planParagraphs(p, "zh")
+        assertEquals(1, targets.size)
+        assertEquals(
+            "Many students want to do well in English, but they do not know how to start.",
+            targets[0].text,
+        )
+        assertEquals(PixelRect(40, 100, 950, 270), targets[0].rect)
+    }
+
+    @Test
+    fun `a blank gap separates two paragraphs`() {
+        val p = page(
+            block("First paragraph line one." to PixelRect(40, 100, 900, 150)),
+            block("First paragraph line two." to PixelRect(40, 160, 900, 210)),
+            // A large vertical gap: a new paragraph starts.
+            block("Second paragraph starts here." to PixelRect(40, 400, 900, 450)),
+        )
+        val targets = TranslationPlanner.planParagraphs(p, "zh")
+        assertEquals(2, targets.size)
+        assertEquals(
+            "First paragraph line one. First paragraph line two.",
+            targets[0].text,
+        )
+        assertEquals("Second paragraph starts here.", targets[1].text)
+    }
+
+    @Test
+    fun `a large left indent starts a new paragraph`() {
+        val p = page(
+            block("Body text that runs the full width." to PixelRect(40, 100, 900, 150)),
+            block("Indented quote." to PixelRect(200, 160, 700, 210)),
+        )
+        val targets = TranslationPlanner.planParagraphs(p, "zh")
+        assertEquals(2, targets.size)
+    }
+
+    @Test
+    fun `an overlapping block does not swallow the paragraph after it`() {
+        // A frame that still carries a painted block above the next paragraph must
+        // not merge the two: that would translate the paragraph as a fragment of the
+        // one above and leave the real text uncovered.
+        val p = page(
+            block("First paragraph." to PixelRect(40, 100, 900, 150)),
+            block("Second paragraph." to PixelRect(40, 400, 900, 450)),
+        )
+        val targets = TranslationPlanner.planParagraphs(p, "zh")
+        assertEquals(2, targets.size)
+        assertEquals("Second paragraph.", targets[1].text)
+    }
+
+    @Test
+    fun `a single block paragraph keeps its own source line height`() {
+        val p = page(
+            block("Only one line here." to PixelRect(40, 100, 900, 150)),
+        )
+        val targets = TranslationPlanner.planParagraphs(p, "zh")
+        assertEquals(1, targets.size)
+        assertEquals(50f, targets[0].sourceLineHeight, 0.01f)
+    }
+
+    @Test
+    fun `paragraph planning skips text already in the target language`() {
+        val p = page(
+            block("这是一段中文。" to PixelRect(40, 100, 900, 150)),
+            block("这也是中文。" to PixelRect(40, 160, 900, 210)),
+        )
+        assertTrue(TranslationPlanner.planParagraphs(p, "zh").isEmpty())
+    }
+
+    @Test
+    fun `paragraph planning preserves paragraph reading order`() {
+        val p = page(
+            block("Second block by y." to PixelRect(40, 300, 900, 350)),
+            block("First block by y." to PixelRect(40, 100, 900, 150)),
+        )
+        val targets = TranslationPlanner.planParagraphs(p, "zh")
+        assertEquals(
+            listOf("First block by y.", "Second block by y."),
+            targets.map { it.text },
+        )
+    }
+
     @Test
     fun `comic mode sorts vertical Japanese lines right to left`() {
         // Right column: x 200..240, Left column: x 150..190

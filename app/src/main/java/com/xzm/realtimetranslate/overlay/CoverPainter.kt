@@ -39,12 +39,8 @@ class CoverPainter(private val density: Float) {
     }
 
     private fun drawTarget(canvas: Canvas, target: CoverTarget, style: CoverStyle) {
-        val block = RectF(
-            target.rect.left - blockPad,
-            target.rect.top - blockPad,
-            target.rect.right + blockPad,
-            target.rect.bottom + blockPad,
-        )
+        val layout = layoutOf(target, style)
+        val block = layout.block
         blockPaint.color = if (style.blockStyle == CoverView.BLOCK_STYLE_DARK) {
             DARK_BLOCK
         } else {
@@ -57,27 +53,99 @@ class CoverPainter(private val density: Float) {
         translationPaint.color = inkOn(blockPaint.color)
         originalPaint.color = (inkOn(blockPaint.color) and 0x00FFFFFF) or 0xC8000000.toInt()
 
+        var top = layout.textTop
+        if (layout.original != null) {
+            drawLines(canvas, layout.original, layout.left, top, layout.originalHeight, originalPaint)
+            top += layout.originalHeight + layout.gap
+        }
+        drawLines(canvas, layout.translation, layout.left, top, layout.translationHeight, translationPaint)
+    }
+
+    /**
+     * The block a target occupies once its translation has been laid out.
+     *
+     * Public because the screen session has to erase exactly this rect from the next
+     * capture. If erasing used the source rect instead, the taller painted block
+     * would be captured again as fresh text and re-translated forever.
+     */
+    fun paintedBounds(target: CoverTarget, style: CoverStyle): RectF = layoutOf(target, style).block
+
+    private class Layout(
+        val block: RectF,
+        val left: Float,
+        val textTop: Float,
+        val translation: FittedText,
+        val translationHeight: Float,
+        val original: FittedText?,
+        val originalHeight: Float,
+        val gap: Float,
+    )
+
+    private fun layoutOf(target: CoverTarget, style: CoverStyle): Layout {
         val left = target.rect.left + textPadX
         val right = target.rect.right - textPadX
         val width = right - left
-        var top = target.rect.top + textPadY
-        var available = target.rect.bottom - textPadY - top
-        if (width <= 0f || available <= 0f) return
-
-        val maxFont = (target.rect.height * 0.55f * style.fontScale)
-            .coerceIn(dp(8f), dp(28f))
-
-        val original = target.original
-        if (style.bilingual && !original.isNullOrBlank()) {
-            val originalHeight = available * 0.4f
-            val fitted = fit(original, width, originalHeight, maxFont * 0.75f)
-            val used = drawLines(canvas, fitted, left, top, originalHeight, originalPaint)
-            top += used + dp(1f)
-            available -= used + dp(1f)
+        if (width <= 0f) {
+            return Layout(RectF(), left, target.rect.top.toFloat(),
+                FittedText(emptyList(), 0f, false), 0f, null, 0f, 0f)
         }
 
-        val fitted = fit(target.text, width, available, maxFont)
-        drawLines(canvas, fitted, left, top, available, translationPaint)
+        val original = target.original
+        val bilingual = style.bilingual && !original.isNullOrBlank()
+
+        // Lay the translation out against the block's real width. Height is left
+        // open because the block grows downwards to fit whatever the fitter
+        // produces; the width is what keeps lines from running off the block.
+        val maxFont = fontFor(target, style)
+        val translation = fit(target.text, width, Float.MAX_VALUE / 4f, maxFont)
+        val fittedOriginal = if (bilingual) {
+            fit(original.orEmpty(), width, Float.MAX_VALUE / 4f, maxFont * 0.72f)
+        } else {
+            null
+        }
+
+        val originalHeight = fittedOriginal?.let { it.lines.size * it.fontSize * LINE_SPACING } ?: 0f
+        val translationHeight = translation.lines.size * translation.fontSize * LINE_SPACING
+        val gap = if (fittedOriginal != null) dp(2f) else 0f
+
+        val needed = originalHeight + gap + translationHeight + textPadY * 2
+        val blockBottom = maxOf(target.rect.bottom.toFloat(), target.rect.top + needed)
+        val block = RectF(
+            target.rect.left - blockPad,
+            target.rect.top - blockPad,
+            target.rect.right + blockPad,
+            blockBottom + blockPad,
+        )
+        return Layout(
+            block = block,
+            left = left,
+            textTop = target.rect.top + textPadY,
+            translation = translation,
+            translationHeight = translationHeight,
+            original = fittedOriginal,
+            originalHeight = originalHeight,
+            gap = gap,
+        )
+    }
+
+    /**
+     * The starting size for the translation, before fitting shrinks it to the box.
+     *
+     * [CoverTarget.sourceLineHeight] is the source text's own line height, so starting
+     * there makes the replacement read at the same scale as what it covers. The
+     * fitter then grows or shrinks from this starting point to fill the block.
+     */
+    private fun fontFor(target: CoverTarget, style: CoverStyle): Float {
+        val fromSource = target.sourceLineHeight
+        val base = if (fromSource > 0f) {
+            // A line box is taller than the glyphs in it; ~0.78 of the box is the
+            // actual text size. Bump it a little so a short translation expands to
+            // fill the block instead of floating in the middle of it.
+            fromSource * 0.78f * FILL_BOOST
+        } else {
+            target.rect.height * 0.55f
+        }
+        return (base * style.fontScale).coerceIn(dp(9f), dp(44f))
     }
 
     /**
@@ -98,7 +166,7 @@ class CoverPainter(private val density: Float) {
             lineHeight = { size -> size * LINE_SPACING },
         )
 
-    /** Draws [fitted] vertically centred in [height]; returns the height it consumed. */
+    /** Draws [fitted] from [top]; returns the height it consumed. */
     private fun drawLines(
         canvas: Canvas,
         fitted: FittedText,
@@ -112,7 +180,10 @@ class CoverPainter(private val density: Float) {
         val metrics = paint.fontMetrics
         val lineHeight = fitted.fontSize * LINE_SPACING
         val used = fitted.lines.size * lineHeight
-        var baseline = top + (height - used) / 2f - metrics.ascent
+        // Anchor to the top of the box rather than centring: when the block grew to
+        // fit the text the two are equal, and when it did not, top alignment keeps
+        // the first line where the source text started.
+        var baseline = top - metrics.ascent
         for (line in fitted.lines) {
             canvas.drawText(line, left, baseline, paint)
             baseline += lineHeight
@@ -132,7 +203,20 @@ class CoverPainter(private val density: Float) {
     private fun dp(value: Float): Float = value * density
 
     companion object {
-        private const val LINE_SPACING = 1.15f
+        /**
+         * Line pitch as a multiple of the font size. Chinese glyphs are full-height
+         * squares, so they need more air between lines than Latin text does; 1.15
+         * reads as a solid block.
+         */
+        private const val LINE_SPACING = 1.35f
+
+        /**
+         * How far the translation may grow past the source line height to fill its
+         * block. Chinese glyphs are denser than Latin, so a translation that matches
+         * the source size can look smaller than the text it replaced.
+         */
+        private const val FILL_BOOST = 1.15f
+
         private val DARK_BLOCK = 0xE6000000.toInt()
 
         /**
