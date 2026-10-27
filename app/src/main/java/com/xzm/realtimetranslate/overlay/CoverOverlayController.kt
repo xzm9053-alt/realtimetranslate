@@ -31,6 +31,20 @@ class CoverOverlayController(private val context: Context) {
     @Volatile
     private var paintedRects: List<PixelRect> = emptyList()
 
+    /** Screen-space targets currently painted, parallel to [paintedRects]. */
+    @Volatile
+    private var paintedTargets: List<CoverTarget> = emptyList()
+
+    /**
+     * The targets behind [paintedRects], in the same order.
+     *
+     * The capture loop redraws their original text back into the frame before OCR:
+     * the cover hides the source text, so without this the recognizer can never see
+     * that region again and the only way to keep it translated would be to
+     * accumulate blocks forever.
+     */
+    fun paintedTargets(): List<CoverTarget> = paintedTargets
+
     /**
      * The blocks currently painted. Callers erase these from the next capture so
      * OCR does not read our own translation back as fresh source text — that loop
@@ -73,8 +87,13 @@ class CoverOverlayController(private val context: Context) {
             )
             // Screen coordinates, NOT the view-space `placed` rects: the capture
             // bitmap spans the whole display, so erasing with view coords would be
-            // off by the status-bar inset.
-            paintedRects = filtered.map { it.rect }
+            // off by the status-bar inset. Use the painter's real bounds — a block
+            // grows downwards to fit its translation, and erasing only the source
+            // rect would leave the painted text in the next capture, where OCR reads
+            // it back as fresh source text and translates the screen forever.
+            val painter = CoverPainter(context.resources.displayMetrics.density)
+            paintedRects = filtered.map { toPixelRect(painter.paintedBounds(it, coverStyle)) }
+            paintedTargets = filtered
             cover.setTargets(placed, coverStyle)
         }
     }
@@ -90,6 +109,7 @@ class CoverOverlayController(private val context: Context) {
 
     fun hide() {
         paintedRects = emptyList()
+        paintedTargets = emptyList()
         onMain { removeWindow() }
     }
 
@@ -105,6 +125,7 @@ class CoverOverlayController(private val context: Context) {
 
     private fun removeWindow() {
         paintedRects = emptyList()
+        paintedTargets = emptyList()
         val cover = view ?: return
         view = null
         runCatching { windowManager.removeView(cover) }
@@ -118,15 +139,20 @@ class CoverOverlayController(private val context: Context) {
             WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
             WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED or
-            // FLAG_SECURE keeps this window out of the MediaProjection frames. Without
-            // it the cover paints over the text, the next capture reads the translation
-            // as fresh content and translates it again — forever. A secure window is
-            // omitted from non-secure virtual displays, which is exactly what we need.
-            // Side effect: the user cannot screenshot the translated screen either.
-            // FLAG_SECURE disabled for A/B test: does MediaProjection return black
-            // frames while a secure window is on screen?
+            // FLAG_SECURE would keep this window out of the MediaProjection frames,
+            // which is exactly what the cover needs. It is off because MIUI returns
+            // black frames for the whole display as soon as any secure window is on
+            // screen — the capture goes blind. The cover loop handles its own blocks
+            // by filtering them out of the OCR result instead.
             0,
         PixelFormat.TRANSLUCENT,
+    )
+
+    private fun toPixelRect(r: android.graphics.RectF): PixelRect = PixelRect(
+        left = r.left.toInt(),
+        top = r.top.toInt(),
+        right = r.right.toInt(),
+        bottom = r.bottom.toInt(),
     )
 
     private fun onSystemBar(rect: PixelRect, width: Int, height: Int): Boolean {

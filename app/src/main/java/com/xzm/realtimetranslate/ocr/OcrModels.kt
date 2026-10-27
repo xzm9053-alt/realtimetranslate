@@ -31,6 +31,10 @@ data class PixelRect(val left: Int, val top: Int, val right: Int, val bottom: In
     fun intersects(other: PixelRect): Boolean =
         left < other.right && other.left < right && top < other.bottom && other.top < bottom
 
+    /** Like [intersects], but two boxes that merely share an edge also count. */
+    fun overlapsOrTouches(other: PixelRect): Boolean =
+        left <= other.right && other.left <= right && top <= other.bottom && other.top <= bottom
+
     fun padded(pad: Int): PixelRect = PixelRect(
         left = left - pad,
         top = top - pad,

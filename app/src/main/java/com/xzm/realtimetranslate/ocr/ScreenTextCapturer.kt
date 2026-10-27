@@ -224,31 +224,42 @@ class ScreenTextCapturer(
         return bm
     }
 
-    /**
-     * Coarse sampled content hash — cheap, just enough to skip identical frames.
-     * Quantizes RGB to 5 bits per channel (mask 0x00F8F8F8) to ignore subpixel
-     * antialiasing and GPU composition jitter on static screens.
-     */
-    private fun coarseHash(bitmap: Bitmap): Long {
-        var hash = 0L
-        val stepX = maxOf(1, bitmap.width / 24)
-        val stepY = maxOf(1, bitmap.height / 24)
-        var y = 0
-        while (y < bitmap.height) {
-            var x = 0
-            while (x < bitmap.width) {
-                val pixel = bitmap.getPixel(x, y)
-                val quantized = pixel and 0x00F8F8F8
-                hash = hash * 31 + quantized.toLong()
-                x += stepX
-            }
-            y += stepY
-        }
-        return hash
-    }
-
     companion object {
         private const val TAG = "ScreenTextCapturer"
         private const val MAX_IMAGES = 2
+
+        /**
+         * Coarse sampled content hash — cheap, just enough to skip identical frames.
+         * Quantizes RGB to 5 bits per channel (mask 0x00F8F8F8) to ignore subpixel
+         * antialiasing and GPU composition jitter on static screens.
+         *
+         * Public so the cover loop can re-hash a frame after erasing its own painted
+         * blocks: the hash taken before erasing changes every frame because of the
+         * overlay's own antialiasing.
+         */
+        fun coarseHash(bitmap: Bitmap, skip: List<PixelRect> = emptyList()): Long {
+            var hash = 0L
+            val stepX = maxOf(1, bitmap.width / 24)
+            val stepY = maxOf(1, bitmap.height / 24)
+            var y = 0
+            while (y < bitmap.height) {
+                var x = 0
+                while (x < bitmap.width) {
+                    // Points under the cover are skipped: those pixels are our own
+                    // drawing, and their antialiasing shifts a little on every
+                    // capture. Including them makes every frame look new, so the
+                    // "unchanged frame" check never fires and the page is translated
+                    // over and over. Skipping them keeps a static page hash stable.
+                    val covered = skip.any { x >= it.left && x < it.right && y >= it.top && y < it.bottom }
+                    if (!covered) {
+                        val pixel = bitmap.getPixel(x, y)
+                        hash = hash * 31 + (pixel and 0x00F8F8F8).toLong()
+                    }
+                    x += stepX
+                }
+                y += stepY
+            }
+            return hash
+        }
     }
 }
