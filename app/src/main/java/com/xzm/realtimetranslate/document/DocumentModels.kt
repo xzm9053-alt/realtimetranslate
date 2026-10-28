@@ -36,7 +36,7 @@ enum class DocumentType(val extension: String, val mimeType: String, val display
  * Metadata for a selected document to be translated.
  */
 data class DocumentInfo(
-    val uri: Uri,
+    val uri: Uri? = null,
     val name: String,
     val sizeBytes: Long,
     val type: DocumentType,
