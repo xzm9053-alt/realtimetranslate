@@ -383,9 +383,11 @@
 
     <!-- More translation tools -->
     <string name="more_entry_title">More translation</string>
-    <string name="more_entry_summary">Camera · Image · Video · Text</string>
+    <string name="more_entry_summary">Document · Camera · Image · Video · Text</string>
     <string name="more_title">More translation</string>
-    <string name="more_subtitle">Camera, gallery, video or text — all through the same recognition and translation</string>
+    <string name="more_subtitle">Document, camera, gallery, video or text — all through the same recognition and translation</string>
+    <string name="more_document_title">Document translation</string>
+    <string name="more_document_summary">PDF page overlay and Word in-place replacement, saved to Downloads</string>
     <string name="more_camera_title">Camera translation</string>
     <string name="more_camera_summary">Take a photo and the translation is painted over the original text</string>
     <string name="more_image_title">Image translation</string>
@@ -497,4 +499,22 @@
     <string name="hub_menu_resume">Resume Translation</string>
     <string name="hub_menu_stop_current">Stop Current Mode</string>
     <string name="hub_menu_close_hub">Close Hub Ball</string>
+
+    <!-- Document translate -->
+    <string name="document_title">Document translation</string>
+    <string name="document_subtitle">PDF page overlay and Word in-place translation into Downloads</string>
+    <string name="document_select_file">📄 Select document (PDF / Word)</string>
+    <string name="document_change_file">Change document</string>
+    <string name="document_file_info_title">Selected document</string>
+    <string name="document_bilingual_toggle">Bilingual alternating pages</string>
+    <string name="document_bilingual_summary">Each original page is followed by its translated page (turn off for translation only)</string>
+    <string name="document_scope_notice">Notice: PDF supports up to 50 pages per run; Word replaces body paragraphs and tables.</string>
+    <string name="document_start">Start translating document</string>
+    <string name="document_translating">Translating document…</string>
+    <string name="document_done_title">Document translation complete</string>
+    <string name="document_open_file">Open document</string>
+    <string name="document_share_file">Share document</string>
+    <string name="document_open_failed">Cannot open document, no viewer available</string>
+    <string name="document_need_key_title">No translation API key configured</string>
+    <string name="document_need_key_body">Document translation requires a configured translation engine. Pick a free engine in Settings or add an API key.</string>
 </resources>

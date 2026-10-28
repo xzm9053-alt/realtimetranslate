@@ -2,15 +2,22 @@ package com.xzm.realtimetranslate.util
 
 import android.content.ContentValues
 import android.content.Context
+import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.OutputStream
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+
+data class DocumentExportResult(
+    val displayPath: String,
+    val contentUri: Uri?,
+)
 
 /**
  * Saves translated documents (PDF, DOCX) into MediaStore `Download/实时翻译`.
@@ -38,14 +45,14 @@ object DocumentExporter {
 
     /**
      * Writes binary data into the system Downloads folder under `Download/实时翻译`.
-     * Returns a display path like `Download/实时翻译/sample-双语-10月28日-15:30.pdf`.
+     * Returns a display path like `Download/实时翻译/sample-双语-10月28日-15:30.pdf` and its content Uri.
      */
     fun saveToDownloads(
         context: Context,
         fileName: String,
         mimeType: String,
         writeBlock: (OutputStream) -> Unit,
-    ): Result<String> = runCatching {
+    ): Result<DocumentExportResult> = runCatching {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
@@ -67,7 +74,10 @@ object DocumentExporter {
                 runCatching { resolver.delete(uri, null, null) }
                 throw t
             }
-            "$RELATIVE_DIR/$fileName"
+            DocumentExportResult(
+                displayPath = "$RELATIVE_DIR/$fileName",
+                contentUri = uri,
+            )
         } else {
             @Suppress("DEPRECATION")
             val baseDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
@@ -77,7 +87,13 @@ object DocumentExporter {
             FileOutputStream(file).use { out ->
                 writeBlock(out)
             }
-            file.absolutePath
+            val contentUri = runCatching {
+                FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            }.getOrNull()
+            DocumentExportResult(
+                displayPath = file.absolutePath,
+                contentUri = contentUri,
+            )
         }
     }
 
@@ -89,7 +105,7 @@ object DocumentExporter {
         fileName: String,
         mimeType: String,
         sourceFile: File,
-    ): Result<String> = saveToDownloads(context, fileName, mimeType) { out ->
+    ): Result<DocumentExportResult> = saveToDownloads(context, fileName, mimeType) { out ->
         FileInputStream(sourceFile).use { it.copyTo(out) }
     }
 }

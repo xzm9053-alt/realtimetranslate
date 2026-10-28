@@ -382,9 +382,11 @@
 
     <!-- 其他翻译 -->
     <string name="more_entry_title">其他翻译</string>
-    <string name="more_entry_summary">相机 · 图片 · 视频 · 文本</string>
+    <string name="more_entry_summary">文档 · 相机 · 图片 · 视频 · 文本</string>
     <string name="more_title">其他翻译</string>
-    <string name="more_subtitle">拍照、选图、视频或文本，都走同一套识别与翻译</string>
+    <string name="more_subtitle">文档、拍照、选图、视频或文本，都走同一套识别与翻译</string>
+    <string name="more_document_title">文档翻译</string>
+    <string name="more_document_summary">PDF 逐页覆盖、Word 原位替换，保存为双语或译文文件</string>
     <string name="more_camera_title">相机翻译</string>
     <string name="more_camera_summary">拍一张照片，译文直接盖在原文上</string>
     <string name="more_image_title">图片翻译</string>
@@ -496,4 +498,22 @@
     <string name="hub_menu_resume">继续翻译</string>
     <string name="hub_menu_stop_current">停止当前翻译</string>
     <string name="hub_menu_close_hub">关闭常驻球</string>
+
+    <!-- 文档翻译 -->
+    <string name="document_title">文档翻译</string>
+    <string name="document_subtitle">PDF 逐页覆盖、Word 原位替换，保持版式输出翻译文档</string>
+    <string name="document_select_file">📄 选择文档（PDF / Word）</string>
+    <string name="document_change_file">更换文档</string>
+    <string name="document_file_info_title">当前文档</string>
+    <string name="document_bilingual_toggle">PDF 双语交替导出</string>
+    <string name="document_bilingual_summary">每页原文后紧跟一页译文，方便对照阅读（关掉则仅导出译文页）</string>
+    <string name="document_scope_notice">说明：PDF 单次最多支持 50 页；Word 替换正文段落与表格文字，页眉页脚与艺术字不作替换。</string>
+    <string name="document_start">开始翻译文档</string>
+    <string name="document_translating">正在翻译文档…</string>
+    <string name="document_done_title">文档翻译完成</string>
+    <string name="document_open_file">打开文档</string>
+    <string name="document_share_file">分享文档</string>
+    <string name="document_open_failed">无法打开文档，可能缺少对应查看器</string>
+    <string name="document_need_key_title">还没有填写翻译 Key</string>
+    <string name="document_need_key_body">文档翻译需要一个可用的翻译引擎。去设置里选一个免 Key 的引擎（微软 / 谷歌免费），或填上 Key。</string>
 </resources>

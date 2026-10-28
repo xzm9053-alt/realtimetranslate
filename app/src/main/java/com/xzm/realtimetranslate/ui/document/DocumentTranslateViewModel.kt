@@ -42,6 +42,7 @@ data class DocumentTranslateUiState(
     val missingKey: Boolean = false,
     val error: String? = null,
     val message: String? = null,
+    val resultUri: Uri? = null,
     val resultDisplayPath: String? = null,
 ) {
     val hasDocument: Boolean get() = documentInfo != null
@@ -150,7 +151,7 @@ class DocumentTranslateViewModel(
                     liveSettings = { settingsRepository.settings.first() },
                 )
 
-                val resultPath = withContext(Dispatchers.IO) {
+                val resultExport = withContext(Dispatchers.IO) {
                     when (info.type) {
                         DocumentType.PDF -> {
                             val uri = info.uri ?: error("无法读取文档路径")
@@ -258,8 +259,9 @@ class DocumentTranslateViewModel(
                 _state.update {
                     it.copy(
                         isWorking = false,
-                        resultDisplayPath = resultPath,
-                        message = "已保存到 $resultPath",
+                        resultDisplayPath = resultExport.displayPath,
+                        resultUri = resultExport.contentUri,
+                        message = "已保存到 ${resultExport.displayPath}",
                     )
                 }
             } catch (t: CancellationException) {
