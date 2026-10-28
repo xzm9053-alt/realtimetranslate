@@ -1,0 +1,1220 @@
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>实时翻译首页改版方案对比</title>
+<style>
+/* CSS Tokens & Theme Architecture */
+:root {
+  --bg-page: #f5f6f9;
+  --bg-card: #ffffff;
+  --bg-card-subtle: #f8f9fc;
+  --text-main: #181c24;
+  --text-muted: #64748b;
+  --text-sub: #94a3b8;
+  --accent: #2563eb;
+  --accent-soft: #eff6ff;
+  --accent-border: #bfdbfe;
+  --border: #e2e8f0;
+  --border-light: #f1f5f9;
+  --phone-bg: #0f172a;
+  --phone-screen: #f8fafc;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.04);
+  --radius-lg: 18px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg-page: #0b0f17;
+    --bg-card: #151d2c;
+    --bg-card-subtle: #1a2436;
+    --text-main: #f1f5f9;
+    --text-muted: #94a3b8;
+    --text-sub: #64748b;
+    --accent: #3b82f6;
+    --accent-soft: rgba(59, 130, 246, 0.15);
+    --accent-border: rgba(59, 130, 246, 0.3);
+    --border: #263348;
+    --border-light: #1e293b;
+    --phone-bg: #000000;
+    --phone-screen: #0f172a;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg-page: #0b0f17;
+  --bg-card: #151d2c;
+  --bg-card-subtle: #1a2436;
+  --text-main: #f1f5f9;
+  --text-muted: #94a3b8;
+  --text-sub: #64748b;
+  --accent: #3b82f6;
+  --accent-soft: rgba(59, 130, 246, 0.15);
+  --accent-border: rgba(59, 130, 246, 0.3);
+  --border: #263348;
+  --border-light: #1e293b;
+  --phone-bg: #000000;
+  --phone-screen: #0f172a;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--bg-page);
+  color: var(--text-main);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  line-height: 1.5;
+  padding-block: 24px 60px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+.container {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+/* Header */
+.header {
+  text-align: center;
+  margin-bottom: 28px;
+}
+.header-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent-border);
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.header-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 8px;
+  letter-spacing: -0.5px;
+}
+.header-desc {
+  font-size: 15px;
+  color: var(--text-muted);
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+/* Tab Selector */
+.tabs-bar {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+}
+.tab-btn {
+  padding: 10px 20px;
+  border-radius: 9999px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: var(--shadow-sm);
+}
+.tab-btn:hover {
+  color: var(--text-main);
+  border-color: var(--accent);
+}
+.tab-btn.active {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+/* Main Showcase Grid */
+.showcase-layout {
+  display: grid;
+  grid-template-columns: 410px 1fr;
+  gap: 36px;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .showcase-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Phone Mockup Frame */
+.phone-wrapper {
+  display: flex;
+  justify-content: center;
+}
+.phone-frame {
+  width: 380px;
+  height: 760px;
+  background: var(--phone-bg);
+  border-radius: 46px;
+  padding: 11px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+.phone-island {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 105px;
+  height: 25px;
+  background: #000000;
+  border-radius: 20px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+}
+.phone-camera {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #1e293b;
+}
+.phone-screen {
+  width: 100%;
+  height: 100%;
+  background: var(--phone-screen);
+  border-radius: 36px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+  scrollbar-width: none;
+  font-family: inherit;
+}
+.phone-screen::-webkit-scrollbar {
+  display: none;
+}
+
+/* Android Status Bar */
+.status-bar {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+  position: sticky;
+  top: 0;
+  background: inherit;
+  z-index: 40;
+}
+
+/* Plan Details Sidebar */
+.plan-details {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  box-shadow: var(--shadow-sm);
+}
+.plan-badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 4px 10px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+.plan-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 10px;
+}
+.plan-summary {
+  font-size: 15px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+.points-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.point-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.point-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.point-content h4 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 4px;
+}
+.point-content p {
+  font-size: 13.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.plan-action-box {
+  padding-top: 20px;
+  border-top: 1px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.plan-verdict {
+  font-size: 13px;
+  color: var(--text-sub);
+}
+.choose-btn {
+  padding: 10px 22px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 9999px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s, opacity 0.15s;
+}
+.choose-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+/* ======================================================== */
+/* MOCKUP COMMON COMPONENTS (Inside Phone Screen) */
+/* ======================================================== */
+.screen-content {
+  padding: 6px 14px 70px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.m-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 4px 6px;
+}
+.m-title-block h2 {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-main);
+  line-height: 1.2;
+}
+.m-title-block p {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.m-hub-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 20px;
+  background: rgba(37,99,235,0.1);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid rgba(37,99,235,0.2);
+  cursor: pointer;
+}
+.m-hub-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+}
+
+.m-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+}
+
+/* ======================================================== */
+/* VARIATION A: 现代灵动卡片流 (MIUI / HyperOS 风格) */
+/* ======================================================== */
+.vA-hero {
+  background: linear-gradient(145deg, #1e3a8a, #2563eb);
+  color: #fff;
+  border-radius: 22px;
+  padding: 18px 16px;
+  box-shadow: 0 10px 20px -5px rgba(37, 99, 235, 0.4);
+}
+.vA-lang-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255,255,255,0.15);
+  backdrop-filter: blur(10px);
+  border-radius: 14px;
+  padding: 8px 14px;
+  margin-bottom: 16px;
+}
+.vA-lang-item {
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.vA-lang-arrow {
+  color: rgba(255,255,255,0.7);
+  font-size: 14px;
+}
+.vA-mode-chips {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+.vA-mode-chip {
+  flex: 1;
+  text-align: center;
+  padding: 8px 4px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.12);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.vA-mode-chip.active {
+  background: #ffffff;
+  color: #1e3a8a;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+.vA-start-btn {
+  width: 100%;
+  padding: 14px;
+  background: #ffffff;
+  color: #1e3a8a;
+  border: none;
+  border-radius: 16px;
+  font-size: 16px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.vA-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.vA-tool-tile {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 16px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.vA-tool-tile:hover {
+  transform: translateY(-2px);
+}
+.vA-tool-icon {
+  font-size: 22px;
+}
+.vA-tool-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.vA-tool-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+/* ======================================================== */
+/* VARIATION B: 极简双核控制器 (Focus Dual-Segment) */
+/* ======================================================== */
+.vB-segment {
+  display: flex;
+  background: rgba(148,163,184,0.15);
+  border-radius: 14px;
+  padding: 4px;
+  margin-bottom: 4px;
+}
+.vB-segment-item {
+  flex: 1;
+  text-align: center;
+  padding: 9px;
+  font-size: 13.5px;
+  font-weight: 700;
+  border-radius: 10px;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+.vB-segment-item.active {
+  background: var(--bg-card);
+  color: var(--text-main);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+}
+
+.vB-source-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.vB-source-btn {
+  flex: 1;
+  padding: 10px;
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-align: center;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.vB-source-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent-border);
+}
+
+.vB-lang-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 16px;
+}
+.vB-lang-col h5 {
+  font-size: 11px;
+  color: var(--text-sub);
+  margin-bottom: 2px;
+}
+.vB-lang-col span {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.vB-launch-btn {
+  width: 100%;
+  padding: 15px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 16px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(37,99,235,0.3);
+}
+
+.vB-quick-tools {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 18px;
+  padding: 12px 14px;
+}
+.vB-quick-header {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-sub);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+.vB-quick-list {
+  display: flex;
+  justify-content: space-between;
+}
+.vB-quick-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.vB-quick-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--bg-card-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+.vB-quick-name {
+  font-size: 11px;
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+/* ======================================================== */
+/* VARIATION C: Bento Box 便当盒网格 (Apple 风格仪表盘) */
+/* ======================================================== */
+.vC-bento {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.vC-bento-hero {
+  grid-column: span 2;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 20px;
+  padding: 16px;
+  position: relative;
+}
+.vC-hero-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.vC-pulse-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #10b981;
+  background: rgba(16,185,129,0.1);
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+.vC-pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+}
+.vC-hero-btn {
+  width: 100%;
+  padding: 13px;
+  background: var(--text-main);
+  color: var(--bg-card);
+  border: none;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.vC-tile {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 18px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 125px;
+  cursor: pointer;
+}
+.vC-tile.accented {
+  background: linear-gradient(135deg, rgba(37,99,235,0.06), rgba(37,99,235,0.12));
+  border-color: var(--accent-border);
+}
+.vC-tile-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.vC-tile-tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(148,163,184,0.15);
+  color: var(--text-muted);
+}
+.vC-tile h4 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-top: 4px;
+}
+.vC-tile p {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Bottom Bar */
+.phone-bottom-nav {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 58px;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-light);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 0 16px;
+  z-index: 30;
+}
+.nav-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-sub);
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.nav-tab.active {
+  color: var(--accent);
+}
+
+/* Comparison Matrix */
+.comparison-section {
+  margin-top: 48px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  box-shadow: var(--shadow-sm);
+}
+.comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+  font-size: 14px;
+}
+.comparison-table th, .comparison-table td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-light);
+}
+.comparison-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+  background: var(--bg-card-subtle);
+}
+.comparison-table td:first-child {
+  font-weight: 600;
+  color: var(--text-main);
+}
+</style>
+
+<div class="container">
+  <header class="header">
+    <div class="header-badge">🎨 UI 排版视觉重构方案集</div>
+    <h1 class="header-title">实时翻译 · 首页全新排版设计</h1>
+    <p class="header-desc">
+      解决目前首页内容全部堆在一页导致的臃肿感。以下精选 3 套截然不同的排版架构，内置完整交互，点击可直接在真机模型中对比试用。
+    </p>
+  </header>
+
+  <!-- Option Tabs -->
+  <div class="tabs-bar">
+    <button class="tab-btn active" onclick="switchPlan('A')">
+      <span>✨ 方案 A</span>
+      <span>现代灵动卡片流（推荐）</span>
+    </button>
+    <button class="tab-btn" onclick="switchPlan('B')">
+      <span>🎯 方案 B</span>
+      <span>极简双核控制器</span>
+    </button>
+    <button class="tab-btn" onclick="switchPlan('C')">
+      <span>🍱 方案 C</span>
+      <span>Bento Box 便当盒网格</span>
+    </button>
+  </div>
+
+  <!-- Showcase Layout -->
+  <div class="showcase-layout">
+
+    <!-- Phone Mockup Frame -->
+    <div class="phone-wrapper">
+      <div class="phone-frame">
+        <div class="phone-island">
+          <div class="phone-camera"></div>
+        </div>
+
+        <div class="phone-screen" id="phoneScreen">
+          <!-- Dynamic Android Status Bar -->
+          <div class="status-bar">
+            <span>09:41</span>
+            <span style="font-size: 11px;">5G · 98%</span>
+          </div>
+
+          <!-- Dynamic Mockup Inject Container -->
+          <div id="mockupContent"></div>
+
+          <!-- Android Bottom Nav -->
+          <div class="phone-bottom-nav">
+            <div class="nav-tab active">
+              <span style="font-size: 16px;">💬</span>
+              <span>主页</span>
+            </div>
+            <div class="nav-tab">
+              <span style="font-size: 16px;">🕒</span>
+              <span>历史</span>
+            </div>
+            <div class="nav-tab">
+              <span style="font-size: 16px;">⚙️</span>
+              <span>设置</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Plan Narrative & Breakdown -->
+    <div class="plan-details" id="planDetails">
+      <!-- Injected by JavaScript -->
+    </div>
+
+  </div>
+
+  <!-- Comparison Matrix Table -->
+  <div class="comparison-section">
+    <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">三套设计方案核心维度横评</h3>
+    <p style="font-size: 13.5px; color: var(--text-muted);">从操作层级、视觉重心、学习门槛等核心维度对比：</p>
+
+    <div style="overflow-x: auto;">
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>对比维度</th>
+            <th>方案 A：现代灵动卡片流</th>
+            <th>方案 B：极简双核控制器</th>
+            <th>方案 C：Bento 便当盒网格</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>视觉风格</td>
+            <td>MIUI / HyperOS 旗舰质感</td>
+            <td>沉浸极简主义，克制干净</td>
+            <td>Apple 仪表盘，科技便当盒</td>
+          </tr>
+          <tr>
+            <td>首屏核心重心</td>
+            <td>主同传 Hero 卡 + 4 宫格小工具</td>
+            <td>声音/屏幕双分段 + 大发射按钮</td>
+            <td>实时仪表状态 + 4 大核心能力瓷贴</td>
+          </tr>
+          <tr>
+            <td>外观/深色设置归宿</td>
+            <td>收纳为浮层或弹窗抽屉，不占主页</td>
+            <td>放入设置页，主页不显示</td>
+            <td>保留为独立紧凑小磁贴</td>
+          </tr>
+          <tr>
+            <td>适合用户群</td>
+            <td>既要看生肉同传，又常用文档/图片翻译的综合用户</td>
+            <td>每天高频只用看视频字幕/漫画翻译的极客</td>
+            <td>喜欢科技感大卡片与一览无余仪表盘的用户</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const PLANS = {
+  A: {
+    badge: "方案 A · 综合推荐",
+    title: "现代灵动卡片流 (HyperOS 旗舰风)",
+    summary: "把首页重构为「沉浸 Hero 主控卡 + 静态工具 4 宫格」。将原来又臭又长的字幕外观（字号、14色、背景透明度）完全折叠进悬浮窗自身的微调抽屉，首页只留最高频操作，干净透气！",
+    points: [
+      {
+        icon: "🌊",
+        title: "大渐变磨砂主控卡 (Hero Card)",
+        desc: "顶部将【声音同传 / 屏幕取词 / 漫画 / 全屏】做成同传卡片内的 4 颗灵动胶囊，语言切换（英语 ⇄ 中文）一目了然，点中间大按钮即刻启动。"
+      },
+      {
+        icon: "📱",
+        title: "静态工具箱 4 宫格排列",
+        desc: "将文档翻译（P5）、图片翻译、视频翻译、长文本翻译整理为 2×2 精致小卡片，告别原来突兀的单列条目。"
+      },
+      {
+        icon: "✨",
+        title: "彻底根除长列表滑不到头",
+        desc: "首页直接在单屏内展示完毕，无需反复上下滑动寻找按钮，信息架构极度舒适。"
+      }
+    ],
+    renderMockup: () => `
+      <div class="screen-content">
+        <div class="m-header">
+          <div class="m-title-block">
+            <h2>实时翻译</h2>
+            <p>本地识别 · 隐私离线 · 极速同传</p>
+          </div>
+          <div class="m-hub-pill">
+            <span class="m-hub-dot"></span>
+            <span>悬浮球已开</span>
+          </div>
+        </div>
+
+        <!-- Hero Card -->
+        <div class="vA-hero">
+          <div class="vA-lang-bar">
+            <span class="vA-lang-item">英语 (自动检测)</span>
+            <span class="vA-lang-arrow">⇄</span>
+            <span class="vA-lang-item">简体中文</span>
+          </div>
+
+          <div class="vA-mode-chips">
+            <div class="vA-mode-chip active">🎙️ 声音</div>
+            <div class="vA-mode-chip">🔍 取词</div>
+            <div class="vA-mode-chip">📚 漫画</div>
+            <div class="vA-mode-chip">🖥️ 全屏</div>
+          </div>
+
+          <button class="vA-start-btn">
+            <span>▶</span>
+            <span>开启声音同传</span>
+          </button>
+        </div>
+
+        <!-- Tools Section Title -->
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 2px 4px;">
+          <span style="font-size: 13px; font-weight: 700; color: var(--text-main);">其他翻译工具</span>
+          <span style="font-size: 11px; color: var(--text-sub);">点击即用</span>
+        </div>
+
+        <!-- 4 Grid Tools -->
+        <div class="vA-grid">
+          <div class="vA-tool-tile">
+            <span class="vA-tool-icon">📄</span>
+            <span class="vA-tool-title">文档翻译</span>
+            <span class="vA-tool-desc">PDF 双语交替 · Word 原位替换</span>
+          </div>
+          <div class="vA-tool-tile">
+            <span class="vA-tool-icon">🖼️</span>
+            <span class="vA-tool-title">图片翻译</span>
+            <span class="vA-tool-desc">拍照 / 相册选图就地覆盖</span>
+          </div>
+          <div class="vA-tool-tile">
+            <span class="vA-tool-icon">🎬</span>
+            <span class="vA-tool-title">视频翻译</span>
+            <span class="vA-tool-desc">离线语音识别 · 导出字幕</span>
+          </div>
+          <div class="vA-tool-tile">
+            <span class="vA-tool-icon">📝</span>
+            <span class="vA-tool-title">文本翻译</span>
+            <span class="vA-tool-desc">长文自动拆分分段精翻</span>
+          </div>
+        </div>
+
+        <!-- Live Status Hint -->
+        <div class="m-card" style="display: flex; align-items: center; gap: 10px; padding: 10px 14px;">
+          <span style="font-size: 16px;">💡</span>
+          <span style="font-size: 11.5px; color: var(--text-muted); line-height: 1.4;">
+            悬浮球常驻在屏幕边缘，点击球可快速切换这 4 种实时模式。
+          </span>
+        </div>
+      </div>
+    `
+  },
+
+  B: {
+    badge: "方案 B · 极简主义",
+    title: "极简双核控制器 (Focus Dual-Segment)",
+    summary: "将首页打造成纯粹的「翻译发射台」。顶部用两段大分段胶囊划清【声音听译】与【屏幕看译】，中间大字号语言牌，底部常驻快捷工具抽屉。",
+    points: [
+      {
+        icon: "🎯",
+        title: "顶部分段胶囊界线分明",
+        desc: "彻底把声音翻译与屏幕翻译拆开，选声音时只看录音模式与音量条；选屏幕时只看取词与框选。"
+      },
+      {
+        icon: "⚡",
+        title: "大按钮极速发射",
+        desc: "底部设计醒目饱满的发射按钮，支持单手盲操一键开始或暂停。"
+      },
+      {
+        icon: "🧰",
+        title: "底部横滑工具托盘",
+        desc: "文档/图片/视频等静态小工具收录在底部小横条中，精致不抢戏。"
+      }
+    ],
+    renderMockup: () => `
+      <div class="screen-content">
+        <div class="m-header">
+          <div class="m-title-block">
+            <h2>LiveTranslate</h2>
+            <p>极简实时翻译发射台</p>
+          </div>
+          <span style="font-size: 18px;">⚙️</span>
+        </div>
+
+        <!-- Top Segment -->
+        <div class="vB-segment">
+          <div class="vB-segment-item active">🎙️ 声音同传</div>
+          <div class="vB-segment-item">🔍 屏幕翻译</div>
+        </div>
+
+        <!-- Language Pairing -->
+        <div class="vB-lang-card">
+          <div class="vB-lang-col">
+            <h5>SOURCE</h5>
+            <span>英语 (自动)</span>
+          </div>
+          <span style="font-size: 18px; color: var(--accent);">➔</span>
+          <div class="vB-lang-col" style="text-align: right;">
+            <h5>TARGET</h5>
+            <span>简体中文</span>
+          </div>
+        </div>
+
+        <!-- Source Selector -->
+        <div class="m-card" style="padding: 12px;">
+          <div style="font-size: 12px; font-weight: 700; color: var(--text-sub); margin-bottom: 4px;">声音捕获来源</div>
+          <div class="vB-source-row">
+            <div class="vB-source-btn active">媒体音 (内录)</div>
+            <div class="vB-source-btn">麦克风</div>
+          </div>
+        </div>
+
+        <!-- Big Launch Button -->
+        <button class="vB-launch-btn">
+          <span>▶ 开始同传翻译</span>
+        </button>
+
+        <!-- Quick Tools Drawer -->
+        <div class="vB-quick-tools">
+          <div class="vB-quick-header">离线与静态工具</div>
+          <div class="vB-quick-list">
+            <div class="vB-quick-item">
+              <div class="vB-quick-icon">📄</div>
+              <span class="vB-quick-name">文档</span>
+            </div>
+            <div class="vB-quick-item">
+              <div class="vB-quick-icon">🖼️</div>
+              <span class="vB-quick-name">图片</span>
+            </div>
+            <div class="vB-quick-item">
+              <div class="vB-quick-icon">🎬</div>
+              <span class="vB-quick-name">视频</span>
+            </div>
+            <div class="vB-quick-item">
+              <div class="vB-quick-icon">📝</div>
+              <span class="vB-quick-name">文本</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `
+  },
+
+  C: {
+    badge: "方案 C · 科技仪表盘",
+    title: "Bento Box 便当盒网格 (Apple 仪表盘风)",
+    summary: "借鉴 Apple 与 Nothing OS 的 Bento Grid 网格系统。将所有核心能力按照方块比例布局，一屏之内全部掌控，具有强烈的现代科技感与专业感。",
+    points: [
+      {
+        icon: "🍱",
+        title: "Bento 模块化磁贴",
+        desc: "顶部为全局工作状态与总开关磁贴；中间为 4 块不同权重的功能方块，错落有致。"
+      },
+      {
+        icon: "📊",
+        title: "实时声波与状态一览",
+        desc: "内录运行状态、当前引擎状态直接以微型图表徽章呈现在磁贴右上角。"
+      },
+      {
+        icon: "🎨",
+        title: "现代工业设计美感",
+        desc: "适合喜欢科技感仪表盘、希望所有功能平铺一触即达的用户。"
+      }
+    ],
+    renderMockup: () => `
+      <div class="screen-content">
+        <div class="m-header">
+          <div class="m-title-block">
+            <h2>仪表盘</h2>
+            <p>全部功能与状态一览</p>
+          </div>
+          <div class="vC-pulse-pill">
+            <span class="vC-pulse-dot"></span>
+            <span>引擎就绪</span>
+          </div>
+        </div>
+
+        <!-- Bento Grid -->
+        <div class="vC-bento">
+          <!-- Main Hero Bento -->
+          <div class="vC-bento-hero">
+            <div class="vC-hero-status">
+              <div>
+                <span style="font-size: 11px; color: var(--text-sub); font-weight: 700;">DEFAULT ENGINE</span>
+                <div style="font-size: 14px; font-weight: 700; color: var(--text-main);">DeepSeek-V3 · 英语 ➔ 中文</div>
+              </div>
+              <span style="font-size: 20px;">⚡</span>
+            </div>
+            <button class="vC-hero-btn">一键唤出悬浮翻译球</button>
+          </div>
+
+          <!-- Voice Tile -->
+          <div class="vC-tile accented">
+            <div class="vC-tile-top">
+              <span style="font-size: 22px;">🎙️</span>
+              <span class="vC-tile-tag">实时</span>
+            </div>
+            <div>
+              <h4>声音同传</h4>
+              <p>媒体音内录 / 麦克风</p>
+            </div>
+          </div>
+
+          <!-- Screen Tile -->
+          <div class="vC-tile accented">
+            <div class="vC-tile-top">
+              <span style="font-size: 22px;">🖥️</span>
+              <span class="vC-tile-tag">实时</span>
+            </div>
+            <div>
+              <h4>屏幕覆盖</h4>
+              <p>全屏 / 漫画 / 区域取词</p>
+            </div>
+          </div>
+
+          <!-- Document Tile -->
+          <div class="vC-tile">
+            <div class="vC-tile-top">
+              <span style="font-size: 22px;">📄</span>
+              <span class="vC-tile-tag">NEW</span>
+            </div>
+            <div>
+              <h4>文档翻译</h4>
+              <p>PDF 双语 / Word 替换</p>
+            </div>
+          </div>
+
+          <!-- Image & Video Tile -->
+          <div class="vC-tile">
+            <div class="vC-tile-top">
+              <span style="font-size: 22px;">🖼️</span>
+              <span class="vC-tile-tag">离线</span>
+            </div>
+            <div>
+              <h4>图视小工具</h4>
+              <p>图片就地覆盖 / 视频字幕</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom Status -->
+        <div class="m-card" style="padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 12px; color: var(--text-muted);">今日已翻译字数统计</span>
+          <span style="font-size: 13px; font-weight: 700; color: var(--accent);">3,842 字</span>
+        </div>
+      </div>
+    `
+  }
+};
+
+let currentPlan = 'A';
+
+function render() {
+  const plan = PLANS[currentPlan];
+
+  // Render Mockup
+  document.getElementById('mockupContent').innerHTML = plan.renderMockup();
+
+  // Render Details
+  document.getElementById('planDetails').innerHTML = `
+    <div class="plan-badge">${plan.badge}</div>
+    <h2 class="plan-title">${plan.title}</h2>
+    <p class="plan-summary">${plan.summary}</p>
+
+    <div class="points-list">
+      ${plan.points.map(pt => `
+        <div class="point-item">
+          <div class="point-icon">${pt.icon}</div>
+          <div class="point-content">
+            <h4>${pt.title}</h4>
+            <p>${pt.desc}</p>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+
+    <div class="plan-action-box">
+      <span class="plan-verdict">支持深色/浅色自适应 · 原生 Miuix 控件</span>
+      <button class="choose-btn" onclick="confirmChoice('${currentPlan}')">选择方案 ${currentPlan} 落地实施</button>
+    </div>
+  `;
+
+  // Update tabs active class
+  const buttons = document.querySelectorAll('.tab-btn');
+  buttons.forEach((btn, idx) => {
+    const keys = ['A', 'B', 'C'];
+    if (keys[idx] === currentPlan) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+}
+
+function switchPlan(key) {
+  currentPlan = key;
+  render();
+}
+
+function confirmChoice(key) {
+  alert(`你已选中「方案 ${key}」！请在终端中回复“选方案 ${key}”，我将立即把该排版代码迁移至应用首页！`);
+}
+
+// Initial render
+render();
+</script>

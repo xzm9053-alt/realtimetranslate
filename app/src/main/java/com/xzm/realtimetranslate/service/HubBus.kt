@@ -23,6 +23,8 @@ enum class StaticModeTarget {
     CAMERA,
     IMAGE,
     DOCUMENT,
+    VIDEO,
+    TEXT,
 }
 
 sealed class HubCommand {

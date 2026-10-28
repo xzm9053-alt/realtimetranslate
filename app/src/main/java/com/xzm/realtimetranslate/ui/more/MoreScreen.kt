@@ -121,6 +121,12 @@ fun MoreScreen(
             StaticModeTarget.DOCUMENT -> {
                 page = PAGE_DOCUMENT
             }
+            StaticModeTarget.VIDEO -> {
+                page = PAGE_VIDEO
+            }
+            StaticModeTarget.TEXT -> {
+                page = PAGE_TEXT
+            }
             null -> Unit
         }
         if (initialStaticTarget != null) onInitialTargetConsumed()
