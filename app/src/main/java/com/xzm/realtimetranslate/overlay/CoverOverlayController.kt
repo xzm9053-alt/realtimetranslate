@@ -1,7 +1,6 @@
 package com.xzm.realtimetranslate.overlay
 
 import android.content.Context
-import android.graphics.Insets
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Handler
@@ -155,6 +154,8 @@ class CoverOverlayController(private val context: Context) {
         bottom = r.bottom.toInt(),
     )
 
+    private data class BarInsets(val left: Int, val top: Int, val right: Int, val bottom: Int)
+
     private fun onSystemBar(rect: PixelRect, width: Int, height: Int): Boolean {
         val insets = systemBarInsets()
         if (rect.top < insets.top || rect.bottom > height - insets.bottom) return true
@@ -162,18 +163,19 @@ class CoverOverlayController(private val context: Context) {
         return false
     }
 
-    /** System-bar thickness in px for the current rotation. */
-    private fun systemBarInsets(): Insets {
+    /** System-bar thickness in px for the current rotation. Safe on API 26+. */
+    private fun systemBarInsets(): BarInsets {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            return windowManager.currentWindowMetrics.windowInsets
+            val insets = windowManager.currentWindowMetrics.windowInsets
                 .getInsetsIgnoringVisibility(WindowInsets.Type.systemBars())
+            return BarInsets(insets.left, insets.top, insets.right, insets.bottom)
         }
         val res = context.resources
         val status = res.getIdentifier("status_bar_height", "dimen", "android")
             .takeIf { it > 0 }?.let { res.getDimensionPixelSize(it) } ?: 0
         val nav = res.getIdentifier("navigation_bar_height", "dimen", "android")
             .takeIf { it > 0 }?.let { res.getDimensionPixelSize(it) } ?: 0
-        return Insets.of(0, status, 0, nav)
+        return BarInsets(0, status, 0, nav)
     }
 
     private fun onMain(block: () -> Unit) {

@@ -7,8 +7,10 @@ import android.media.AudioFormat
 import android.media.AudioPlaybackCaptureConfiguration
 import android.media.AudioRecord
 import android.media.projection.MediaProjection
+import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
+import androidx.annotation.RequiresApi
 import com.xzm.realtimetranslate.util.AppLog as Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +27,7 @@ import kotlinx.coroutines.launch
  * AudioRecord 照样初始化成功、read() 照样返回满长缓冲区，但内容全是 0。
  * 表现就是静音看门狗报「收到的是数字静音」。
  */
+@RequiresApi(Build.VERSION_CODES.Q)
 class SystemAudioCapturer(
     private val scope: CoroutineScope,
     private val onSilenceAlert: ((durationMs: Long, source: String) -> Unit)? = null,

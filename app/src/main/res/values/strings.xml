@@ -58,6 +58,9 @@
     <string name="status_running">Translating</string>
     <string name="status_translating">Translating</string>
     <string name="status_waiting_sound">Translating · waiting for audio…</string>
+    <string name="audio_source_media_needs_q">Media (Android 10+)</string>
+    <string name="audio_source_both_needs_q">Media + Mic (Android 10+)</string>
+    <string name="audio_media_unsupported_on_legacy_android">System audio playback capture requires Android 10+. Switched to microphone.</string>
     <string name="audio_hint_media_silent">No system audio received. Confirm the target app is playing; for live or call apps, switch to the microphone.</string>
     <string name="audio_hint_mic_silent">The microphone is not receiving input — check whether another app is using it.</string>
     <string name="audio_hint_stalled">Capture started but is not receiving data. Stop and start again.</string>

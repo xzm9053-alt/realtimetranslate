@@ -100,7 +100,13 @@ class SubtitleSessionService : Service() {
             }
             ACTION_START -> {
                 val modeName = intent.getStringExtra(EXTRA_AUDIO_SOURCE)
-                audioSourceMode = AudioSourceMode.fromStorage(modeName)
+                val rawMode = AudioSourceMode.fromStorage(modeName)
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q && rawMode.needsMediaProjection) {
+                    Log.w(TAG, "AudioPlaybackCapture not supported on Android < 10, fallback to MIC")
+                    audioSourceMode = AudioSourceMode.MIC
+                } else {
+                    audioSourceMode = rawMode
+                }
                 val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED)
                 val data = if (Build.VERSION.SDK_INT >= 33) {
                     intent.getParcelableExtra(EXTRA_RESULT_DATA, Intent::class.java)

@@ -16,7 +16,7 @@ android {
 
     defaultConfig {
         applicationId = "com.xzm.realtimetranslate"
-        minSdk = 29
+        minSdk = 26
         targetSdk = 35
         // CI can override: -PVERSION_CODE=2 -PVERSION_NAME=0.1.1
         versionCode = (findProperty("VERSION_CODE") as String?)?.toIntOrNull() ?: 5

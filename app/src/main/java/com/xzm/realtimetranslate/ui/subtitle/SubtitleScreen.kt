@@ -1,5 +1,7 @@
 package com.xzm.realtimetranslate.ui.subtitle
 
+import android.os.Build
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -38,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -130,6 +133,7 @@ fun SubtitleScreen(
     var selectedMode by remember(ocrRunning, running) {
         mutableIntStateOf(if (ocrRunning && !running) 1 else 0)
     }
+    val context = LocalContext.current
 
     val (statusLabel, tone) = when (session.status) {
         SessionBus.Status.Idle -> stringResource(R.string.status_idle) to StatusTone.Idle
@@ -618,11 +622,34 @@ fun SubtitleScreen(
             )
             SectionCard {
                 Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                    val isLegacyAndroid = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
+                    val mediaLabel = if (isLegacyAndroid) {
+                        stringResource(R.string.audio_source_media_needs_q)
+                    } else {
+                        stringResource(R.string.audio_source_media)
+                    }
+                    val bothLabel = if (isLegacyAndroid) {
+                        stringResource(R.string.audio_source_both_needs_q)
+                    } else {
+                        stringResource(R.string.audio_source_both)
+                    }
+
                     AudioSourceRow(
-                        label = stringResource(R.string.audio_source_media),
+                        label = mediaLabel,
                         selected = settings.audioSourceMode == AudioSourceMode.MEDIA,
                         enabled = !running,
-                        onClick = { onAudioSource(AudioSourceMode.MEDIA) },
+                        onClick = {
+                            if (isLegacyAndroid) {
+                                Toast.makeText(
+                                    context,
+                                    R.string.audio_media_unsupported_on_legacy_android,
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                                onAudioSource(AudioSourceMode.MIC)
+                            } else {
+                                onAudioSource(AudioSourceMode.MEDIA)
+                            }
+                        },
                     )
                     AudioSourceRow(
                         label = stringResource(R.string.audio_source_mic),
@@ -631,10 +658,21 @@ fun SubtitleScreen(
                         onClick = { onAudioSource(AudioSourceMode.MIC) },
                     )
                     AudioSourceRow(
-                        label = stringResource(R.string.audio_source_both),
+                        label = bothLabel,
                         selected = settings.audioSourceMode == AudioSourceMode.MEDIA_AND_MIC,
                         enabled = !running,
-                        onClick = { onAudioSource(AudioSourceMode.MEDIA_AND_MIC) },
+                        onClick = {
+                            if (isLegacyAndroid) {
+                                Toast.makeText(
+                                    context,
+                                    R.string.audio_media_unsupported_on_legacy_android,
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                                onAudioSource(AudioSourceMode.MIC)
+                            } else {
+                                onAudioSource(AudioSourceMode.MEDIA_AND_MIC)
+                            }
+                        },
                     )
                 }
             }

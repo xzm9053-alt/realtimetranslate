@@ -58,6 +58,9 @@
     <string name="status_running">翻译中</string>
     <string name="status_translating">翻译中</string>
     <string name="status_waiting_sound">翻译中 · 等待声音…</string>
+    <string name="audio_source_media_needs_q">媒体音 (需安卓10+)</string>
+    <string name="audio_source_both_needs_q">媒体+麦克风 (需安卓10+)</string>
+    <string name="audio_media_unsupported_on_legacy_android">当前系统版本低于 Android 10，系统不支持免外放内录，已自动切换为麦克风收音。</string>
     <string name="audio_hint_media_silent">没收到系统声音。请确认目标应用正在播放；若是直播或通话类应用，请改用麥克风。</string>
     <string name="audio_hint_mic_silent">麥克风没有输入，请检查是否被其它应用占用。</string>
     <string name="audio_hint_stalled">采集已启动但收不到数据，请停止后重新开始。</string>
