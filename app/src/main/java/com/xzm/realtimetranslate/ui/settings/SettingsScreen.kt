@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -81,6 +82,7 @@ import com.xzm.realtimetranslate.ui.components.PageTitle
 import com.xzm.realtimetranslate.ui.components.SectionCard
 import com.xzm.realtimetranslate.ui.components.SettingSwitchRow
 import com.xzm.realtimetranslate.ui.theme.Booth
+import com.xzm.realtimetranslate.util.PermissionUtils
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -195,6 +197,8 @@ fun SettingsScreen(
     var activeConfigAsrEngine by rememberSaveable { mutableStateOf<AsrEngineType?>(null) }
     var showRewardDialog by remember { mutableStateOf(false) }
     var showUserGuideDialog by remember { mutableStateOf(false) }
+    var historyExpanded by rememberSaveable { mutableStateOf(false) }
+    var logsExpanded by rememberSaveable { mutableStateOf(false) }
 
     val pickingEngine = activeModelPickerEngine
     if (pickingEngine != null) {
@@ -345,8 +349,9 @@ fun SettingsScreen(
             subtitle = stringResource(R.string.settings_subtitle),
         )
 
+        // ================= Group 1: 核心引擎 =================
         SmallTitle(
-            text = stringResource(R.string.settings_engine),
+            text = "核心引擎",
             modifier = Modifier.padding(horizontal = 24.dp),
         )
         val configured = isEngineConfigured(
@@ -358,72 +363,55 @@ fun SettingsScreen(
             genericBaseUrl = genericBaseUrl.text,
         )
         SectionCard {
-            if (!configured) {
-                // 尚未配置/使用任何引擎时，根据用户需求只显示「选择翻译引擎」
+            Column {
+                // 1. 翻译大模型
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { showEnginePicker = true }
+                        .clickable {
+                            if (configured) {
+                                activeConfigEngine = engineType
+                            } else {
+                                showEnginePicker = true
+                            }
+                        }
                         .padding(horizontal = 16.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(R.string.settings_engine_select_prompt),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Booth.Accent,
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = stringResource(R.string.settings_engine_select_summary),
-                            fontSize = 13.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        )
-                    }
-                    Icon(
-                        imageVector = Icons.Outlined.ExpandMore,
-                        contentDescription = null,
-                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.6f),
-                        modifier = Modifier.rotate(-90f),
-                    )
-                }
-            } else {
-                Column {
-                    // 1. 当前使用的引擎（点击进入该引擎的配置二级菜单）
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { activeConfigEngine = engineType }
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        modifier = Modifier.weight(1f),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
+                        SettingRowIcon(
+                            emoji = "🌐",
+                            bg = Booth.Accent.copy(alpha = 0.12f),
+                        )
+                        Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = stringResource(engineType.titleRes),
-                                    fontSize = 16.sp,
+                                    text = "翻译大模型",
+                                    fontSize = 15.5.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MiuixTheme.colorScheme.onSurface,
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(Booth.Accent.copy(alpha = 0.15f))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(Booth.Accent.copy(alpha = 0.12f))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp),
                                 ) {
                                     Text(
-                                        text = stringResource(R.string.settings_engine_in_use),
+                                        text = stringResource(engineType.titleRes),
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = Booth.Accent,
                                     )
                                 }
                             }
-                            Spacer(modifier = Modifier.height(3.dp))
+                            Spacer(modifier = Modifier.height(2.dp))
                             val currentModelName = when (engineType) {
                                 TranslationEngineType.DEEPSEEK -> deepSeekModel.text
                                 TranslationEngineType.ZHIPU -> zhipuModel.text
@@ -432,72 +420,61 @@ fun SettingsScreen(
                                 else -> ""
                             }
                             Text(
-                                text = if (currentModelName.isNotBlank()) {
-                                    "$currentModelName · " + stringResource(R.string.settings_model_select_action)
+                                text = if (!configured) {
+                                    "尚未配置，点击选择翻译服务"
+                                } else if (currentModelName.isNotBlank()) {
+                                    "$currentModelName · 点击进入配置"
                                 } else {
-                                    stringResource(engineType.summaryRes)
+                                    "${stringResource(engineType.summaryRes)} · 点击配置"
                                 },
-                                fontSize = 13.sp,
+                                fontSize = 12.sp,
                                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                             )
                         }
-                        Icon(
-                            imageVector = Icons.Outlined.ExpandMore,
-                            contentDescription = null,
-                            tint = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.6f),
-                            modifier = Modifier.rotate(-90f),
-                        )
                     }
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                            .height(0.5.dp)
-                            .background(MiuixTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    Icon(
+                        imageVector = Icons.Outlined.ExpandMore,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.6f),
+                        modifier = Modifier.rotate(-90f),
                     )
+                }
 
-                    // 2. 其他引擎入口（点击进入全部可用引擎选择列表）
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { showEnginePicker = true }
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = stringResource(R.string.settings_engine_other),
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MiuixTheme.colorScheme.onSurface,
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = stringResource(R.string.settings_engine_other_summary),
-                                fontSize = 13.sp,
-                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                            )
-                        }
-                        Icon(
-                            imageVector = Icons.Outlined.ExpandMore,
-                            contentDescription = null,
-                            tint = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.6f),
-                            modifier = Modifier.rotate(-90f),
+                SettingDivider()
+
+                // 2. 切换其他翻译引擎
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showEnginePicker = true }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.padding(start = 46.dp).weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.settings_engine_other),
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MiuixTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            text = "微软免费 / 谷歌 / 智谱 / Gemini / 自定义API",
+                            fontSize = 11.5.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         )
                     }
+                    Icon(
+                        imageVector = Icons.Outlined.ExpandMore,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.5f),
+                        modifier = Modifier.rotate(-90f),
+                    )
                 }
-            }
-        }
 
-        SmallTitle(
-            text = stringResource(R.string.settings_asr_engine),
-            modifier = Modifier.padding(horizontal = 24.dp),
-        )
-        SectionCard {
-            Column {
-                // 1. 当前在用识别引擎卡片
+                SettingDivider()
+
+                // 3. 语音识别 (ASR)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -506,48 +483,56 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Text(
-                                text = stringResource(asrEngine.titleRes),
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MiuixTheme.colorScheme.onSurface,
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Booth.Accent.copy(alpha = 0.12f))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp),
-                            ) {
-                                Text(
-                                    text = "使用中",
-                                    fontSize = 11.sp,
-                                    color = Booth.Accent,
-                                    fontWeight = FontWeight.Medium,
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(3.dp))
-                        val asrSubtitle = when (asrEngine) {
-                            AsrEngineType.LOCAL_SENSEVOICE -> "本地离线模型 · 零流量消耗 · 隐私不出手机"
-                            AsrEngineType.ALIYUN_FUN_ASR -> {
-                                val m = aliyunAsrModel.text.ifBlank { "fun-asr-realtime" }
-                                "$m · WebSocket 全双工实时流式"
-                            }
-                            AsrEngineType.GENERIC_OPENAI -> {
-                                val m = genericAsrModel.text.ifBlank { "FunAudioLLM/SenseVoiceSmall" }
-                                "$m · 标准 /audio/transcriptions 接口"
-                            }
-                        }
-                        Text(
-                            text = "$asrSubtitle · 点击配置",
-                            fontSize = 13.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        SettingRowIcon(
+                            emoji = "🎙️",
+                            bg = Color(0xFF8B5CF6).copy(alpha = 0.12f),
                         )
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "语音识别 (ASR)",
+                                    fontSize = 15.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MiuixTheme.colorScheme.onSurface,
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(Color(0xFF8B5CF6).copy(alpha = 0.12f))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                                ) {
+                                    Text(
+                                        text = stringResource(asrEngine.titleRes),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color(0xFF8B5CF6),
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            val asrSubtitle = when (asrEngine) {
+                                AsrEngineType.LOCAL_SENSEVOICE -> "本地离线模型 · 零流量 · 隐私安全"
+                                AsrEngineType.ALIYUN_FUN_ASR -> {
+                                    val m = aliyunAsrModel.text.ifBlank { "fun-asr-realtime" }
+                                    "$m · 阿里百炼流式"
+                                }
+                                AsrEngineType.GENERIC_OPENAI -> {
+                                    val m = genericAsrModel.text.ifBlank { "SenseVoiceSmall" }
+                                    "$m · OpenAI兼容接口"
+                                }
+                            }
+                            Text(
+                                text = "$asrSubtitle · 点击配置",
+                                fontSize = 12.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            )
+                        }
                     }
                     Icon(
                         imageVector = Icons.Outlined.ExpandMore,
@@ -557,36 +542,348 @@ fun SettingsScreen(
                     )
                 }
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .height(0.5.dp)
-                        .background(MiuixTheme.colorScheme.outline.copy(alpha = 0.15f))
-                )
+                SettingDivider()
 
-                // 2. 其他识别引擎切换入口
+                // 4. 切换其他识别引擎
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { showAsrEnginePicker = true }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.padding(start = 46.dp).weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.settings_asr_engine_other),
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MiuixTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            text = "本地离线 SenseVoice / 阿里百炼 / 通用转录",
+                            fontSize = 11.5.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Outlined.ExpandMore,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.5f),
+                        modifier = Modifier.rotate(-90f),
+                    )
+                }
+            }
+        }
+
+        // ================= Group 2: 系统与体验 =================
+        SmallTitle(
+            text = "系统与体验",
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
+        SectionCard {
+            Column {
+                // 1. 悬浮窗显示权限
+                val canOverlay = PermissionUtils.canDrawOverlays(context)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenOverlayPermission() }
                         .padding(horizontal = 16.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(R.string.settings_asr_engine_other),
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MiuixTheme.colorScheme.onSurface,
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        SettingRowIcon(
+                            emoji = "🪟",
+                            bg = Color(0xFFF59E0B).copy(alpha = 0.12f),
                         )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "本地离线 SenseVoice / 阿里百炼流式 / 通用 OpenAI 兼容",
-                            fontSize = 12.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        Column {
+                            Text(
+                                text = stringResource(R.string.settings_permissions),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MiuixTheme.colorScheme.onSurface,
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = stringResource(R.string.settings_permissions_hint),
+                                fontSize = 12.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            )
+                        }
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (canOverlay) Color(0xFF10B981).copy(alpha = 0.12f) else Color(0xFFF59E0B).copy(alpha = 0.12f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                        ) {
+                            Text(
+                                text = if (canOverlay) "已授权" else "去开启",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = if (canOverlay) Color(0xFF10B981) else Color(0xFFF59E0B),
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Outlined.ExpandMore,
+                            contentDescription = null,
+                            tint = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.6f),
+                            modifier = Modifier.rotate(-90f),
                         )
+                    }
+                }
+
+                SettingDivider()
+
+                // 2. 历史记录管理
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { historyExpanded = !historyExpanded }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        SettingRowIcon(
+                            emoji = "🕒",
+                            bg = Color(0xFF64748B).copy(alpha = 0.12f),
+                        )
+                        Column {
+                            Text(
+                                text = stringResource(R.string.settings_history),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MiuixTheme.colorScheme.onSurface,
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            val historySummary = when (settings.historyMode) {
+                                HistoryMode.AUTO_CLEAR -> "自动清理 · 最多保留 ${settings.historyLimit} 条"
+                                HistoryMode.SAVE_ALL -> "全部保存 · 永不自动删除"
+                            }
+                            Text(
+                                text = historySummary,
+                                fontSize = 12.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            )
+                        }
+                    }
+                    Text(
+                        text = if (historyExpanded) "▲" else "▼",
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    )
+                }
+
+                if (historyExpanded) {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                        OptionRow(
+                            label = stringResource(R.string.history_mode_auto_clear),
+                            summary = stringResource(R.string.history_mode_auto_clear_summary),
+                            selected = settings.historyMode == HistoryMode.AUTO_CLEAR,
+                            onClick = { viewModel.setHistoryMode(HistoryMode.AUTO_CLEAR) },
+                            horizontalPadding = 0.dp,
+                        )
+                        OptionRow(
+                            label = stringResource(R.string.history_mode_save_all),
+                            summary = stringResource(R.string.history_mode_save_all_summary),
+                            selected = settings.historyMode == HistoryMode.SAVE_ALL,
+                            onClick = { viewModel.setHistoryMode(HistoryMode.SAVE_ALL) },
+                            horizontalPadding = 0.dp,
+                        )
+                        if (settings.historyMode == HistoryMode.AUTO_CLEAR) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = stringResource(R.string.history_max_entries, settings.historyLimit),
+                                fontSize = 13.sp,
+                            )
+                            Slider(
+                                value = settings.historyLimit.toFloat(),
+                                onValueChange = { v -> viewModel.setHistoryLimit(v.toInt()) },
+                                valueRange = UserSettings.Defaults.HISTORY_LIMIT_MIN.toFloat()..UserSettings.Defaults.HISTORY_LIMIT_MAX.toFloat(),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                }
+
+                SettingDivider()
+
+                // 3. 数字静音自动告警开关
+                SettingSwitchRow(
+                    title = stringResource(R.string.settings_silence_detection_title),
+                    summary = stringResource(R.string.settings_silence_detection_summary),
+                    checked = settings.silenceDetectionEnabled,
+                    onCheckedChange = { v ->
+                        viewModel.update { it.copy(silenceDetectionEnabled = v) }
+                    },
+                )
+            }
+        }
+
+        // ================= Group 3: 诊断与支持 =================
+        SmallTitle(
+            text = "诊断与支持",
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
+        SectionCard {
+            Column {
+                // 1. 系统日志与诊断报告 (可折叠展示导出与清除操作)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { logsExpanded = !logsExpanded }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        SettingRowIcon(
+                            emoji = "📊",
+                            bg = Color(0xFF64748B).copy(alpha = 0.12f),
+                        )
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = stringResource(R.string.settings_logs),
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MiuixTheme.colorScheme.onSurface,
+                                )
+                                if (lastRunCrashed) {
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "● 异常",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFFF5C5C),
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "日志大小 ${formatBytes(logSizeBytes)} · 一键导出诊断",
+                                fontSize = 12.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            )
+                        }
+                    }
+                    Text(
+                        text = if (logsExpanded) "▲" else "▼",
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    )
+                }
+
+                if (logsExpanded) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        if (lastRunCrashed) {
+                            Text(
+                                text = stringResource(R.string.settings_crash_detected),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFFFF5C5C),
+                            )
+                        }
+                        SettingSwitchRow(
+                            title = stringResource(R.string.settings_diagnostic_content),
+                            summary = stringResource(R.string.settings_diagnostic_content_summary),
+                            checked = settings.diagnosticLogContent,
+                            onCheckedChange = { v ->
+                                viewModel.update { it.copy(diagnosticLogContent = v) }
+                            },
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(
+                                text = stringResource(R.string.settings_share_diagnostics),
+                                onClick = viewModel::shareDiagnostics,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(
+                                text = stringResource(R.string.settings_save_diagnostics),
+                                onClick = viewModel::saveDiagnostics,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(
+                                text = stringResource(R.string.settings_view_logs),
+                                onClick = { showLogs = true },
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(
+                                text = stringResource(R.string.settings_clear_logs),
+                                onClick = viewModel::clearLogs,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        if (!diagMessage.isNullOrBlank()) {
+                            Text(
+                                text = diagMessage.orEmpty(),
+                                fontSize = 12.sp,
+                                color = Booth.Accent,
+                            )
+                        }
+                    }
+                }
+
+                SettingDivider()
+
+                // 2. 使用说明 · 快速上手
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showUserGuideDialog = true }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        SettingRowIcon(
+                            emoji = "📖",
+                            bg = Booth.Accent.copy(alpha = 0.12f),
+                        )
+                        Column {
+                            Text(
+                                text = stringResource(R.string.settings_user_guide),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MiuixTheme.colorScheme.onSurface,
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "图文并茂快速掌握全功能与手势",
+                                fontSize = 12.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            )
+                        }
                     }
                     Icon(
                         imageVector = Icons.Outlined.ExpandMore,
@@ -595,226 +892,16 @@ fun SettingsScreen(
                         modifier = Modifier.rotate(-90f),
                     )
                 }
-            }
-        }
 
-        SmallTitle(
-            text = "系统与诊断",
-            modifier = Modifier.padding(horizontal = 24.dp),
-        )
-        SectionCard {
-            SettingSwitchRow(
-                title = stringResource(R.string.settings_silence_detection_title),
-                summary = stringResource(R.string.settings_silence_detection_summary),
-                checked = settings.silenceDetectionEnabled,
-                onCheckedChange = { v ->
-                    viewModel.update { it.copy(silenceDetectionEnabled = v) }
-                },
-            )
-        }
+                SettingDivider()
 
-        SmallTitle(
-            text = stringResource(R.string.settings_history),
-            modifier = Modifier.padding(horizontal = 24.dp),
-        )
-        SectionCard {
-            Column(
-                modifier = Modifier.padding(vertical = 6.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_history_desc),
-                    fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
-                OptionRow(
-                    label = stringResource(R.string.history_mode_auto_clear),
-                    summary = stringResource(R.string.history_mode_auto_clear_summary),
-                    selected = settings.historyMode == HistoryMode.AUTO_CLEAR,
-                    onClick = { viewModel.setHistoryMode(HistoryMode.AUTO_CLEAR) },
-                )
-                OptionRow(
-                    label = stringResource(R.string.history_mode_save_all),
-                    summary = stringResource(R.string.history_mode_save_all_summary),
-                    selected = settings.historyMode == HistoryMode.SAVE_ALL,
-                    onClick = { viewModel.setHistoryMode(HistoryMode.SAVE_ALL) },
-                )
-                if (settings.historyMode == HistoryMode.AUTO_CLEAR) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Text(
-                            text = stringResource(
-                                R.string.history_max_entries,
-                                settings.historyLimit,
-                            ),
-                            fontSize = 13.sp,
-                        )
-                        Slider(
-                            value = settings.historyLimit.toFloat(),
-                            onValueChange = { v -> viewModel.setHistoryLimit(v.toInt()) },
-                            valueRange = UserSettings.Defaults.HISTORY_LIMIT_MIN.toFloat()..
-                                UserSettings.Defaults.HISTORY_LIMIT_MAX.toFloat(),
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                }
-            }
-        }
-
-        SmallTitle(
-            text = stringResource(R.string.settings_permissions),
-            modifier = Modifier.padding(horizontal = 24.dp),
-        )
-        SectionCard {
-            Column(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                TextButton(
-                    text = stringResource(R.string.settings_open_overlay),
-                    onClick = onOpenOverlayPermission,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Text(
-                    text = stringResource(R.string.settings_permissions_hint),
-                    fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                )
-            }
-        }
-
-        SmallTitle(
-            text = stringResource(R.string.settings_logs),
-            modifier = Modifier.padding(horizontal = 24.dp),
-        )
-        SectionCard {
-            Column(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                if (lastRunCrashed) {
-                    Text(
-                        text = stringResource(R.string.settings_crash_detected),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFFD32F2F),
-                    )
-                }
-                Text(
-                    text = stringResource(R.string.settings_logs_desc),
-                    fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                )
-                SettingSwitchRow(
-                    title = stringResource(R.string.settings_diagnostic_content),
-                    summary = stringResource(R.string.settings_diagnostic_content_summary),
-                    checked = settings.diagnosticLogContent,
-                    onCheckedChange = { v ->
-                        viewModel.update { it.copy(diagnosticLogContent = v) }
-                    },
-                )
-                TextButton(
-                    text = stringResource(R.string.settings_share_diagnostics),
-                    onClick = viewModel::shareDiagnostics,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                TextButton(
-                    text = stringResource(R.string.settings_save_diagnostics),
-                    onClick = viewModel::saveDiagnostics,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(
-                        text = stringResource(R.string.settings_view_logs),
-                        onClick = { showLogs = true },
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(
-                        text = stringResource(R.string.settings_clear_logs),
-                        onClick = viewModel::clearLogs,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                Text(
-                    text = stringResource(R.string.settings_logs_size, formatBytes(logSizeBytes)),
-                    fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                )
-                if (!diagMessage.isNullOrBlank()) {
-                    Text(
-                        text = diagMessage.orEmpty(),
-                        fontSize = 12.sp,
-                        color = Booth.Accent,
-                    )
-                }
-            }
-        }
-
-        SmallTitle(
-            text = stringResource(R.string.settings_about),
-            modifier = Modifier.padding(horizontal = 24.dp),
-        )
-        SectionCard {
-            Column(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_user_guide),
-                    fontSize = 13.sp,
-                    color = Booth.Accent,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showUserGuideDialog = true },
-                )
-                Text(
-                    text = stringResource(
-                        R.string.settings_bilibili,
-                        stringResource(R.string.settings_bilibili_author),
-                    ),
-                    fontSize = 13.sp,
-                    color = Booth.Accent,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            runCatching {
-                                context.startActivity(
-                                    Intent(
-                                        Intent.ACTION_VIEW,
-                                        Uri.parse("https://space.bilibili.com/1366321010"),
-                                    )
-                                )
-                            }
-                        },
-                )
-                Text(
-                    text = stringResource(R.string.settings_reward_author),
-                    fontSize = 13.sp,
-                    color = Color(0xFF07C160),
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showRewardDialog = true },
-                )
-                Text(
-                    text = stringResource(R.string.settings_version, BuildConfig.VERSION_NAME),
-                    fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.clickable { versionTaps++ },
-                )
+                // 3. 检查软件更新
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable(enabled = !isCheckingUpdate) {
                             isCheckingUpdate = true
-                            Toast.makeText(
-                                context,
-                                context.getString(R.string.update_checking),
-                                Toast.LENGTH_SHORT,
-                            ).show()
+                            Toast.makeText(context, R.string.update_checking, Toast.LENGTH_SHORT).show()
                             coroutineScope.launch {
                                 val result = UpdateChecker().checkForUpdate(
                                     UpdateChecker.DEFAULT_UPDATE_URL,
@@ -824,47 +911,160 @@ fun SettingsScreen(
                                 when (result) {
                                     is UpdateCheckResult.HasUpdate -> onPromptUpdate(result.info)
                                     is UpdateCheckResult.AlreadyLatest -> {
-                                        Toast.makeText(
-                                            context,
-                                            context.getString(R.string.update_already_latest),
-                                            Toast.LENGTH_SHORT,
-                                        ).show()
+                                        Toast.makeText(context, R.string.update_already_latest, Toast.LENGTH_SHORT).show()
                                     }
                                     is UpdateCheckResult.Failed -> {
-                                        Toast.makeText(
-                                            context,
-                                            context.getString(R.string.update_check_failed),
-                                            Toast.LENGTH_SHORT,
-                                        ).show()
+                                        Toast.makeText(context, R.string.update_check_failed, Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             }
-                        },
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                        }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        SettingRowIcon(
+                            emoji = "🔄",
+                            bg = Color(0xFF06B6D4).copy(alpha = 0.12f),
+                        )
+                        Column {
+                            Text(
+                                text = stringResource(R.string.update_check_title),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MiuixTheme.colorScheme.onSurface,
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = if (isCheckingUpdate) "正在检查更新…" else "当前版本 v${BuildConfig.VERSION_NAME} (code ${BuildConfig.VERSION_CODE})",
+                                fontSize = 12.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = Icons.Outlined.ExpandMore,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.6f),
+                        modifier = Modifier.rotate(-90f),
+                    )
+                }
+
+                SettingDivider()
+
+                // 4. Bilibili 主页
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            openUrl(context, "https://space.bilibili.com/1366321010")
+                        }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        SettingRowIcon(
+                            emoji = "🍉",
+                            bg = Color(0xFFFB7299).copy(alpha = 0.12f),
+                        )
+                        Column {
+                            Text(
+                                text = stringResource(R.string.settings_bilibili, stringResource(R.string.settings_bilibili_author)),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MiuixTheme.colorScheme.onSurface,
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "视频教程与最新动态分享",
+                                fontSize = 12.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = Icons.Outlined.ExpandMore,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.6f),
+                        modifier = Modifier.rotate(-90f),
+                    )
+                }
+
+                SettingDivider()
+
+                // 5. 打赏作者
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showRewardDialog = true }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        SettingRowIcon(
+                            emoji = "☕",
+                            bg = Color(0xFF07C160).copy(alpha = 0.12f),
+                        )
+                        Column {
+                            Text(
+                                text = stringResource(R.string.settings_reward_author),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF07C160),
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "微信赞赏码 · 感谢你的鼓励与支持",
+                                fontSize = 12.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = Icons.Outlined.ExpandMore,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.6f),
+                        modifier = Modifier.rotate(-90f),
+                    )
+                }
+
+                // 6. 版本彩蛋与测试崩溃
+                SettingDivider()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { versionTaps++ }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.Center,
                 ) {
                     Text(
-                        text = stringResource(R.string.update_check_title),
-                        fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.primary,
+                        text = "实时翻译 v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})",
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     )
-                    if (isCheckingUpdate) {
-                        Text(
-                            text = stringResource(R.string.update_checking),
-                            fontSize = 12.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        )
-                    }
                 }
                 if (versionTaps >= CRASH_TEST_TAPS) {
-                    // The only way to verify crash capture: `adb shell am crash` and a
-                    // plain kill both bypass the default uncaught-exception handler.
                     TextButton(
                         text = stringResource(R.string.settings_crash_test),
                         onClick = {
                             Thread { throw RuntimeException("diagnostic test crash") }.start()
                         },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                     )
                 }
             }
@@ -1570,6 +1770,34 @@ private fun ColorSwatchRow(
             }
         }
     }
+}
+
+@Composable
+private fun SettingRowIcon(
+    emoji: String,
+    bg: Color,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .size(34.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(bg),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text = emoji, fontSize = 16.sp)
+    }
+}
+
+@Composable
+private fun SettingDivider(horizontalPadding: Dp = 16.dp) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = horizontalPadding)
+            .height(0.5.dp)
+            .background(MiuixTheme.colorScheme.outline.copy(alpha = 0.15f)),
+    )
 }
 
 /** Taps on the version number that reveal the test-crash button. */

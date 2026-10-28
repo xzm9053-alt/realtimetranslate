@@ -1,0 +1,1005 @@
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>设置页排版改版方案对比</title>
+<style>
+/* CSS Tokens & Theme Architecture */
+:root {
+  --bg-page: #f5f6f9;
+  --bg-card: #ffffff;
+  --bg-card-subtle: #f8f9fc;
+  --text-main: #181c24;
+  --text-muted: #64748b;
+  --text-sub: #94a3b8;
+  --accent: #2563eb;
+  --accent-soft: #eff6ff;
+  --accent-border: #bfdbfe;
+  --border: #e2e8f0;
+  --border-light: #f1f5f9;
+  --phone-bg: #0f172a;
+  --phone-screen: #f8fafc;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05);
+  --radius-lg: 18px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg-page: #0b0f17;
+    --bg-card: #151d2c;
+    --bg-card-subtle: #1a2436;
+    --text-main: #f1f5f9;
+    --text-muted: #94a3b8;
+    --text-sub: #64748b;
+    --accent: #3b82f6;
+    --accent-soft: rgba(59, 130, 246, 0.15);
+    --accent-border: rgba(59, 130, 246, 0.3);
+    --border: #263348;
+    --border-light: #1e293b;
+    --phone-bg: #000000;
+    --phone-screen: #0f172a;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg-page: #0b0f17;
+  --bg-card: #151d2c;
+  --bg-card-subtle: #1a2436;
+  --text-main: #f1f5f9;
+  --text-muted: #94a3b8;
+  --text-sub: #64748b;
+  --accent: #3b82f6;
+  --accent-soft: rgba(59, 130, 246, 0.15);
+  --accent-border: rgba(59, 130, 246, 0.3);
+  --border: #263348;
+  --border-light: #1e293b;
+  --phone-bg: #000000;
+  --phone-screen: #0f172a;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--bg-page);
+  color: var(--text-main);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  line-height: 1.5;
+  padding-block: 24px 60px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+.container {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+/* Header */
+.header {
+  text-align: center;
+  margin-bottom: 28px;
+}
+.header-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent-border);
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.header-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 8px;
+  letter-spacing: -0.5px;
+}
+.header-desc {
+  font-size: 15px;
+  color: var(--text-muted);
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+/* Tab Selector */
+.tabs-bar {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+}
+.tab-btn {
+  padding: 10px 20px;
+  border-radius: 9999px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: var(--shadow-sm);
+}
+.tab-btn:hover {
+  color: var(--text-main);
+  border-color: var(--accent);
+}
+.tab-btn.active {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+/* Main Showcase Grid */
+.showcase-layout {
+  display: grid;
+  grid-template-columns: 410px 1fr;
+  gap: 36px;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .showcase-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Phone Mockup Frame */
+.phone-wrapper {
+  display: flex;
+  justify-content: center;
+}
+.phone-frame {
+  width: 380px;
+  height: 760px;
+  background: var(--phone-bg);
+  border-radius: 46px;
+  padding: 11px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+.phone-island {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 105px;
+  height: 25px;
+  background: #000000;
+  border-radius: 20px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+}
+.phone-camera {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #1e293b;
+}
+.phone-screen {
+  width: 100%;
+  height: 100%;
+  background: var(--phone-screen);
+  border-radius: 36px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+  scrollbar-width: none;
+  font-family: inherit;
+}
+.phone-screen::-webkit-scrollbar {
+  display: none;
+}
+
+/* Android Status Bar */
+.status-bar {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+  position: sticky;
+  top: 0;
+  background: inherit;
+  z-index: 40;
+}
+
+/* Plan Details Sidebar */
+.plan-details {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  box-shadow: var(--shadow-sm);
+}
+.plan-badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 4px 10px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+.plan-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 10px;
+}
+.plan-summary {
+  font-size: 15px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+.points-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.point-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.point-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.point-content h4 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 4px;
+}
+.point-content p {
+  font-size: 13.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.plan-action-box {
+  padding-top: 20px;
+  border-top: 1px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.plan-verdict {
+  font-size: 13px;
+  color: var(--text-sub);
+}
+.choose-btn {
+  padding: 10px 22px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 9999px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s, opacity 0.15s;
+}
+.choose-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+/* ======================================================== */
+/* MOCKUP COMMON COMPONENTS (Inside Phone Screen) */
+/* ======================================================== */
+.screen-content {
+  padding: 6px 14px 70px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.m-header {
+  padding: 4px 4px 8px;
+}
+.m-title-block h2 {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-main);
+  line-height: 1.2;
+}
+.m-title-block p {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* Card System */
+.m-group-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+}
+
+.m-group-header {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-sub);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 0 8px;
+  margin-top: 4px;
+}
+
+.m-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.m-row:not(:last-child) {
+  border-bottom: 1px solid var(--border-light);
+}
+.m-row:hover {
+  background: var(--bg-card-subtle);
+}
+.m-row-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.m-row-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.m-row-text h4 {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--text-main);
+  line-height: 1.25;
+}
+.m-row-text p {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+.m-row-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.m-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(37,99,235,0.1);
+  color: var(--accent);
+}
+.m-arrow {
+  color: var(--text-sub);
+  font-size: 14px;
+}
+
+/* Bottom Bar */
+.phone-bottom-nav {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 58px;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-light);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 0 16px;
+  z-index: 30;
+}
+.nav-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-sub);
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.nav-tab.active {
+  color: var(--accent);
+}
+
+/* ======================================================== */
+/* VARIATION A: 经典分组折叠流 (iOS / HyperOS 标准设置) */
+/* ======================================================== */
+.icon-blue { background: rgba(37, 99, 235, 0.12); color: #2563eb; }
+.icon-purple { background: rgba(147, 51, 234, 0.12); color: #9333ea; }
+.icon-amber { background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
+.icon-green { background: rgba(16, 185, 129, 0.12); color: #10b981; }
+.icon-slate { background: rgba(100, 116, 139, 0.12); color: #64748b; }
+
+.vA-about-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 20px;
+  padding: 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.vA-app-logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: #fff;
+  box-shadow: 0 6px 14px rgba(37,99,235,0.3);
+}
+
+/* ======================================================== */
+/* VARIATION B: 双核心主控仪表盘 (Dual-Core Dashboard) */
+/* ======================================================== */
+.vB-hero-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.vB-engine-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 18px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 130px;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+.vB-engine-card.active-card {
+  border-color: var(--accent-border);
+  background: linear-gradient(145deg, var(--bg-card), var(--accent-soft));
+}
+.vB-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.vB-card-icon {
+  font-size: 22px;
+}
+.vB-status-pill {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #10b981;
+  background: rgba(16,185,129,0.12);
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+.vB-card-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.vB-card-model {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+/* ======================================================== */
+/* VARIATION C: 分类标签切换卡片 (Category Segmented) */
+/* ======================================================== */
+.vC-seg-bar {
+  display: flex;
+  background: rgba(148,163,184,0.15);
+  border-radius: 12px;
+  padding: 3px;
+  margin-bottom: 4px;
+}
+.vC-seg-item {
+  flex: 1;
+  text-align: center;
+  padding: 7px;
+  font-size: 12.5px;
+  font-weight: 700;
+  border-radius: 9px;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+.vC-seg-item.active {
+  background: var(--bg-card);
+  color: var(--text-main);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+}
+</style>
+
+<div class="container">
+  <header class="header">
+    <div class="header-badge">⚙️ 设置页 UI 排版重构方案</div>
+    <h1 class="header-title">实时翻译 · 设置页架构优化</h1>
+    <p class="header-desc">
+      当前设置页被 6 个零碎的卡片切得太散，低频的诊断日志和高频的模型切换堆叠在一起。以下提供 3 套针对性的精炼重构方案：
+    </p>
+  </header>
+
+  <!-- Option Tabs -->
+  <div class="tabs-bar">
+    <button class="tab-btn active" onclick="switchPlan('A')">
+      <span>✨ 方案 A</span>
+      <span>经典分组折叠流（强烈推荐）</span>
+    </button>
+    <button class="tab-btn" onclick="switchPlan('B')">
+      <span>⚡ 方案 B</span>
+      <span>双引擎主控仪表盘</span>
+    </button>
+    <button class="tab-btn" onclick="switchPlan('C')">
+      <span>🗂️ 方案 C</span>
+      <span>分栏标签卡片盒</span>
+    </button>
+  </div>
+
+  <!-- Showcase Layout -->
+  <div class="showcase-layout">
+
+    <!-- Phone Mockup Frame -->
+    <div class="phone-wrapper">
+      <div class="phone-frame">
+        <div class="phone-island">
+          <div class="phone-camera"></div>
+        </div>
+
+        <div class="phone-screen" id="phoneScreen">
+          <!-- Dynamic Android Status Bar -->
+          <div class="status-bar">
+            <span>09:41</span>
+            <span style="font-size: 11px;">5G · 98%</span>
+          </div>
+
+          <!-- Dynamic Mockup Inject Container -->
+          <div id="mockupContent"></div>
+
+          <!-- Android Bottom Nav -->
+          <div class="phone-bottom-nav">
+            <div class="nav-tab">
+              <span style="font-size: 16px;">💬</span>
+              <span>主页</span>
+            </div>
+            <div class="nav-tab">
+              <span style="font-size: 16px;">🕒</span>
+              <span>历史</span>
+            </div>
+            <div class="nav-tab active">
+              <span style="font-size: 16px;">⚙️</span>
+              <span>设置</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Plan Narrative & Breakdown -->
+    <div class="plan-details" id="planDetails">
+      <!-- Injected by JavaScript -->
+    </div>
+
+  </div>
+</div>
+
+<script>
+const PLANS = {
+  A: {
+    badge: "方案 A · 综合最推荐",
+    title: "经典分组折叠流 (iOS / HyperOS 统一卡片)",
+    summary: "将散落在主页的 7 个碎片 Card 优雅归拢为 3 个逻辑清晰的大卡片（核心双引擎、系统与偏好、帮助与关于）。把原来工程感十足的 4 个日志按钮全部收进「日志与诊断报告 ›」二级页面，主页干净整洁且层次分明！",
+    points: [
+      {
+        icon: "🧠",
+        title: "核心双引擎合并卡片",
+        desc: "【翻译大模型】与【语音识别 ASR】归入同一个核心卡片，左侧有精致彩色图标，右侧带当前在用模型药丸，点选直达配置。"
+      },
+      {
+        icon: "🛡️",
+        title: "系统偏好收拢整合",
+        desc: "将悬浮窗授权、历史记录保留上限、静音看门狗收纳在「系统与体验」卡片中，不再占满屏幕。"
+      },
+      {
+        icon: "📋",
+        title: "日志与工程控制台收纳",
+        desc: "把复杂的崩溃日志、抓包导出、清空日志收为「日志与诊断报告 ›」一行，点进去才看详细参数，不再污染主设置页。"
+      },
+      {
+        icon: "🍉",
+        title: "精致品牌关于卡片",
+        desc: "底部收尾为统一的关于卡片，包含高清 Logo、版本号、更新检测、以及打赏/B站快捷胶囊。"
+      }
+    ],
+    renderMockup: () => `
+      <div class="screen-content">
+        <div class="m-header">
+          <div class="m-title-block">
+            <h2>设置</h2>
+            <p>引擎配置 · 系统偏好 · 软件支持</p>
+          </div>
+        </div>
+
+        <!-- Group 1: 核心引擎 -->
+        <div class="m-group-header">核心引擎</div>
+        <div class="m-group-card">
+          <div class="m-row">
+            <div class="m-row-left">
+              <div class="m-row-icon icon-blue">🌐</div>
+              <div class="m-row-text">
+                <h4>翻译大模型</h4>
+                <p>DeepSeek-V3 · 已配置连接</p>
+              </div>
+            </div>
+            <div class="m-row-right">
+              <span class="m-badge">使用中</span>
+              <span class="m-arrow">›</span>
+            </div>
+          </div>
+          <div class="m-row">
+            <div class="m-row-left">
+              <div class="m-row-icon icon-purple">🎙️</div>
+              <div class="m-row-text">
+                <h4>语音识别 (ASR)</h4>
+                <p>SenseVoice 本地模型 · 离线零流量</p>
+              </div>
+            </div>
+            <div class="m-row-right">
+              <span class="m-badge">离线</span>
+              <span class="m-arrow">›</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Group 2: 系统与偏好 -->
+        <div class="m-group-header">系统与体验</div>
+        <div class="m-group-card">
+          <div class="m-row">
+            <div class="m-row-left">
+              <div class="m-row-icon icon-amber">🪟</div>
+              <div class="m-row-text">
+                <h4>悬浮窗显示权限</h4>
+                <p>在所有应用上方呈现字幕与球</p>
+              </div>
+            </div>
+            <div class="m-row-right">
+              <span style="font-size: 11px; color: #10b981; font-weight: 600;">已授权</span>
+              <span class="m-arrow">›</span>
+            </div>
+          </div>
+          <div class="m-row">
+            <div class="m-row-left">
+              <div class="m-row-icon icon-slate">🕒</div>
+              <div class="m-row-text">
+                <h4>历史记录管理</h4>
+                <p>自动清理 · 最多保存 20 条</p>
+              </div>
+            </div>
+            <div class="m-row-right">
+              <span class="m-arrow">›</span>
+            </div>
+          </div>
+          <div class="m-row">
+            <div class="m-row-left">
+              <div class="m-row-icon icon-green">🔇</div>
+              <div class="m-row-text">
+                <h4>数字静音自动告警</h4>
+                <p>连续 10 秒无声时提示内录异常</p>
+              </div>
+            </div>
+            <div class="m-row-right">
+              <span style="font-size: 13px; color: var(--accent); font-weight: bold;">已开启</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Group 3: 诊断与关于 -->
+        <div class="m-group-header">诊断与支持</div>
+        <div class="m-group-card">
+          <div class="m-row">
+            <div class="m-row-left">
+              <div class="m-row-icon icon-slate">📊</div>
+              <div class="m-row-text">
+                <h4>日志与诊断报告</h4>
+                <p>日志体积 24.5 KB · 一键导出分享</p>
+              </div>
+            </div>
+            <div class="m-row-right">
+              <span class="m-arrow">›</span>
+            </div>
+          </div>
+          <div class="m-row">
+            <div class="m-row-left">
+              <div class="m-row-icon icon-blue">🔄</div>
+              <div class="m-row-text">
+                <h4>检查软件更新</h4>
+                <p>当前版本 v0.4.0 (5) · 已是最新</p>
+              </div>
+            </div>
+            <div class="m-row-right">
+              <span class="m-arrow">›</span>
+            </div>
+          </div>
+          <div class="m-row">
+            <div class="m-row-left">
+              <div class="m-row-icon icon-green">☕</div>
+              <div class="m-row-text">
+                <h4>打赏作者 · 支持开发</h4>
+                <p>感谢每一份鼓励与认可</p>
+              </div>
+            </div>
+            <div class="m-row-right">
+              <span class="m-arrow">›</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `
+  },
+
+  B: {
+    badge: "方案 B · 极致双核",
+    title: "双引擎主控仪表盘 (Dual-Core Dashboard)",
+    summary: "顶部直接放置两块并排大卡片，醒目呈现当前翻译引擎与识别引擎的状态和模型名；下方把其余设置划分为「通用设置」和「关于支持」两大块，视觉冲击力强。",
+    points: [
+      {
+        icon: "⚡",
+        title: "顶部双核大瓷贴",
+        desc: "翻译与识别各占半边天，模型名称、连通状态一目了然，点任意一张卡片直接进入详细参数调整。"
+      },
+      {
+        icon: "🧩",
+        title: "整洁的通用列表",
+        desc: "权限、历史与诊断采用单行列表排布，没有琐碎的单选和滑杆挤占主界面。"
+      }
+    ],
+    renderMockup: () => `
+      <div class="screen-content">
+        <div class="m-header">
+          <div class="m-title-block">
+            <h2>设置中枢</h2>
+            <p>双核引擎与运行参数控制</p>
+          </div>
+        </div>
+
+        <!-- 2 Big Engine Cards -->
+        <div class="vB-hero-grid">
+          <div class="vB-engine-card active-card">
+            <div class="vB-card-top">
+              <span class="vB-card-icon">🌐</span>
+              <span class="vB-status-pill">连通正常</span>
+            </div>
+            <div>
+              <div class="vB-card-name">翻译模型</div>
+              <div class="vB-card-model">DeepSeek-V3</div>
+            </div>
+          </div>
+
+          <div class="vB-engine-card">
+            <div class="vB-card-top">
+              <span class="vB-card-icon">🎙️</span>
+              <span class="vB-status-pill" style="color: #6366f1; background: rgba(99,102,241,0.12);">本地运行</span>
+            </div>
+            <div>
+              <div class="vB-card-name">语音识别</div>
+              <div class="vB-card-model">SenseVoice int8</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="m-group-header">系统与参数</div>
+        <div class="m-group-card">
+          <div class="m-row">
+            <span style="font-size: 14px; font-weight: 600;">悬浮窗权限状态</span>
+            <span style="font-size: 12px; color: #10b981; font-weight: bold;">正常运行 ›</span>
+          </div>
+          <div class="m-row">
+            <span style="font-size: 14px; font-weight: 600;">历史记录归档策略</span>
+            <span style="font-size: 12px; color: var(--text-muted);">自动清理 (20条) ›</span>
+          </div>
+          <div class="m-row">
+            <span style="font-size: 14px; font-weight: 600;">系统日志与诊断导出</span>
+            <span style="font-size: 12px; color: var(--text-muted);">查看与分享 ›</span>
+          </div>
+        </div>
+
+        <div class="m-group-header">关于软件</div>
+        <div class="m-group-card">
+          <div class="m-row">
+            <span style="font-size: 14px; font-weight: 600;">检查新版本</span>
+            <span style="font-size: 12px; color: var(--accent);">v0.4.0 (5) ›</span>
+          </div>
+          <div class="m-row">
+            <span style="font-size: 14px; font-weight: 600;">Bilibili 主页 · 刘西瓜皮皮</span>
+            <span style="font-size: 12px; color: var(--text-sub);">访问 ›</span>
+          </div>
+          <div class="m-row">
+            <span style="font-size: 14px; font-weight: 600; color: #10b981;">☕ 打赏支持作者</span>
+            <span style="font-size: 12px; color: var(--text-sub);">微信赞赏 ›</span>
+          </div>
+        </div>
+      </div>
+    `
+  },
+
+  C: {
+    badge: "方案 C · 分栏标签",
+    title: "分栏标签卡片盒 (Category Segmented)",
+    summary: "顶部设置 3 个分段标签【引擎配置】 / 【体验设置】 / 【关于支持】。切换标签只看当前分类，页面永不超长，按需查阅。",
+    points: [
+      {
+        icon: "🗂️",
+        title: "标签按需切换",
+        desc: "彻底消除滑动，把引擎选择、通用偏好、关于诊断各自独立成 Tab，互不打扰。"
+      },
+      {
+        icon: "🧹",
+        title: "极高空间利用率",
+        desc: "每次只展示用户关心的那一部分，视觉负担最小。"
+      }
+    ],
+    renderMockup: () => `
+      <div class="screen-content">
+        <div class="m-header">
+          <div class="m-title-block">
+            <h2>设置</h2>
+            <p>分类标签式配置中心</p>
+          </div>
+        </div>
+
+        <!-- 3 Segment Tabs -->
+        <div class="vC-seg-bar">
+          <div class="vC-seg-item active">核心引擎</div>
+          <div class="vC-seg-item">通用偏好</div>
+          <div class="vC-seg-item">关于与支持</div>
+        </div>
+
+        <div class="m-group-card">
+          <div class="m-row">
+            <div class="m-row-left">
+              <span style="font-size: 20px;">🌐</span>
+              <div class="m-row-text">
+                <h4>当前翻译引擎</h4>
+                <p>DeepSeek-V3 · 流式响应</p>
+              </div>
+            </div>
+            <span class="m-arrow">›</span>
+          </div>
+          <div class="m-row">
+            <div class="m-row-left">
+              <span style="font-size: 20px;">🔄</span>
+              <div class="m-row-text">
+                <h4>切换其他翻译引擎</h4>
+                <p>微软免费 / 智谱 / Gemini / OpenAI兼容</p>
+              </div>
+            </div>
+            <span class="m-arrow">›</span>
+          </div>
+        </div>
+
+        <div class="m-group-card" style="margin-top: 10px;">
+          <div class="m-row">
+            <div class="m-row-left">
+              <span style="font-size: 20px;">🎙️</span>
+              <div class="m-row-text">
+                <h4>当前语音识别 (ASR)</h4>
+                <p>SenseVoice 本地模型</p>
+              </div>
+            </div>
+            <span class="m-arrow">›</span>
+          </div>
+          <div class="m-row">
+            <div class="m-row-left">
+              <span style="font-size: 20px;">🔄</span>
+              <div class="m-row-text">
+                <h4>切换其他识别引擎</h4>
+                <p>阿里百炼流式 / 通用 OpenAI</p>
+              </div>
+            </div>
+            <span class="m-arrow">›</span>
+          </div>
+        </div>
+      </div>
+    `
+  }
+};
+
+let currentPlan = 'A';
+
+function render() {
+  const plan = PLANS[currentPlan];
+  document.getElementById('mockupContent').innerHTML = plan.renderMockup();
+
+  document.getElementById('planDetails').innerHTML = `
+    <div class="plan-badge">${plan.badge}</div>
+    <h2 class="plan-title">${plan.title}</h2>
+    <p class="plan-summary">${plan.summary}</p>
+
+    <div class="points-list">
+      ${plan.points.map(pt => `
+        <div class="point-item">
+          <div class="point-icon">${pt.icon}</div>
+          <div class="point-content">
+            <h4>${pt.title}</h4>
+            <p>${pt.desc}</p>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+
+    <div class="plan-action-box">
+      <span class="plan-verdict">MIUIX 原生样式 · 层次分明</span>
+      <button class="choose-btn" onclick="alert('在终端回复 选方案 ${currentPlan} 即可！')">选用方案 ${currentPlan}</button>
+    </div>
+  `;
+
+  const buttons = document.querySelectorAll('.tab-btn');
+  buttons.forEach((btn, idx) => {
+    const keys = ['A', 'B', 'C'];
+    if (keys[idx] === currentPlan) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+}
+
+function switchPlan(key) {
+  currentPlan = key;
+  render();
+}
+
+render();
+</script>
