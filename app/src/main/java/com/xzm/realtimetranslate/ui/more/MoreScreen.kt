@@ -31,6 +31,9 @@ import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.service.StaticModeTarget
 import com.xzm.realtimetranslate.ui.components.PageTitle
 import com.xzm.realtimetranslate.ui.components.SectionCard
+import com.xzm.realtimetranslate.ui.document.DocumentTranslateScreen
+import com.xzm.realtimetranslate.ui.document.DocumentTranslateViewModel
+import com.xzm.realtimetranslate.ui.document.DocumentTranslateViewModelFactory
 import com.xzm.realtimetranslate.ui.image.ImageSource
 import com.xzm.realtimetranslate.ui.image.ImageTranslateScreen
 import com.xzm.realtimetranslate.ui.image.ImageTranslateViewModel
@@ -49,6 +52,7 @@ private const val PAGE_HUB = 0
 private const val PAGE_TEXT = 1
 private const val PAGE_VIDEO = 2
 private const val PAGE_IMAGE = 3
+private const val PAGE_DOCUMENT = 4
 
 /**
  * "其他翻译"入口下的二级页面：一个 Hub，加文本 / 视频 / 图片三个子页。
@@ -94,6 +98,14 @@ fun MoreScreen(
             app.historyRepository,
         ),
     )
+    val documentVm: DocumentTranslateViewModel = viewModel(
+        factory = DocumentTranslateViewModelFactory(
+            app,
+            app.settingsRepository,
+            app.apiKeyStore,
+            app.historyRepository,
+        ),
+    )
 
     // Must come after imageVm: the ball's request carries which picker to preselect.
     LaunchedEffect(initialStaticTarget) {
@@ -106,9 +118,10 @@ fun MoreScreen(
                 imageVm.setSource(ImageSource.GALLERY)
                 page = PAGE_IMAGE
             }
-            // Documents (P5) are not implemented yet; stay on the hub rather than
-            // opening a page that cannot do anything.
-            StaticModeTarget.DOCUMENT, null -> Unit
+            StaticModeTarget.DOCUMENT -> {
+                page = PAGE_DOCUMENT
+            }
+            null -> Unit
         }
         if (initialStaticTarget != null) onInitialTargetConsumed()
     }
@@ -132,8 +145,15 @@ fun MoreScreen(
             onOpenSettings = onOpenSettings,
             modifier = modifier,
         )
+        PAGE_DOCUMENT -> DocumentTranslateScreen(
+            viewModel = documentVm,
+            onBack = { page = PAGE_HUB },
+            onOpenSettings = onOpenSettings,
+            modifier = modifier,
+        )
         else -> MoreHub(
             onBack = onBack,
+            onOpenDocument = { page = PAGE_DOCUMENT },
             onOpenText = { page = PAGE_TEXT },
             onOpenVideo = { page = PAGE_VIDEO },
             onOpenCamera = {
@@ -152,6 +172,7 @@ fun MoreScreen(
 @Composable
 private fun MoreHub(
     onBack: () -> Unit,
+    onOpenDocument: () -> Unit,
     onOpenText: () -> Unit,
     onOpenVideo: () -> Unit,
     onOpenCamera: () -> Unit,
@@ -174,6 +195,13 @@ private fun MoreHub(
         Row(modifier = Modifier.padding(horizontal = 16.dp)) {
             TextButton(text = stringResource(R.string.common_back), onClick = onBack)
         }
+
+        HubEntry(
+            emoji = "📄",
+            title = stringResource(R.string.more_document_title),
+            summary = stringResource(R.string.more_document_summary),
+            onClick = onOpenDocument,
+        )
 
         HubEntry(
             emoji = "📷",
