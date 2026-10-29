@@ -388,6 +388,10 @@
     <string name="more_entry_summary">文档 · 相机 · 图片 · 视频 · 文本</string>
     <string name="more_title">其他翻译</string>
     <string name="more_subtitle">文档、拍照、选图、视频或文本，都走同一套识别与翻译</string>
+    <string name="more_group_files">文档与音视频翻译</string>
+    <string name="more_group_quick">图文与日常快译</string>
+    <string name="more_badge_doc">PDF / Word</string>
+    <string name="more_badge_video">字幕压制</string>
     <string name="more_document_title">文档翻译</string>
     <string name="more_document_summary">PDF 逐页覆盖、Word 原位替换，保存为双语或译文文件</string>
     <string name="more_camera_title">相机翻译</string>

@@ -389,6 +389,10 @@
     <string name="more_entry_summary">Document · Camera · Image · Video · Text</string>
     <string name="more_title">More translation</string>
     <string name="more_subtitle">Document, camera, gallery, video or text — all through the same recognition and translation</string>
+    <string name="more_group_files">Document &amp; Media Translation</string>
+    <string name="more_group_quick">Visual &amp; Quick Translation</string>
+    <string name="more_badge_doc">PDF / Word</string>
+    <string name="more_badge_video">Burn-in</string>
     <string name="more_document_title">Document translation</string>
     <string name="more_document_summary">PDF page overlay and Word in-place replacement, saved to Downloads</string>
     <string name="more_camera_title">Camera translation</string>
