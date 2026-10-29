@@ -482,13 +482,6 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(Unit) {
                     HubBus.commands.collect { cmd ->
                         when (cmd) {
-                            is HubCommand.SwitchMode -> {
-                                when (cmd.mode) {
-                                    HubMode.VOICE -> requestStartSubtitle()
-                                    HubMode.SCREEN_REGION -> requestStartOcr()
-                                    HubMode.IDLE -> Unit
-                                }
-                            }
                             is HubCommand.LaunchStaticMode -> {
                                 // Handled by FloatingHubService (it starts this activity with
                                 // an extra). Reaching here means the ball posted while we were

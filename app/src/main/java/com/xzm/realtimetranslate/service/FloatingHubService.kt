@@ -11,12 +11,15 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.xzm.realtimetranslate.LiveTranslateApp
 import com.xzm.realtimetranslate.R
+import com.xzm.realtimetranslate.data.AudioSourceMode
 import com.xzm.realtimetranslate.overlay.HubBallOverlay
+import com.xzm.realtimetranslate.overlay.RegionSelectorOverlay
 import com.xzm.realtimetranslate.ui.main.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -41,6 +44,7 @@ class FloatingHubService : Service() {
                 when (cmd) {
                     HubCommand.CloseHub -> stopSelf()
                     is HubCommand.LaunchStaticMode -> launchStatic(cmd.target)
+                    is HubCommand.SwitchMode -> handleSwitchMode(cmd.mode)
                     else -> Unit
                 }
             }
@@ -51,6 +55,61 @@ class FloatingHubService : Service() {
             HubBus.state.collect { state ->
                 overlay?.updateState(state)
             }
+        }
+    }
+
+    /**
+     * 响应悬浮球发起的实时翻译模式切换：
+     * 完全通过系统浮层（RegionSelectorOverlay）和透明跳板授权（ProjectionRequestActivity）处理，
+     * 绝不跳转或唤起主 App 界面，让用户在第三方应用、游戏或视频中拥有纯粹的悬浮翻译体验。
+     */
+    private fun handleSwitchMode(mode: HubMode) {
+        val app = applicationContext as LiveTranslateApp
+        when (mode) {
+            HubMode.SCREEN_REGION -> {
+                // 如果当前正在声音同传，先停止声音同传
+                if (SessionBus.state.value.status == SessionBus.Status.Running ||
+                    SessionBus.state.value.status == SessionBus.Status.Starting
+                ) {
+                    scope.launch {
+                        runCatching { SessionBus.stop() }
+                        runCatching { SubtitleSessionService.stop(this@FloatingHubService) }
+                    }
+                }
+                // 直接由前台服务展示选区浮层，完全不跳转进入主 App
+                val selector = RegionSelectorOverlay(
+                    context = this@FloatingHubService,
+                    onConfirm = { region ->
+                        ProjectionRequestActivity.requestOcr(this@FloatingHubService, region)
+                    },
+                    onCancel = { /* 用户取消选区 */ },
+                )
+                selector.show()
+            }
+            HubMode.VOICE -> {
+                // 如果当前正在屏幕取词，先停止取词
+                if (ScreenOcrBus.state.value.status.isActive) {
+                    scope.launch {
+                        runCatching { ScreenOcrBus.stop() }
+                        runCatching { ScreenTextSessionService.stop(this@FloatingHubService) }
+                    }
+                }
+                scope.launch {
+                    val settings = app.settingsRepository.settings.first()
+                    val audioSource = settings.audioSourceMode
+                    if (audioSource == AudioSourceMode.MIC) {
+                        SubtitleSessionService.start(
+                            this@FloatingHubService,
+                            audioSource = AudioSourceMode.MIC,
+                            resultCode = 0,
+                            data = Intent(),
+                        )
+                    } else {
+                        ProjectionRequestActivity.requestVoice(this@FloatingHubService, audioSource)
+                    }
+                }
+            }
+            HubMode.IDLE -> Unit
         }
     }
 

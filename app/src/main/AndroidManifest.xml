@@ -51,6 +51,15 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".service.ProjectionRequestActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Translucent"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity="com.xzm.realtimetranslate.projection"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
+
         <service
             android:name=".service.SubtitleSessionService"
             android:exported="false"
