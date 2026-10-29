@@ -80,6 +80,8 @@ import com.xzm.realtimetranslate.translate.ModelProbe
 import com.xzm.realtimetranslate.translate.ModelPresets
 import com.xzm.realtimetranslate.ui.components.PageTitle
 import com.xzm.realtimetranslate.ui.components.SectionCard
+import com.xzm.realtimetranslate.ui.components.SettingDivider
+import com.xzm.realtimetranslate.ui.components.SettingRowIcon
 import com.xzm.realtimetranslate.ui.components.SettingSwitchRow
 import com.xzm.realtimetranslate.ui.theme.Booth
 import com.xzm.realtimetranslate.util.PermissionUtils
@@ -1770,34 +1772,6 @@ private fun ColorSwatchRow(
             }
         }
     }
-}
-
-@Composable
-private fun SettingRowIcon(
-    emoji: String,
-    bg: Color,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .size(34.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(bg),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(text = emoji, fontSize = 16.sp)
-    }
-}
-
-@Composable
-private fun SettingDivider(horizontalPadding: Dp = 16.dp) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = horizontalPadding)
-            .height(0.5.dp)
-            .background(MiuixTheme.colorScheme.outline.copy(alpha = 0.15f)),
-    )
 }
 
 /** Taps on the version number that reveal the test-crash button. */

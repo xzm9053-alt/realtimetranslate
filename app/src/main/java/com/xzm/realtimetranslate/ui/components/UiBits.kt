@@ -19,6 +19,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xzm.realtimetranslate.ui.theme.Booth
@@ -185,3 +187,43 @@ fun SettingSwitchRow(
         )
     }
 }
+
+/**
+ * 现代 MIUIX 卡片内的统一彩色圆角图标容器。
+ */
+@Composable
+fun SettingRowIcon(
+    emoji: String,
+    bg: Color,
+    modifier: Modifier = Modifier,
+    size: Dp = 34.dp,
+    fontSize: TextUnit = 16.sp,
+) {
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(RoundedCornerShape(10.dp))
+            .background(bg),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text = emoji, fontSize = fontSize)
+    }
+}
+
+/**
+ * 现代 MIUIX 卡片内列表项之间的细分割线。
+ */
+@Composable
+fun SettingDivider(
+    modifier: Modifier = Modifier,
+    horizontalPadding: Dp = 16.dp,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = horizontalPadding)
+            .height(0.5.dp)
+            .background(MiuixTheme.colorScheme.outline.copy(alpha = 0.15f)),
+    )
+}
+
