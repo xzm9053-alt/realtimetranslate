@@ -354,7 +354,8 @@ class MainActivity : ComponentActivity() {
 
                 // 统一凭据门禁：引擎自带 requiresApiKey / keyLabelRes，调用点不再特判具体引擎。
                 // 返回 null 表示可以启动，否则返回要展示的提示文案。
-                fun missingEngineKeyMessage(): String? {
+                fun missingEngineKeyMessage(isVoice: Boolean = false): String? {
+                    if (isVoice && settings.voiceRecognizeOnly) return null
                     val engine = settings.translationEngine
                     if (app.apiKeyStore.hasKeyFor(engine)) return null
                     return getString(R.string.msg_need_api_key, getString(engine.keyLabelRes!!))
@@ -367,8 +368,8 @@ class MainActivity : ComponentActivity() {
                         if (ocrSession.status.isActive) {
                             stopOcr()
                         }
-                        // 需要 Key 的引擎没填 Key 就不放行；免 Key 引擎（微软 / 谷歌免费）直接过。
-                        missingEngineKeyMessage()?.let { message ->
+                        // 需要 Key 的引擎没填 Key 就不放行；免 Key 引擎（微软 / 谷歌免费 / 纯识别）直接过。
+                        missingEngineKeyMessage(isVoice = true)?.let { message ->
                             SessionBus.setStatus(SessionBus.Status.Error, message)
                             scope.launch { pagerState.animateScrollToPage(1) }
                             return

@@ -75,6 +75,7 @@ class UserSettingsRepository(private val context: Context) {
         val draftTranslationPreview = booleanPreferencesKey("draft_translation_preview")
         val silenceDetectionEnabled = booleanPreferencesKey("silence_detection_enabled")
         val hubEnabled = booleanPreferencesKey("hub_enabled")
+        val voiceRecognizeOnly = booleanPreferencesKey("voice_recognize_only")
     }
 
     val settings: Flow<UserSettings> = context.dataStore.data.map { prefs ->
@@ -142,6 +143,7 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.draftTranslationPreview] = next.draftTranslationPreview
             prefs[Keys.silenceDetectionEnabled] = next.silenceDetectionEnabled
             prefs[Keys.hubEnabled] = next.hubEnabled
+            prefs[Keys.voiceRecognizeOnly] = next.voiceRecognizeOnly
         }
     }
 
@@ -228,6 +230,8 @@ class UserSettingsRepository(private val context: Context) {
             ?: UserSettings.Defaults.SILENCE_DETECTION_ENABLED,
         hubEnabled = this[Keys.hubEnabled]
             ?: UserSettings.Defaults.HUB_ENABLED,
+        voiceRecognizeOnly = this[Keys.voiceRecognizeOnly]
+            ?: UserSettings.Defaults.VOICE_RECOGNIZE_ONLY,
     )
 
     /** Migrate the pre-3-option boolean: true→BOTH, false/absent→TRANSLATION. */

@@ -6,6 +6,7 @@ import com.xzm.realtimetranslate.util.AppLog as Log
 import com.xzm.realtimetranslate.LiveTranslateApp
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.AsrEngineType
+import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.translate.AsrEngine
 import com.xzm.realtimetranslate.translate.DashScopeEndpoints
 import com.xzm.realtimetranslate.translate.SpeechRecognizer
@@ -237,11 +238,19 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
                 if (partials) ensureDraftWorker()
 
                 // liveSettings: 引擎每次请求重读设置，模型名 / baseUrl / 思考开关
-                // 改动下一句即生效，不必重启会话。
+                // 改动下一句即生效，不必重启会话。若开启 voiceRecognizeOnly 则走 NONE 仅识别引擎。
+                val engineSettings = if (settings.voiceRecognizeOnly) {
+                    settings.copy(translationEngine = TranslationEngineType.NONE)
+                } else {
+                    settings
+                }
                 translationEngine = TranslationEngineFactory.create(
-                    settings = settings,
+                    settings = engineSettings,
                     keys = app.apiKeyStore,
-                    liveSettings = { app.settingsRepository.settings.first() },
+                    liveSettings = {
+                        val s = app.settingsRepository.settings.first()
+                        if (s.voiceRecognizeOnly) s.copy(translationEngine = TranslationEngineType.NONE) else s
+                    },
                 )
 
                 // 预热翻译连接池：后台建立 TLS 与 HTTP/2 握手，消除首句翻译 3~4 秒的冷启动延迟

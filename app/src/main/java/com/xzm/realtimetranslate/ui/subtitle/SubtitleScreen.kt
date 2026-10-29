@@ -257,7 +257,8 @@ fun SubtitleScreen(
         }
 
         // 统一语言设置卡片（作为中央核心枢纽）
-        val isNoneEngine = settings.translationEngine == TranslationEngineType.NONE
+        val isVoice = selectedMode == 0
+        val isVoiceRecognizeOnly = isVoice && settings.voiceRecognizeOnly
         SectionCard {
             Column {
                 Row(
@@ -288,7 +289,7 @@ fun SubtitleScreen(
                             color = MiuixTheme.colorScheme.onSurface,
                         )
                     }
-                    val canSwap = settings.sourceLanguageCode != "auto" && !isNoneEngine
+                    val canSwap = settings.sourceLanguageCode != "auto" && !isVoiceRecognizeOnly
                     Box(
                         modifier = Modifier
                             .clip(CircleShape)
@@ -303,7 +304,7 @@ fun SubtitleScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            text = if (isNoneEngine) "→" else "⇄",
+                            text = if (isVoiceRecognizeOnly) "→" else "⇄",
                             fontWeight = FontWeight.Bold,
                             color = if (canSwap) Booth.Accent else MiuixTheme.colorScheme.onSurfaceVariantSummary,
                             fontSize = 16.sp,
@@ -313,7 +314,7 @@ fun SubtitleScreen(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(10.dp))
-                            .clickable(enabled = !isNoneEngine) { picker = LangPicker.Target }
+                            .clickable(enabled = !isVoiceRecognizeOnly) { picker = LangPicker.Target }
                             .padding(4.dp),
                         horizontalAlignment = Alignment.End,
                     ) {
@@ -325,26 +326,24 @@ fun SubtitleScreen(
                         )
                         Spacer(modifier = Modifier.height(3.dp))
                         Text(
-                            text = if (isNoneEngine) "（不翻译 · 仅听写）" else stringResource(SupportedLanguages.labelResOf(settings.targetLanguageCode)),
-                            fontSize = if (isNoneEngine) 13.5.sp else 16.sp,
+                            text = if (isVoiceRecognizeOnly) "（不翻译 · 仅听写）" else stringResource(SupportedLanguages.labelResOf(settings.targetLanguageCode)),
+                            fontSize = if (isVoiceRecognizeOnly) 13.5.sp else 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (isNoneEngine) Booth.Accent else MiuixTheme.colorScheme.onSurface,
+                            color = if (isVoiceRecognizeOnly) Booth.Accent else MiuixTheme.colorScheme.onSurface,
                         )
                     }
                 }
-                SettingDivider()
-                SettingSwitchRow(
-                    title = "仅识别（不翻译）",
-                    summary = "直接打出原始语音识别字幕，端侧离线运行，免 API Key、不消耗 Token",
-                    checked = isNoneEngine,
-                    onCheckedChange = { checked ->
-                        if (checked) {
-                            onUpdateSettings { it.copy(translationEngine = TranslationEngineType.NONE) }
-                        } else {
-                            onUpdateSettings { it.copy(translationEngine = TranslationEngineType.DEEPSEEK) }
-                        }
-                    },
-                )
+                if (isVoice) {
+                    SettingDivider()
+                    SettingSwitchRow(
+                        title = "仅识别（不翻译）",
+                        summary = "直接打出原始语音识别字幕，端侧离线运行，免 API Key、不消耗 Token",
+                        checked = settings.voiceRecognizeOnly,
+                        onCheckedChange = { checked ->
+                            onUpdateSettings { it.copy(voiceRecognizeOnly = checked) }
+                        },
+                    )
+                }
             }
         }
 
@@ -451,7 +450,7 @@ fun SubtitleScreen(
                     colors = if (running) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColorsPrimary(),
                 ) {
                     Text(
-                        text = if (running) "⏹ 停止声音同传" else if (isNoneEngine) "▶ 开始实时听写（仅识别）" else "▶ 开始同传翻译",
+                        text = if (running) "⏹ 停止声音同传" else if (settings.voiceRecognizeOnly) "▶ 开始实时听写（仅识别）" else "▶ 开始同传翻译",
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.5.sp,
                     )

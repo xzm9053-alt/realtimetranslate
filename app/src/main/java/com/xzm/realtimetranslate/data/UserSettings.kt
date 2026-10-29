@@ -105,8 +105,11 @@ data class UserSettings(
     val silenceDetectionEnabled: Boolean = Defaults.SILENCE_DETECTION_ENABLED,
     // 常驻悬浮球开关：在所有 App 上方显示便捷悬浮球，承载多模式切换。
     val hubEnabled: Boolean = Defaults.HUB_ENABLED,
+    // 声音同传仅识别不翻译：只提取语音生成字幕，不调用大模型翻译，完全离线免 API Key
+    val voiceRecognizeOnly: Boolean = Defaults.VOICE_RECOGNIZE_ONLY,
 ) {
     object Defaults {
+        const val VOICE_RECOGNIZE_ONLY = false
         // Kept for schema compatibility; the engine now reads DeepSeek settings directly.
         const val ENDPOINT =
             "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"

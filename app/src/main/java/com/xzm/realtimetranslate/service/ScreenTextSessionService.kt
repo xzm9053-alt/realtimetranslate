@@ -263,7 +263,11 @@ class ScreenTextSessionService : Service() {
 
         // Engine-aware credential gate: engines with requiresApiKey need a key,
         // keyless ones (Microsoft / Google free) pass straight through.
-        val engineType = currentSettings.translationEngine
+        val engineType = if (currentSettings.translationEngine == TranslationEngineType.NONE) {
+            TranslationEngineType.DEEPSEEK
+        } else {
+            currentSettings.translationEngine
+        }
         if (!app.apiKeyStore.hasKeyFor(engineType)) {
             val label = getString(engineType.keyLabelRes!!)
             ScreenOcrBus.setStatus(
@@ -419,10 +423,23 @@ class ScreenTextSessionService : Service() {
             val app = application as LiveTranslateApp
             // liveSettings: 引擎每次请求重读设置，模型名 / baseUrl / 思考开关改动
             // 下一句即生效（重选区域不会重建引擎，靠这里生效）。
+            // 屏幕取词专注于识别翻译，不走 NONE 仅识别模式。
+            val ocrEngineType = if (currentSettings.translationEngine == TranslationEngineType.NONE) {
+                TranslationEngineType.DEEPSEEK
+            } else {
+                currentSettings.translationEngine
+            }
             val engine = TranslationEngineFactory.create(
-                settings = currentSettings,
+                settings = currentSettings.copy(translationEngine = ocrEngineType),
                 keys = app.apiKeyStore,
-                liveSettings = { app.settingsRepository.settings.first() },
+                liveSettings = {
+                    val s = app.settingsRepository.settings.first()
+                    if (s.translationEngine == TranslationEngineType.NONE) {
+                        s.copy(translationEngine = TranslationEngineType.DEEPSEEK)
+                    } else {
+                        s
+                    }
+                },
             )
             // 翻译 worker：单槽（conflated）Channel = 同时最多一个翻译在飞，且翻译
             // 期间画面又换了只保留最新的那份文本。引擎再慢也冻不住上面的采集节拍，
