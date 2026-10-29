@@ -36,8 +36,11 @@
 
     <string name="history_title">历史记录</string>
     <string name="history_subtitle">已保存的翻译会话</string>
-    <string name="history_empty">暂无历史——结束一次会话后，这里会显示。</string>
-    <string name="history_count">%1$d 条会话</string>
+    <string name="history_summary_active">长文本会话存档 · 支持导出为 TXT</string>
+    <string name="history_summary_empty">暂无归档 · 开启翻译后自动保存</string>
+    <string name="history_empty">暂无会话历史</string>
+    <string name="history_empty_hint">开启声音同传、屏幕取词或文档翻译后，长文本与时间戳将自动在此归档保存。</string>
+    <string name="history_count">%1$d 场历史会话</string>
     <string name="history_clear_all">全部清理</string>
     <string name="history_cleared">已清空全部历史</string>
     <string name="history_original">原文</string>

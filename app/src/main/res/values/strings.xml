@@ -36,7 +36,10 @@
 
     <string name="history_title">History</string>
     <string name="history_subtitle">Your saved translation sessions</string>
-    <string name="history_empty">No history yet — finish a session and it appears here.</string>
+    <string name="history_summary_active">Archived transcripts · Export to TXT supported</string>
+    <string name="history_summary_empty">No sessions · Auto saved when translating</string>
+    <string name="history_empty">No session history</string>
+    <string name="history_empty_hint">Real-time subtitles, OCR screen translation and documents will be automatically archived here.</string>
     <string name="history_count">%1$d session(s)</string>
     <string name="history_clear_all">Clear all</string>
     <string name="history_cleared">All history cleared</string>
