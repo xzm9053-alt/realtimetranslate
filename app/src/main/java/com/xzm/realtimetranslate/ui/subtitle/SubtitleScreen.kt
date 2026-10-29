@@ -107,28 +107,30 @@ fun SubtitleScreen(
     pendingVideoUri: Uri? = null,
     onStaticLaunchConsumed: () -> Unit = {},
 ) {
-    var showMore by rememberSaveable { mutableStateOf(false) }
-    var pendingStaticTarget by remember { mutableStateOf<StaticModeTarget?>(null) }
+    var activeTool by rememberSaveable { mutableStateOf<StaticModeTarget?>(null) }
 
-    // The floating ball asks for a tool page while this screen may not even be
-    // composed yet; open the More sheet and let it route to the right sub-page.
-    LaunchedEffect(staticLaunch) {
-        if (staticLaunch != null) showMore = true
+    LaunchedEffect(staticLaunch, pendingVideoUri) {
+        if (staticLaunch != null) {
+            activeTool = staticLaunch
+        } else if (pendingVideoUri != null) {
+            activeTool = StaticModeTarget.VIDEO
+        }
     }
 
-    if (showMore) {
+    val currentTool = activeTool
+    if (currentTool != null) {
         MoreScreen(
-            onBack = { showMore = false },
-            onOpenSettings = {
-                showMore = false
-                onOpenSettings()
-            },
-            initialStaticTarget = pendingStaticTarget ?: staticLaunch,
-            initialVideoUri = pendingVideoUri,
-            onInitialTargetConsumed = {
-                pendingStaticTarget = null
+            target = currentTool,
+            onBack = {
+                activeTool = null
                 onStaticLaunchConsumed()
             },
+            onOpenSettings = {
+                activeTool = null
+                onStaticLaunchConsumed()
+                onOpenSettings()
+            },
+            initialVideoUri = pendingVideoUri,
             modifier = Modifier.fillMaxSize(),
         )
         return
@@ -605,22 +607,10 @@ fun SubtitleScreen(
 
         // 离线与静态小工具 4 宫格快捷托盘
         QuickToolsTray(
-            onOpenDocument = {
-                pendingStaticTarget = StaticModeTarget.DOCUMENT
-                showMore = true
-            },
-            onOpenImage = {
-                pendingStaticTarget = StaticModeTarget.IMAGE
-                showMore = true
-            },
-            onOpenVideo = {
-                pendingStaticTarget = StaticModeTarget.VIDEO
-                showMore = true
-            },
-            onOpenText = {
-                pendingStaticTarget = StaticModeTarget.TEXT
-                showMore = true
-            },
+            onOpenDocument = { activeTool = StaticModeTarget.DOCUMENT },
+            onOpenImage = { activeTool = StaticModeTarget.IMAGE },
+            onOpenVideo = { activeTool = StaticModeTarget.VIDEO },
+            onOpenText = { activeTool = StaticModeTarget.TEXT },
         )
 
         // 字幕外观个性化设置（折叠收纳抽屉）
@@ -956,25 +946,12 @@ private fun QuickToolsTray(
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
                 Text(
-                    text = "离线与静态工具",
+                    text = "实用翻译工具",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = scheme.onSurfaceVariantSummary,
                 )
-                Text(
-                    text = "全部小工具 ›",
-                    fontSize = 12.sp,
-                    color = Booth.Accent,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.clickable(onClick = onOpenDocument),
-                )
-            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
