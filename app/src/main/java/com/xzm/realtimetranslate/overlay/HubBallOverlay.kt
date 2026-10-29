@@ -195,17 +195,11 @@ class HubBallOverlay(
         when (currentState.mode) {
             HubMode.IDLE -> {
                 addHeader("实时翻译模式")
-                addItem("🖥️", context.getString(R.string.hub_menu_fullscreen)) {
-                    HubBus.postCommand(HubCommand.SwitchMode(HubMode.FULLSCREEN))
-                }
                 addItem("🔍", context.getString(R.string.hub_menu_region)) {
                     HubBus.postCommand(HubCommand.SwitchMode(HubMode.SCREEN_REGION))
                 }
                 addItem("🎙️", context.getString(R.string.hub_menu_voice)) {
                     HubBus.postCommand(HubCommand.SwitchMode(HubMode.VOICE))
-                }
-                addItem("📚", context.getString(R.string.hub_menu_comic)) {
-                    HubBus.postCommand(HubCommand.SwitchMode(HubMode.COMIC))
                 }
 
                 addHeader("其他翻译工具")
@@ -267,24 +261,6 @@ class HubBallOverlay(
                 addItem("🔲", "切换取词框显隐") {
                     HubBus.postCommand(HubCommand.ToggleOutline)
                 }
-                addItem("⏹️", context.getString(R.string.hub_menu_stop_current), 0xFFFF5C5C.toInt()) {
-                    HubBus.postCommand(HubCommand.StopCurrentMode)
-                }
-            }
-            HubMode.FULLSCREEN, HubMode.COMIC -> {
-                val headerTitle = if (currentState.mode == HubMode.COMIC) "漫画翻译控制" else "全屏翻译控制"
-                addHeader(headerTitle)
-
-                val pauseText = if (currentState.isPaused) {
-                    context.getString(R.string.hub_menu_resume)
-                } else {
-                    context.getString(R.string.hub_menu_pause)
-                }
-                val pauseIcon = if (currentState.isPaused) "▶️" else "⏸️"
-                addItem(pauseIcon, pauseText) {
-                    HubBus.postCommand(HubCommand.TogglePause)
-                }
-
                 addItem("⏹️", context.getString(R.string.hub_menu_stop_current), 0xFFFF5C5C.toInt()) {
                     HubBus.postCommand(HubCommand.StopCurrentMode)
                 }

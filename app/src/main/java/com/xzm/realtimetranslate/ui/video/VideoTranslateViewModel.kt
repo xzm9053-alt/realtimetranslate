@@ -10,10 +10,13 @@ import androidx.lifecycle.viewModelScope
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.ApiKeyStore
 import com.xzm.realtimetranslate.data.SupportedLanguages
+import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettingsRepository
 import com.xzm.realtimetranslate.data.VideoSubtitleMode
 import com.xzm.realtimetranslate.service.SessionBus
 import com.xzm.realtimetranslate.translate.AsrEngine
+import com.xzm.realtimetranslate.translate.PassthroughTranslationEngine
+import com.xzm.realtimetranslate.translate.TranslationEngine
 import com.xzm.realtimetranslate.translate.TranslationEngineFactory
 import com.xzm.realtimetranslate.util.ExportTranslator
 import com.xzm.realtimetranslate.util.ModelDownloader
@@ -42,6 +45,7 @@ data class VideoTranslateUiState(
     val displayName: String = "",
     val sourceCode: String = "auto",
     val targetCode: String = "zh-Hans",
+    val recognizeOnly: Boolean = false,
     val isRunning: Boolean = false,
     val stage: VideoTranslationPipeline.Stage? = null,
     val progress: Float = 0f,
@@ -127,6 +131,11 @@ class VideoTranslateViewModel(
         viewModelScope.launch { settingsRepository.update { it.copy(videoSubtitleMode = mode) } }
     }
 
+    /** 仅识别不翻译：只提取语音生成字幕，不调用大模型翻译，完全离线免 API Key */
+    fun setRecognizeOnly(enabled: Boolean) {
+        _state.update { it.copy(recognizeOnly = enabled) }
+    }
+
     fun start() {
         val snapshot = _state.value
         val uri = snapshot.uri?.let(Uri::parse) ?: return
@@ -155,7 +164,8 @@ class VideoTranslateViewModel(
             }
             try {
                 val settings = settingsRepository.settings.first()
-                if (!apiKeyStore.hasKeyFor(settings.translationEngine)) {
+                val isRecognizeOnly = snapshot.recognizeOnly || settings.translationEngine == TranslationEngineType.NONE
+                if (!isRecognizeOnly && !apiKeyStore.hasKeyFor(settings.translationEngine)) {
                     _state.update {
                         it.copy(
                             isRunning = false,
@@ -183,11 +193,15 @@ class VideoTranslateViewModel(
                 val paths = modelManager.paths
                 val modelDir = paths.senseVoiceModel.parentFile
                     ?: throw IllegalStateException("模型目录不可用")
-                val engine = TranslationEngineFactory.create(
-                    settings,
-                    apiKeyStore,
-                    liveSettings = { settingsRepository.settings.first() },
-                )
+                val engine: TranslationEngine = if (isRecognizeOnly) {
+                    PassthroughTranslationEngine
+                } else {
+                    TranslationEngineFactory.create(
+                        settings,
+                        apiKeyStore,
+                        liveSettings = { settingsRepository.settings.first() },
+                    )
+                }
                 val pipeline = VideoTranslationPipeline(
                     context = getApplication(),
                     modelDir = modelDir,
@@ -198,7 +212,11 @@ class VideoTranslateViewModel(
                     uri = uri,
                     language = AsrEngine.senseVoiceLanguageFor(snapshot.sourceCode),
                     translate = { text ->
-                        engine.translate(text, snapshot.sourceCode, snapshot.targetCode).lastOrNull()
+                        if (isRecognizeOnly) {
+                            text
+                        } else {
+                            engine.translate(text, snapshot.sourceCode, snapshot.targetCode).lastOrNull()
+                        }
                     },
                     onProgress = { stage, fraction ->
                         _state.update {
@@ -225,9 +243,11 @@ class VideoTranslateViewModel(
                         progress = 1f,
                         cues = cues,
                         durationMs = result.durationMs,
-                        failedTranslations = result.failedTranslations,
+                        failedTranslations = if (isRecognizeOnly) 0 else result.failedTranslations,
                         message = if (cues.isEmpty()) {
                             getApplication<Application>().getString(R.string.video_no_speech)
+                        } else if (isRecognizeOnly) {
+                            "字幕提取完成，共 ${cues.size} 句"
                         } else {
                             getApplication<Application>().getString(R.string.video_done, cues.size)
                         },

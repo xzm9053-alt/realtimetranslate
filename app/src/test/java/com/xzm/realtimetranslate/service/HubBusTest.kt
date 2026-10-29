@@ -39,23 +39,16 @@ class HubBusTest {
     }
 
     @Test
-    fun `sync from ScreenOcrBus reflects region and fullscreen mode`() {
+    fun `sync from ScreenOcrBus reflects region mode`() {
         HubBus.setHubEnabled(true)
-        HubBus.syncFromScreenOcr(ScreenOcrBus.Status.Running, ScreenOcrMode.FULLSCREEN)
-        assertEquals(HubMode.FULLSCREEN, HubBus.state.value.mode)
+        HubBus.syncFromScreenOcr(ScreenOcrBus.Status.Running, ScreenOcrMode.REGION)
+        assertEquals(HubMode.SCREEN_REGION, HubBus.state.value.mode)
 
-        HubBus.syncFromScreenOcr(ScreenOcrBus.Status.Paused, ScreenOcrMode.FULLSCREEN)
+        HubBus.syncFromScreenOcr(ScreenOcrBus.Status.Paused, ScreenOcrMode.REGION)
         assertTrue(HubBus.state.value.isPaused)
 
-        HubBus.syncFromScreenOcr(ScreenOcrBus.Status.Stopped, ScreenOcrMode.FULLSCREEN)
+        HubBus.syncFromScreenOcr(ScreenOcrBus.Status.Stopped, ScreenOcrMode.REGION)
         assertEquals(HubMode.IDLE, HubBus.state.value.mode)
-
-        HubBus.syncFromScreenOcr(ScreenOcrBus.Status.Running, ScreenOcrMode.COMIC)
-        assertEquals(HubMode.COMIC, HubBus.state.value.mode)
-
-        HubBus.syncFromScreenOcr(ScreenOcrBus.Status.Paused, ScreenOcrMode.COMIC)
-        assertTrue(HubBus.state.value.isPaused)
-        assertEquals(HubMode.COMIC, HubBus.state.value.mode)
     }
 
     @Test

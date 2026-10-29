@@ -57,12 +57,14 @@ import com.xzm.realtimetranslate.data.OcrScript
 import com.xzm.realtimetranslate.data.ScreenOcrMode
 import com.xzm.realtimetranslate.data.SubtitleDisplayMode
 import com.xzm.realtimetranslate.data.SupportedLanguages
+import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
 import com.xzm.realtimetranslate.service.ScreenOcrBus
 import com.xzm.realtimetranslate.service.SessionBus
 import com.xzm.realtimetranslate.service.StaticModeTarget
 import com.xzm.realtimetranslate.ui.components.PageTitle
 import com.xzm.realtimetranslate.ui.components.SectionCard
+import com.xzm.realtimetranslate.ui.components.SettingDivider
 import com.xzm.realtimetranslate.ui.components.SettingSwitchRow
 import com.xzm.realtimetranslate.ui.components.StatusPill
 import com.xzm.realtimetranslate.ui.components.StatusTone
@@ -94,8 +96,6 @@ fun SubtitleScreen(
     onStop: () -> Unit,
     onOcrStart: () -> Unit,
     onOcrStop: () -> Unit,
-    onFullscreenStart: () -> Unit,
-    onComicStart: () -> Unit = {},
     onExport: () -> Unit,
     canDrawOverlays: Boolean,
     onUpdateSettings: ((UserSettings) -> UserSettings) -> Unit = {},
@@ -139,7 +139,6 @@ fun SubtitleScreen(
     var selectedMode by remember(ocrRunning, running) {
         mutableIntStateOf(if (ocrRunning && !running) 1 else 0)
     }
-    var selectedScreenMode by rememberSaveable { mutableIntStateOf(0) }
     var appearanceExpanded by rememberSaveable { mutableStateOf(false) }
 
     val context = LocalContext.current
@@ -244,7 +243,7 @@ fun SubtitleScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = "🖥️ 屏幕翻译",
+                    text = "🔍 屏幕取词",
                     fontWeight = if (isScreen) FontWeight.Bold else FontWeight.Medium,
                     color = if (isScreen) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     fontSize = 14.5.sp,
@@ -253,78 +252,94 @@ fun SubtitleScreen(
         }
 
         // 统一语言设置卡片（作为中央核心枢纽）
+        val isNoneEngine = settings.translationEngine == TranslationEngineType.NONE
         SectionCard {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(
+            Column {
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable { picker = LangPicker.Source }
-                        .padding(4.dp),
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text(
-                        text = "源语言 (SOURCE)",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    )
-                    Spacer(modifier = Modifier.height(3.dp))
-                    Text(
-                        text = stringResource(SupportedLanguages.labelResOf(settings.sourceLanguageCode)),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MiuixTheme.colorScheme.onSurface,
-                    )
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { picker = LangPicker.Source }
+                            .padding(4.dp),
+                    ) {
+                        Text(
+                            text = "源语言 (SOURCE)",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Text(
+                            text = stringResource(SupportedLanguages.labelResOf(settings.sourceLanguageCode)),
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MiuixTheme.colorScheme.onSurface,
+                        )
+                    }
+                    val canSwap = settings.sourceLanguageCode != "auto" && !isNoneEngine
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(if (canSwap) Booth.Accent.copy(alpha = 0.12f) else MiuixTheme.colorScheme.surfaceVariant)
+                            .clickable(enabled = canSwap) {
+                                val currentSrc = settings.sourceLanguageCode
+                                val currentTgt = settings.targetLanguageCode
+                                onSourceLanguage(currentTgt)
+                                onTargetLanguage(currentSrc)
+                            }
+                            .padding(10.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = if (isNoneEngine) "→" else "⇄",
+                            fontWeight = FontWeight.Bold,
+                            color = if (canSwap) Booth.Accent else MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            fontSize = 16.sp,
+                        )
+                    }
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable(enabled = !isNoneEngine) { picker = LangPicker.Target }
+                            .padding(4.dp),
+                        horizontalAlignment = Alignment.End,
+                    ) {
+                        Text(
+                            text = "目标语言 (TARGET)",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Text(
+                            text = if (isNoneEngine) "（不翻译 · 仅听写）" else stringResource(SupportedLanguages.labelResOf(settings.targetLanguageCode)),
+                            fontSize = if (isNoneEngine) 13.5.sp else 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isNoneEngine) Booth.Accent else MiuixTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
-                val canSwap = settings.sourceLanguageCode != "auto"
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(if (canSwap) Booth.Accent.copy(alpha = 0.12f) else MiuixTheme.colorScheme.surfaceVariant)
-                        .clickable(enabled = canSwap) {
-                            val currentSrc = settings.sourceLanguageCode
-                            val currentTgt = settings.targetLanguageCode
-                            onSourceLanguage(currentTgt)
-                            onTargetLanguage(currentSrc)
+                SettingDivider()
+                SettingSwitchRow(
+                    title = "仅识别（不翻译）",
+                    summary = "直接打出原始语音识别字幕，端侧离线运行，免 API Key、不消耗 Token",
+                    checked = isNoneEngine,
+                    onCheckedChange = { checked ->
+                        if (checked) {
+                            onUpdateSettings { it.copy(translationEngine = TranslationEngineType.NONE) }
+                        } else {
+                            onUpdateSettings { it.copy(translationEngine = TranslationEngineType.DEEPSEEK) }
                         }
-                        .padding(10.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = "⇄",
-                        fontWeight = FontWeight.Bold,
-                        color = if (canSwap) Booth.Accent else MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        fontSize = 16.sp,
-                    )
-                }
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable { picker = LangPicker.Target }
-                        .padding(4.dp),
-                    horizontalAlignment = Alignment.End,
-                ) {
-                    Text(
-                        text = "目标语言 (TARGET)",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    )
-                    Spacer(modifier = Modifier.height(3.dp))
-                    Text(
-                        text = stringResource(SupportedLanguages.labelResOf(settings.targetLanguageCode)),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MiuixTheme.colorScheme.onSurface,
-                    )
-                }
+                    },
+                )
             }
         }
 
@@ -431,7 +446,7 @@ fun SubtitleScreen(
                     colors = if (running) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColorsPrimary(),
                 ) {
                     Text(
-                        text = if (running) "⏹ 停止声音同传" else "▶ 开始同传翻译",
+                        text = if (running) "⏹ 停止声音同传" else if (isNoneEngine) "▶ 开始实时听写（仅识别）" else "▶ 开始同传翻译",
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.5.sp,
                     )
@@ -456,7 +471,7 @@ fun SubtitleScreen(
                 }
             }
         } else {
-            // ================= 屏幕翻译面板 =================
+            // ================= 屏幕取词面板 =================
             SectionCard {
                 Column(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
@@ -468,39 +483,14 @@ fun SubtitleScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = "屏幕翻译模式",
+                            text = "识别语种与选区",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         )
                         StatusPill(
-                            label = if (ocrRunning) "运行中" else "未启动",
+                            label = if (ocrRunning) "取词中" else "未启动",
                             tone = if (ocrRunning) StatusTone.Ok else StatusTone.Idle,
-                        )
-                    }
-
-                    // 屏幕翻译三态胶囊
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        SourceSegmentChip(
-                            label = "🎯 区域取词",
-                            selected = selectedScreenMode == 0,
-                            onClick = { selectedScreenMode = 0 },
-                            modifier = Modifier.weight(1f),
-                        )
-                        SourceSegmentChip(
-                            label = "🖥️ 全屏覆盖",
-                            selected = selectedScreenMode == 1,
-                            onClick = { selectedScreenMode = 1 },
-                            modifier = Modifier.weight(1f),
-                        )
-                        SourceSegmentChip(
-                            label = "📚 漫画翻译",
-                            selected = selectedScreenMode == 2,
-                            onClick = { selectedScreenMode = 2 },
-                            modifier = Modifier.weight(1f),
                         )
                     }
 
@@ -509,27 +499,14 @@ fun SubtitleScreen(
                         onSelect = { script -> onUpdateSettings { it.copy(ocrScript = script) } },
                     )
 
-                    if (selectedScreenMode == 0) {
-                        SettingSwitchRow(
-                            title = stringResource(R.string.ocr_outline_enabled),
-                            summary = stringResource(R.string.ocr_outline_enabled_summary),
-                            checked = settings.ocrRegionOutlineEnabled,
-                            onCheckedChange = { v ->
-                                onUpdateSettings { it.copy(ocrRegionOutlineEnabled = v) }
-                            },
-                        )
-                    }
-
-                    if (selectedScreenMode == 1) {
-                        SettingSwitchRow(
-                            title = stringResource(R.string.cover_bilingual),
-                            summary = stringResource(R.string.cover_bilingual_summary),
-                            checked = settings.coverBilingual,
-                            onCheckedChange = { v ->
-                                onUpdateSettings { it.copy(coverBilingual = v) }
-                            },
-                        )
-                    }
+                    SettingSwitchRow(
+                        title = stringResource(R.string.ocr_outline_enabled),
+                        summary = stringResource(R.string.ocr_outline_enabled_summary),
+                        checked = settings.ocrRegionOutlineEnabled,
+                        onCheckedChange = { v ->
+                            onUpdateSettings { it.copy(ocrRegionOutlineEnabled = v) }
+                        },
+                    )
 
                     if (ocrSession.message.isNotBlank()) {
                         Text(
@@ -543,7 +520,7 @@ fun SubtitleScreen(
                 }
             }
 
-            // 大发射按钮（屏幕翻译）
+            // 大发射按钮（屏幕取词）
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -555,11 +532,7 @@ fun SubtitleScreen(
                         if (ocrRunning) {
                             onOcrStop()
                         } else {
-                            when (selectedScreenMode) {
-                                0 -> onOcrStart()
-                                1 -> onFullscreenStart()
-                                2 -> onComicStart()
-                            }
+                            onOcrStart()
                         }
                     },
                     enabled = !running,
@@ -569,11 +542,7 @@ fun SubtitleScreen(
                     colors = if (ocrRunning) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColorsPrimary(),
                 ) {
                     Text(
-                        text = if (ocrRunning) "⏹ 停止屏幕翻译" else when (selectedScreenMode) {
-                            0 -> "▶ 开始区域取词"
-                            1 -> "▶ 开启全屏覆盖"
-                            else -> "▶ 开启漫画翻译"
-                        },
+                        text = if (ocrRunning) "⏹ 停止屏幕取词" else "▶ 开始画框取词",
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.5.sp,
                     )

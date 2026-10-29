@@ -78,6 +78,8 @@ import com.xzm.realtimetranslate.ui.components.LanguageChip
 import com.xzm.realtimetranslate.ui.components.LanguagePickerSheet
 import com.xzm.realtimetranslate.ui.components.PageTitle
 import com.xzm.realtimetranslate.ui.components.SectionCard
+import com.xzm.realtimetranslate.ui.components.SettingDivider
+import com.xzm.realtimetranslate.ui.components.SettingSwitchRow
 import com.xzm.realtimetranslate.ui.theme.Booth
 import com.xzm.realtimetranslate.video.VideoCue
 import com.xzm.realtimetranslate.video.VideoTranslationPipeline
@@ -213,11 +215,19 @@ fun VideoTranslateScreen(
                         )
                         LanguageChip(
                             label = stringResource(R.string.text_target_lang),
-                            value = stringResource(targetLabel.labelRes),
+                            value = if (state.recognizeOnly) "（不翻译 · 仅听写）" else stringResource(targetLabel.labelRes),
                             modifier = Modifier.weight(1f),
-                            onClick = { if (!state.isRunning) picker = LangField.Target },
+                            onClick = { if (!state.isRunning && !state.recognizeOnly) picker = LangField.Target },
                         )
                     }
+                    SettingDivider()
+                    SettingSwitchRow(
+                        title = "仅识别（不翻译）",
+                        summary = "直接提取视频语音生成字幕，不调用 AI 翻译，完全离线免 API Key",
+                        checked = state.recognizeOnly,
+                        onCheckedChange = viewModel::setRecognizeOnly,
+                        enabled = !state.isRunning,
+                    )
                     Text(
                         text = stringResource(R.string.video_local_asr_hint),
                         fontSize = 11.sp,
@@ -322,9 +332,13 @@ fun VideoTranslateScreen(
                         },
                     ) {
                         Text(
-                            text = stringResource(
-                                if (state.isRunning) R.string.video_stop else R.string.video_start,
-                            ),
+                            text = if (state.isRunning) {
+                                stringResource(R.string.video_stop)
+                            } else if (state.recognizeOnly) {
+                                "▶ 开始提取字幕（仅识别）"
+                            } else {
+                                stringResource(R.string.video_start)
+                            },
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 16.sp,
                         )

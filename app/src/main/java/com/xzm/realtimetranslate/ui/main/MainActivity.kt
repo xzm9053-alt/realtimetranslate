@@ -141,7 +141,6 @@ class MainActivity : ComponentActivity() {
                 var pendingOcrStart by remember { mutableStateOf(false) }
                 var pendingHubStart by remember { mutableStateOf(false) }
                 var pendingOcrRegion by remember { mutableStateOf<Rect?>(null) }
-                var pendingOcrMode by remember { mutableStateOf(ScreenOcrMode.REGION) }
                 var updateInfoToPrompt by remember { mutableStateOf<RemoteUpdateInfo?>(null) }
 
                 fun openVideoUrl(url: String) {
@@ -175,11 +174,11 @@ class MainActivity : ComponentActivity() {
                     if (result.resultCode == Activity.RESULT_OK && result.data != null && region != null) {
                         runCatching {
                             ScreenTextSessionService.start(
-                                this,
+                                this@MainActivity,
                                 region = region,
                                 resultCode = result.resultCode,
                                 data = result.data!!,
-                                mode = pendingOcrMode,
+                                mode = ScreenOcrMode.REGION,
                             )
                         }.onFailure {
                             Log.e(TAG, "start ocr service failed", it)
@@ -196,16 +195,12 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                fun requestOcrProjection(region: Rect, mode: ScreenOcrMode = ScreenOcrMode.REGION) {
+                fun requestOcrProjection(region: Rect) {
                     ScreenOcrBus.setStatus(
                         ScreenOcrBus.Status.Starting,
-                        getString(
-                            if (mode == ScreenOcrMode.FULLSCREEN) R.string.cover_starting
-                            else R.string.msg_requesting_projection,
-                        ),
+                        getString(R.string.msg_requesting_projection),
                     )
                     pendingOcrRegion = region
-                    pendingOcrMode = mode
                     val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
                     ocrProjectionLauncher.launch(mpm.createScreenCaptureIntent())
                 }
@@ -219,15 +214,9 @@ class MainActivity : ComponentActivity() {
                     selector.show()
                 }
 
-                /** Resumes an OCR start whose permissions are now granted, in the mode the user picked. */
+                /** Resumes an OCR start whose permissions are now granted. */
                 fun continueOcrStart() {
-                    if (pendingOcrMode == ScreenOcrMode.FULLSCREEN || pendingOcrMode == ScreenOcrMode.COMIC) {
-                        // The service turns this placeholder into the full screen; the
-                        // selection overlay is deliberately skipped for this mode.
-                        requestOcrProjection(Rect(0, 0, 1, 1), pendingOcrMode)
-                    } else {
-                        showRegionSelector()
-                    }
+                    showRegionSelector()
                 }
 
                 fun stopOcr() {
@@ -384,7 +373,6 @@ class MainActivity : ComponentActivity() {
 
                 fun requestStartOcr() {
                     try {
-                        pendingOcrMode = ScreenOcrMode.REGION
                         if (ocrSession.status.isActive) {
                             stopOcr()
                             return
@@ -433,58 +421,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                /**
-                 * Full-screen cover mode. Same permission chain as region OCR, minus the
-                 * area selector — the whole screen is the capture area.
-                 */
-                fun requestStartFullscreen(targetMode: ScreenOcrMode = ScreenOcrMode.FULLSCREEN) {
-                    try {
-                        pendingOcrMode = targetMode
-                        // Switching modes needs a fresh projection: the token carries
-                        // nothing about the mode, but the service fixes the mode at start.
-                        if (ocrSession.status.isActive) {
-                            stopOcr()
-                        }
-                        if (session.status == SessionBus.Status.Running ||
-                            session.status == SessionBus.Status.Starting
-                        ) {
-                            scope.launch {
-                                runCatching { SessionBus.stop() }
-                                runCatching { SubtitleSessionService.stop(this@MainActivity) }
-                            }
-                        }
-                        missingEngineKeyMessage()?.let { message ->
-                            ScreenOcrBus.setStatus(ScreenOcrBus.Status.Error, message)
-                            scope.launch { pagerState.animateScrollToPage(1) }
-                            return
-                        }
-                        val needed = buildList {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                add(Manifest.permission.POST_NOTIFICATIONS)
-                            }
-                        }.filter {
-                            ContextCompat.checkSelfPermission(this, it) !=
-                                PackageManager.PERMISSION_GRANTED
-                        }
-                        if (needed.isNotEmpty()) {
-                            ocrPermissionLauncher.launch(needed.toTypedArray())
-                            return
-                        }
-                        if (!PermissionUtils.canDrawOverlays(this)) {
-                            pendingOcrStart = true
-                            overlayLauncher.launch(PermissionUtils.overlaySettingsIntent(this))
-                            return
-                        }
-                        continueOcrStart()
-                    } catch (t: Throwable) {
-                        Log.e(TAG, "requestStartFullscreen", t)
-                        ScreenOcrBus.setStatus(
-                            ScreenOcrBus.Status.Error,
-                            getString(R.string.msg_start_failed, t.message.orEmpty()),
-                        )
-                    }
-                }
-
                 fun toggleHub(enabled: Boolean) {
                     if (enabled) {
                         if (!PermissionUtils.canDrawOverlays(this@MainActivity)) {
@@ -513,8 +449,6 @@ class MainActivity : ComponentActivity() {
                                 when (cmd.mode) {
                                     HubMode.VOICE -> requestStartSubtitle()
                                     HubMode.SCREEN_REGION -> requestStartOcr()
-                                    HubMode.FULLSCREEN -> requestStartFullscreen(ScreenOcrMode.FULLSCREEN)
-                                    HubMode.COMIC -> requestStartFullscreen(ScreenOcrMode.COMIC)
                                     HubMode.IDLE -> Unit
                                 }
                             }
@@ -591,8 +525,6 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onOcrStart = { requestStartOcr() },
                                 onOcrStop = { stopOcr() },
-                                onFullscreenStart = { requestStartFullscreen(ScreenOcrMode.FULLSCREEN) },
-                                onComicStart = { requestStartFullscreen(ScreenOcrMode.COMIC) },
                                 onExport = { subtitleVm.exportLastSession() },
                                 canDrawOverlays = PermissionUtils.canDrawOverlays(this@MainActivity),
                                 onUpdateSettings = { transform ->

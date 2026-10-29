@@ -15,8 +15,6 @@ enum class HubMode {
     IDLE,
     VOICE,
     SCREEN_REGION,
-    FULLSCREEN,
-    COMIC,
 }
 
 enum class StaticModeTarget {
@@ -87,12 +85,8 @@ object HubBus {
         _state.value = _state.value.copy(mode = newMode)
     }
 
-    fun syncFromScreenOcr(ocrStatus: ScreenOcrBus.Status, ocrMode: ScreenOcrMode) {
-        val targetMode = when (ocrMode) {
-            ScreenOcrMode.REGION -> HubMode.SCREEN_REGION
-            ScreenOcrMode.FULLSCREEN -> HubMode.FULLSCREEN
-            ScreenOcrMode.COMIC -> HubMode.COMIC
-        }
+    fun syncFromScreenOcr(ocrStatus: ScreenOcrBus.Status, ocrMode: ScreenOcrMode = ScreenOcrMode.REGION) {
+        val targetMode = HubMode.SCREEN_REGION
         val (newMode, paused) = when (ocrStatus) {
             ScreenOcrBus.Status.Running, ScreenOcrBus.Status.Starting -> targetMode to false
             ScreenOcrBus.Status.Paused -> targetMode to true
