@@ -1,5 +1,6 @@
 package com.xzm.realtimetranslate.ui.more
 
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -59,6 +60,7 @@ import com.xzm.realtimetranslate.ui.text.TextTranslateScreen
 import com.xzm.realtimetranslate.ui.text.TextTranslateViewModel
 import com.xzm.realtimetranslate.ui.text.TextTranslateViewModelFactory
 import com.xzm.realtimetranslate.ui.video.VideoTranslateScreen
+import com.xzm.realtimetranslate.ui.video.queryDisplayName
 import com.xzm.realtimetranslate.ui.video.VideoTranslateViewModel
 import com.xzm.realtimetranslate.ui.video.VideoTranslateViewModelFactory
 import top.yukonga.miuix.kmp.basic.SmallTitle
@@ -87,10 +89,12 @@ fun MoreScreen(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
     initialStaticTarget: StaticModeTarget? = null,
+    initialVideoUri: Uri? = null,
     onInitialTargetConsumed: () -> Unit = {},
 ) {
     var page by rememberSaveable { mutableIntStateOf(PAGE_HUB) }
     val app = LocalContext.current.applicationContext as LiveTranslateApp
+    val context = LocalContext.current
 
     val textVm: TextTranslateViewModel = viewModel(
         factory = TextTranslateViewModelFactory(
@@ -141,6 +145,13 @@ fun MoreScreen(
             }
             StaticModeTarget.VIDEO -> {
                 page = PAGE_VIDEO
+                // 别的 App 递过来的视频：页面切过去的同时把文件导入，
+                // 否则用户落在一个空页上，还得自己去相册里找刚才那个。
+                // 不调 start()：识别要跑好几分钟，且可能因未配 Key / 模型未就绪失败，
+                // 那些失败应当发生在用户刚刚主动点过的地方。
+                initialVideoUri?.let { uri ->
+                    videoVm.setVideo(uri, queryDisplayName(context, uri))
+                }
             }
             StaticModeTarget.TEXT -> {
                 page = PAGE_TEXT

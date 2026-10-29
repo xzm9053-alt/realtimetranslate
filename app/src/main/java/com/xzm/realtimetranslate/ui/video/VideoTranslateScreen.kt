@@ -871,7 +871,7 @@ private fun formatDuration(ms: Long): String {
     return "%02d:%02d".format(minutes, seconds)
 }
 
-private fun queryDisplayName(context: Context, uri: Uri): String {
+internal fun queryDisplayName(context: Context, uri: Uri): String {
     val name = runCatching {
         context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
             ?.use { cursor ->

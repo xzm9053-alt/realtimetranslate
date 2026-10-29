@@ -33,6 +33,22 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!--
+              接收别的 App 递过来的视频，直接进视频翻译页。
+
+              只收 ACTION_SEND，**刻意不收 ACTION_VIEW**：VIEW 会让本应用出现在
+              相册里「用哪个应用打开视频」的列表里，而它不是播放器 —— 用户点开一个
+              视频却被弹到翻译界面，那是误触。
+
+              调用方用 setPackage 点名投递（见录制 App 的 ui/TranslateHandoff.kt），
+              所以这里不需要 <queries> 之类的可见性声明。
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
         </activity>
 
         <service

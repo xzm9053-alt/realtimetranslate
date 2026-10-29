@@ -80,7 +80,6 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 class MainActivity : ComponentActivity() {
-
     /**
      * A camera / gallery / document launch requested from the floating ball.
      *
@@ -91,10 +90,17 @@ class MainActivity : ComponentActivity() {
      */
     private val staticLaunch = mutableStateOf<StaticModeTarget?>(null)
 
+    /**
+     * 别的 App 递过来的视频。跟 [staticLaunch] 分开存，因为它们是两件事：
+     * 悬浮球只要求“打开哪个页”，而这里还多一个要导入的文件。
+     */
+    private val pendingVideoUri = mutableStateOf<Uri?>(null)
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         handleStaticLaunch(intent)
+        handleSharedVideo(intent)
     }
 
     /** Consumes [FloatingHubService.EXTRA_STATIC_MODE] if present; unknown values are ignored. */
@@ -107,10 +113,41 @@ class MainActivity : ComponentActivity() {
         staticLaunch.value = target
     }
 
+    /**
+     * 接收别的 App（目前是录制 App）通过 ACTION_SEND 递来的视频，并直接落到视频翻译页。
+     *
+     * 两件事必须同时做：设 `staticLaunch = VIDEO` 把页面切过去，
+     * 再把 URI 存起来等 `MoreScreen` 取走 —— 只做前一件的话，用户看到的是
+     * 一个空的视频页，还得自己去相册里找刚才那个文件。
+     *
+     * **不自动开始识别**：识别要跑好几分钟，且可能因未配 API Key、模型未就绪、
+     * 实时字幕正在跑而失败 —— 自动开始只会让这些失败来得莫名其妙。
+     * 留给用户点那一下，失败就发生在他刚刚主动点过的地方。
+     */
+    private fun handleSharedVideo(intent: Intent?) {
+        if (intent == null) return
+        if (!isVideoShare(intent.action, intent.type)) return
+        val uri: Uri? = intent.parcelableExtra(Intent.EXTRA_STREAM)
+        if (uri == null) return
+        // 不清掉的话，旋转屏幕触发重建会把同一个文件再导一次
+        intent.removeExtra(Intent.EXTRA_STREAM)
+        pendingVideoUri.value = uri
+        staticLaunch.value = StaticModeTarget.VIDEO
+    }
+
+    private inline fun <reified T : android.os.Parcelable> Intent.parcelableExtra(name: String): T? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getParcelableExtra(name, T::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            getParcelableExtra(name)
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         handleStaticLaunch(intent)
+        handleSharedVideo(intent)
         val app = application as LiveTranslateApp
 
         setContent {
@@ -538,7 +575,11 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onToggleHub = { toggleHub(it) },
                                 staticLaunch = staticLaunch.value,
-                                onStaticLaunchConsumed = { staticLaunch.value = null },
+                                pendingVideoUri = pendingVideoUri.value,
+                                onStaticLaunchConsumed = {
+                                    staticLaunch.value = null
+                                    pendingVideoUri.value = null
+                                },
                             )
                             1 -> SettingsScreen(
                                 modifier = Modifier.fillMaxSize(),
@@ -598,4 +639,18 @@ class MainActivity : ComponentActivity() {
     companion object {
         private const val TAG = "MainActivity"
     }
+}
+
+/**
+ * 这个 Intent 是不是「别的 App 递过来一段视频」。
+ *
+ * 抽成纯函数是为了能测：它决定的是**要不要把用户的画面切走**，
+ * 而 `MainActivity` 本身在 JVM 单测里跑不起来。
+ *
+ * 只认 `ACTION_SEND`：`ACTION_VIEW` 是「打开」不是「分享」，
+ * 而清单里本来也没注册 VIEW（那会让本应用混进相册的播放器选择列表）。
+ */
+internal fun isVideoShare(action: String?, mimeType: String?): Boolean {
+    if (action != Intent.ACTION_SEND) return false
+    return mimeType?.startsWith("video/") == true
 }

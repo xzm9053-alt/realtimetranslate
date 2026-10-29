@@ -1,5 +1,6 @@
 package com.xzm.realtimetranslate.ui.subtitle
 
+import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -103,6 +104,7 @@ fun SubtitleScreen(
     onOpenSettings: () -> Unit = {},
     onToggleHub: (Boolean) -> Unit = {},
     staticLaunch: StaticModeTarget? = null,
+    pendingVideoUri: Uri? = null,
     onStaticLaunchConsumed: () -> Unit = {},
 ) {
     var showMore by rememberSaveable { mutableStateOf(false) }
@@ -122,6 +124,7 @@ fun SubtitleScreen(
                 onOpenSettings()
             },
             initialStaticTarget = pendingStaticTarget ?: staticLaunch,
+            initialVideoUri = pendingVideoUri,
             onInitialTargetConsumed = {
                 pendingStaticTarget = null
                 onStaticLaunchConsumed()
