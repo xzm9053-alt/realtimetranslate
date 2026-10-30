@@ -85,36 +85,34 @@ fun LogViewerScreen(
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        PageTitle(title = stringResource(R.string.settings_logs_title))
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            TextButton(
-                text = stringResource(R.string.settings_logs_back),
-                onClick = onBack,
-            )
-            TextButton(
-                text = stringResource(R.string.settings_logs_refresh),
-                onClick = { reloads++ },
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = stringResource(R.string.settings_logs_errors_only),
-                    fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                )
-                Switch(
-                    checked = errorsOnly,
-                    onCheckedChange = { errorsOnly = it },
-                    modifier = Modifier.padding(start = 8.dp),
-                )
-            }
-        }
+        SubScreenHeader(
+            title = stringResource(R.string.settings_logs_title),
+            subtitle = "实时诊断记录与系统事件",
+            onBack = onBack,
+            trailingContent = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(
+                        text = "刷新",
+                        onClick = { reloads++ },
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(start = 4.dp),
+                    ) {
+                        Text(
+                            text = "仅错误",
+                            fontSize = 12.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                        Switch(
+                            checked = errorsOnly,
+                            onCheckedChange = { errorsOnly = it },
+                            modifier = Modifier.padding(start = 6.dp),
+                        )
+                    }
+                }
+            },
+        )
 
         when {
             state is LogState.Failed -> CenteredNotice(stringResource(R.string.settings_logs_read_failed))

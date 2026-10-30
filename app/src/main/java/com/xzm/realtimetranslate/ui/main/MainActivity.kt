@@ -564,6 +564,9 @@ class MainActivity : ComponentActivity() {
                                 onResetAppearance = {
                                     scope.launch { settingsVm.resetSubtitleAppearance() }
                                 },
+                                onResetOcrAppearance = {
+                                    scope.launch { settingsVm.resetOcrAppearance() }
+                                },
                                 onOpenSettings = {
                                     scope.launch { pagerState.animateScrollToPage(1) }
                                 },

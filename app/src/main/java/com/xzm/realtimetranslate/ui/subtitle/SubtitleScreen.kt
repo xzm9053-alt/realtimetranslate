@@ -4,6 +4,20 @@ import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -42,6 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -101,6 +116,7 @@ fun SubtitleScreen(
     canDrawOverlays: Boolean,
     onUpdateSettings: ((UserSettings) -> UserSettings) -> Unit = {},
     onResetAppearance: () -> Unit = {},
+    onResetOcrAppearance: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onToggleHub: (Boolean) -> Unit = {},
     staticLaunch: StaticModeTarget? = null,
@@ -117,23 +133,9 @@ fun SubtitleScreen(
         }
     }
 
-    val currentTool = activeTool
-    if (currentTool != null) {
-        MoreScreen(
-            target = currentTool,
-            onBack = {
-                activeTool = null
-                onStaticLaunchConsumed()
-            },
-            onOpenSettings = {
-                activeTool = null
-                onStaticLaunchConsumed()
-                onOpenSettings()
-            },
-            initialVideoUri = pendingVideoUri,
-            modifier = Modifier.fillMaxSize(),
-        )
-        return
+    BackHandler(enabled = activeTool != null) {
+        activeTool = null
+        onStaticLaunchConsumed()
     }
 
     val running = session.status == SessionBus.Status.Running ||
@@ -156,13 +158,45 @@ fun SubtitleScreen(
         SessionBus.Status.Stopped -> stringResource(R.string.status_stopped) to StatusTone.Warn
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
+    AnimatedContent(
+        targetState = activeTool,
+        transitionSpec = {
+            if (targetState != null) {
+                (slideInHorizontally(tween(260)) { it } + fadeIn(tween(260))).togetherWith(
+                    slideOutHorizontally(tween(260)) { -it / 3 } + fadeOut(tween(200)),
+                )
+            } else {
+                (slideInHorizontally(tween(260)) { -it / 3 } + fadeIn(tween(260))).togetherWith(
+                    slideOutHorizontally(tween(260)) { it } + fadeOut(tween(200)),
+                )
+            }
+        },
+        modifier = modifier.fillMaxSize(),
+        label = "ToolTransition",
+    ) { currentTool ->
+        if (currentTool != null) {
+            MoreScreen(
+                target = currentTool,
+                onBack = {
+                    activeTool = null
+                    onStaticLaunchConsumed()
+                },
+                onOpenSettings = {
+                    activeTool = null
+                    onStaticLaunchConsumed()
+                    onOpenSettings()
+                },
+                initialVideoUri = pendingVideoUri,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
         // 顶部 Header + 悬浮球快捷状态胶囊
         Row(
             modifier = Modifier
@@ -186,10 +220,25 @@ fun SubtitleScreen(
             }
 
             // 悬浮球开关状态芯片
+            val hubBgColor by animateColorAsState(
+                targetValue = if (settings.hubEnabled) Booth.Accent.copy(alpha = 0.12f) else MiuixTheme.colorScheme.surfaceVariant,
+                animationSpec = tween(220),
+                label = "hubBgColor",
+            )
+            val hubDotColor by animateColorAsState(
+                targetValue = if (settings.hubEnabled) Color(0xFF10B981) else Color(0xFF94A3B8),
+                animationSpec = tween(220),
+                label = "hubDotColor",
+            )
+            val hubTextColor by animateColorAsState(
+                targetValue = if (settings.hubEnabled) Booth.Accent else MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                animationSpec = tween(220),
+                label = "hubTextColor",
+            )
             Row(
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
-                    .background(if (settings.hubEnabled) Booth.Accent.copy(alpha = 0.12f) else MiuixTheme.colorScheme.surfaceVariant)
+                    .background(hubBgColor)
                     .clickable { onToggleHub(!settings.hubEnabled) }
                     .padding(horizontal = 12.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -199,18 +248,18 @@ fun SubtitleScreen(
                     modifier = Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(if (settings.hubEnabled) Color(0xFF10B981) else Color(0xFF94A3B8)),
+                        .background(hubDotColor),
                 )
                 Text(
                     text = if (settings.hubEnabled) "悬浮球已开" else "悬浮球已关",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (settings.hubEnabled) Booth.Accent else MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    color = hubTextColor,
                 )
             }
         }
 
-        // 顶部分段大胶囊：声音同传 vs 屏幕翻译
+        // 顶部分段大胶囊：声音同传 vs 屏幕取词
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -221,11 +270,21 @@ fun SubtitleScreen(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             val isAudio = selectedMode == 0
+            val audioBgColor by animateColorAsState(
+                targetValue = if (isAudio) MiuixTheme.colorScheme.surface else Color.Transparent,
+                animationSpec = tween(200),
+                label = "audioBgColor",
+            )
+            val audioTextColor by animateColorAsState(
+                targetValue = if (isAudio) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                animationSpec = tween(200),
+                label = "audioTextColor",
+            )
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(11.dp))
-                    .background(if (isAudio) MiuixTheme.colorScheme.surface else Color.Transparent)
+                    .background(audioBgColor)
                     .clickable { selectedMode = 0 }
                     .padding(vertical = 10.dp),
                 contentAlignment = Alignment.Center,
@@ -233,16 +292,26 @@ fun SubtitleScreen(
                 Text(
                     text = "🎙️ 声音同传",
                     fontWeight = if (isAudio) FontWeight.Bold else FontWeight.Medium,
-                    color = if (isAudio) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    color = audioTextColor,
                     fontSize = 14.5.sp,
                 )
             }
             val isScreen = selectedMode == 1
+            val screenBgColor by animateColorAsState(
+                targetValue = if (isScreen) MiuixTheme.colorScheme.surface else Color.Transparent,
+                animationSpec = tween(200),
+                label = "screenBgColor",
+            )
+            val screenTextColor by animateColorAsState(
+                targetValue = if (isScreen) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                animationSpec = tween(200),
+                label = "screenTextColor",
+            )
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(11.dp))
-                    .background(if (isScreen) MiuixTheme.colorScheme.surface else Color.Transparent)
+                    .background(screenBgColor)
                     .clickable { selectedMode = 1 }
                     .padding(vertical = 10.dp),
                 contentAlignment = Alignment.Center,
@@ -250,7 +319,7 @@ fun SubtitleScreen(
                 Text(
                     text = "🔍 屏幕取词",
                     fontWeight = if (isScreen) FontWeight.Bold else FontWeight.Medium,
-                    color = if (isScreen) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    color = screenTextColor,
                     fontSize = 14.5.sp,
                 )
             }
@@ -347,218 +416,238 @@ fun SubtitleScreen(
             }
         }
 
-        if (selectedMode == 0) {
-            // ================= 声音同传面板 =================
-            SectionCard {
-                Column(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = "声音来源",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        )
-                        StatusPill(label = statusLabel, tone = tone)
-                    }
-
-                    // 声音来源横向胶囊切换器
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        val isLegacyAndroid = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
-                        val mediaLabel = if (isLegacyAndroid) "媒体音(需安卓10+)" else "📻 媒体音"
-                        SourceSegmentChip(
-                            label = mediaLabel,
-                            selected = settings.audioSourceMode == AudioSourceMode.MEDIA,
-                            onClick = {
-                                if (isLegacyAndroid) {
-                                    Toast.makeText(
-                                        context,
-                                        R.string.audio_media_unsupported_on_legacy_android,
-                                        Toast.LENGTH_LONG,
-                                    ).show()
-                                    onAudioSource(AudioSourceMode.MIC)
-                                } else {
-                                    onAudioSource(AudioSourceMode.MEDIA)
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                        )
-                        SourceSegmentChip(
-                            label = "🎙️ 麦克风",
-                            selected = settings.audioSourceMode == AudioSourceMode.MIC,
-                            onClick = { onAudioSource(AudioSourceMode.MIC) },
-                            modifier = Modifier.weight(1f),
-                        )
-                        val bothLabel = if (isLegacyAndroid) "混音(需10+)" else "混音"
-                        SourceSegmentChip(
-                            label = bothLabel,
-                            selected = settings.audioSourceMode == AudioSourceMode.MEDIA_AND_MIC,
-                            onClick = {
-                                if (isLegacyAndroid) {
-                                    Toast.makeText(
-                                        context,
-                                        R.string.audio_media_unsupported_on_legacy_android,
-                                        Toast.LENGTH_LONG,
-                                    ).show()
-                                    onAudioSource(AudioSourceMode.MIC)
-                                } else {
-                                    onAudioSource(AudioSourceMode.MEDIA_AND_MIC)
-                                }
-                            },
-                            modifier = Modifier.weight(0.9f),
-                        )
-                    }
-
-                    if (running) {
-                        AudioLevelRow(level = session.audioLevel, state = session.captureState)
-                    }
-
-                    if (session.message.isNotBlank()) {
-                        Text(
-                            text = session.message,
-                            fontSize = 12.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceSecondary,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
-
-            // 大发射按钮（声音同传）
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 2.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Button(
-                    onClick = { if (running) onStop() else onStart() },
-                    enabled = !ocrRunning,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    colors = if (running) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColorsPrimary(),
-                ) {
-                    Text(
-                        text = if (running) "⏹ 停止声音同传" else if (settings.voiceRecognizeOnly) "▶ 开始实时听写（仅识别）" else "▶ 开始同传翻译",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.5.sp,
+        AnimatedContent(
+            targetState = selectedMode,
+            transitionSpec = {
+                if (targetState > initialState) {
+                    (slideInHorizontally(tween(240)) { it / 3 } + fadeIn(tween(240))).togetherWith(
+                        slideOutHorizontally(tween(200)) { -it / 3 } + fadeOut(tween(180)),
+                    )
+                } else {
+                    (slideInHorizontally(tween(240)) { -it / 3 } + fadeIn(tween(240))).togetherWith(
+                        slideOutHorizontally(tween(200)) { it / 3 } + fadeOut(tween(180)),
                     )
                 }
+            },
+            label = "ModeSwitchAnimation",
+        ) { mode ->
+            if (mode == 0) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // ================= 声音同传面板 =================
+                    SectionCard {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "声音来源",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                )
+                                StatusPill(label = statusLabel, tone = tone)
+                            }
 
-                if (ocrRunning) {
-                    Text(
-                        text = stringResource(R.string.subtitle_audio_busy),
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(horizontal = 4.dp),
-                    )
-                }
+                            // 声音来源横向胶囊切换器
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                val isLegacyAndroid = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
+                                val mediaLabel = if (isLegacyAndroid) "媒体音(需安卓10+)" else "📻 媒体音"
+                                SourceSegmentChip(
+                                    label = mediaLabel,
+                                    selected = settings.audioSourceMode == AudioSourceMode.MEDIA,
+                                    onClick = {
+                                        if (isLegacyAndroid) {
+                                            Toast.makeText(
+                                                context,
+                                                R.string.audio_media_unsupported_on_legacy_android,
+                                                Toast.LENGTH_LONG,
+                                            ).show()
+                                            onAudioSource(AudioSourceMode.MIC)
+                                        } else {
+                                            onAudioSource(AudioSourceMode.MEDIA)
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                )
+                                SourceSegmentChip(
+                                    label = "🎙️ 麦克风",
+                                    selected = settings.audioSourceMode == AudioSourceMode.MIC,
+                                    onClick = { onAudioSource(AudioSourceMode.MIC) },
+                                    modifier = Modifier.weight(1f),
+                                )
+                                val bothLabel = if (isLegacyAndroid) "混音(需10+)" else "混音"
+                                SourceSegmentChip(
+                                    label = bothLabel,
+                                    selected = settings.audioSourceMode == AudioSourceMode.MEDIA_AND_MIC,
+                                    onClick = {
+                                        if (isLegacyAndroid) {
+                                            Toast.makeText(
+                                                context,
+                                                R.string.audio_media_unsupported_on_legacy_android,
+                                                Toast.LENGTH_LONG,
+                                            ).show()
+                                            onAudioSource(AudioSourceMode.MIC)
+                                        } else {
+                                            onAudioSource(AudioSourceMode.MEDIA_AND_MIC)
+                                        }
+                                    },
+                                    modifier = Modifier.weight(0.9f),
+                                )
+                            }
 
-                if (!canDrawOverlays) {
-                    Text(
-                        text = stringResource(R.string.subtitle_need_overlay),
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(horizontal = 4.dp),
-                    )
-                }
-            }
-        } else {
-            // ================= 屏幕取词面板 =================
-            SectionCard {
-                Column(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = "识别语种与选区",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        )
-                        StatusPill(
-                            label = if (ocrRunning) "取词中" else "未启动",
-                            tone = if (ocrRunning) StatusTone.Ok else StatusTone.Idle,
-                        )
-                    }
+                            if (running) {
+                                AudioLevelRow(level = session.audioLevel, state = session.captureState)
+                            }
 
-                    OcrScriptRow(
-                        selected = settings.ocrScript,
-                        onSelect = { script -> onUpdateSettings { it.copy(ocrScript = script) } },
-                    )
-
-                    SettingSwitchRow(
-                        title = stringResource(R.string.ocr_outline_enabled),
-                        summary = stringResource(R.string.ocr_outline_enabled_summary),
-                        checked = settings.ocrRegionOutlineEnabled,
-                        onCheckedChange = { v ->
-                            onUpdateSettings { it.copy(ocrRegionOutlineEnabled = v) }
-                        },
-                    )
-
-                    if (ocrSession.message.isNotBlank()) {
-                        Text(
-                            text = ocrSession.message,
-                            fontSize = 12.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceSecondary,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
-
-            // 大发射按钮（屏幕取词）
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 2.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Button(
-                    onClick = {
-                        if (ocrRunning) {
-                            onOcrStop()
-                        } else {
-                            onOcrStart()
+                            if (session.message.isNotBlank()) {
+                                Text(
+                                    text = session.message,
+                                    fontSize = 12.sp,
+                                    color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
-                    },
-                    enabled = !running,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    colors = if (ocrRunning) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColorsPrimary(),
-                ) {
-                    Text(
-                        text = if (ocrRunning) "⏹ 停止屏幕取词" else "▶ 开始画框取词",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.5.sp,
-                    )
-                }
+                    }
 
-                if (running) {
-                    Text(
-                        text = stringResource(R.string.subtitle_ocr_busy),
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(horizontal = 4.dp),
-                    )
+                    // 大发射按钮（声音同传）
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 2.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Button(
+                            onClick = { if (running) onStop() else onStart() },
+                            enabled = !ocrRunning,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp),
+                            colors = if (running) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColorsPrimary(),
+                        ) {
+                            Text(
+                                text = if (running) "⏹ 停止声音同传" else if (settings.voiceRecognizeOnly) "▶ 开始实时听写（仅识别）" else "▶ 开始同传翻译",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.5.sp,
+                            )
+                        }
+
+                        if (ocrRunning) {
+                            Text(
+                                text = stringResource(R.string.subtitle_audio_busy),
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(horizontal = 4.dp),
+                            )
+                        }
+
+                        if (!canDrawOverlays) {
+                            Text(
+                                text = stringResource(R.string.subtitle_need_overlay),
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(horizontal = 4.dp),
+                            )
+                        }
+                    }
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // ================= 屏幕取词面板 =================
+                    SectionCard {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "识别语种与选区",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                )
+                                StatusPill(
+                                    label = if (ocrRunning) "取词中" else "未启动",
+                                    tone = if (ocrRunning) StatusTone.Ok else StatusTone.Idle,
+                                )
+                            }
+
+                            OcrScriptRow(
+                                selected = settings.ocrScript,
+                                onSelect = { script -> onUpdateSettings { it.copy(ocrScript = script) } },
+                            )
+
+                            SettingSwitchRow(
+                                title = stringResource(R.string.ocr_outline_enabled),
+                                summary = stringResource(R.string.ocr_outline_enabled_summary),
+                                checked = settings.ocrRegionOutlineEnabled,
+                                onCheckedChange = { v ->
+                                    onUpdateSettings { it.copy(ocrRegionOutlineEnabled = v) }
+                                },
+                            )
+
+                            if (ocrSession.message.isNotBlank()) {
+                                Text(
+                                    text = ocrSession.message,
+                                    fontSize = 12.sp,
+                                    color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+
+                    // 大发射按钮（屏幕取词）
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 2.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Button(
+                            onClick = {
+                                if (ocrRunning) {
+                                    onOcrStop()
+                                } else {
+                                    onOcrStart()
+                                }
+                            },
+                            enabled = !running,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp),
+                            colors = if (ocrRunning) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColorsPrimary(),
+                        ) {
+                            Text(
+                                text = if (ocrRunning) "⏹ 停止屏幕取词" else "▶ 开始画框取词",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.5.sp,
+                            )
+                        }
+
+                        if (running) {
+                            Text(
+                                text = stringResource(R.string.subtitle_ocr_busy),
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(horizontal = 4.dp),
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -566,7 +655,11 @@ fun SubtitleScreen(
         // 实时预览卡片（当存在识别或翻译文本时显现）
         val hasPreview = (selectedMode == 0 && (session.outputPreview.isNotBlank() || session.inputPreview.isNotBlank())) ||
             (selectedMode == 1 && (ocrSession.outputPreview.isNotBlank() || ocrSession.inputPreview.isNotBlank()))
-        if (hasPreview) {
+        AnimatedVisibility(
+            visible = hasPreview,
+            enter = expandVertically(tween(220)) + fadeIn(tween(200)),
+            exit = shrinkVertically(tween(200)) + fadeOut(tween(160)),
+        ) {
             SectionCard {
                 Column(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -612,7 +705,8 @@ fun SubtitleScreen(
             onOpenText = { activeTool = StaticModeTarget.TEXT },
         )
 
-        // 字幕外观个性化设置（折叠收纳抽屉）
+        // 外观个性化设置（折叠收纳抽屉，根据顶部所选模式自适应）
+        val isAudio = selectedMode == 0
         SectionCard {
             Column(
                 modifier = Modifier
@@ -634,231 +728,470 @@ fun SubtitleScreen(
                         Text(text = "🎨", fontSize = 16.sp)
                         Column {
                             Text(
-                                text = "字幕与屏幕外观微调",
+                                text = if (isAudio) "字幕外观微调" else "取词框与气泡微调",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MiuixTheme.colorScheme.onSurface,
                             )
                             Text(
-                                text = if (appearanceExpanded) "点击折叠设置面板" else "字号、双语排版、文字颜色、背景透明度",
+                                text = if (appearanceExpanded) {
+                                    "点击折叠设置面板"
+                                } else if (isAudio) {
+                                    "字号、双语排版、文字颜色、背景透明度"
+                                } else {
+                                    "选区框颜色、明显程度、气泡字号与颜色"
+                                },
                                 fontSize = 11.5.sp,
                                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                             )
                         }
                     }
+                    val appearanceArrowRotation by animateFloatAsState(
+                        targetValue = if (appearanceExpanded) 180f else 0f,
+                        animationSpec = tween(220),
+                        label = "appearanceArrowRotation",
+                    )
                     Text(
-                        text = if (appearanceExpanded) "▲" else "▼",
+                        text = "▼",
+                        modifier = Modifier.rotate(appearanceArrowRotation),
                         fontSize = 12.sp,
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     )
                 }
 
-                if (appearanceExpanded) {
-                    Spacer(modifier = Modifier.height(14.dp))
+                AnimatedVisibility(
+                    visible = appearanceExpanded,
+                    enter = expandVertically(
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioLowBouncy,
+                            stiffness = Spring.StiffnessMediumLow,
+                        ),
+                    ) + fadeIn(tween(200)),
+                    exit = shrinkVertically(tween(200)) + fadeOut(tween(150)),
+                ) {
+                    Column {
+                        Spacer(modifier = Modifier.height(14.dp))
 
-                    Text(
-                        text = "实时效果预览",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(
-                                Color(
-                                    red = 0.08f,
-                                    green = 0.08f,
-                                    blue = 0.10f,
-                                    alpha = settings.backgroundAlpha.coerceIn(0.1f, 1f),
-                                ),
-                            )
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                    ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        Text(
+                            text = "实时效果预览",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        if (isAudio) {
+                        // ================= 声音同传字幕外观 =================
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    Color(
+                                        red = 0.08f,
+                                        green = 0.08f,
+                                        blue = 0.10f,
+                                        alpha = settings.backgroundAlpha.coerceIn(0.1f, 1f),
+                                    ),
+                                )
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.CenterHorizontally)
-                                    .width(36.dp)
-                                    .height(4.dp)
-                                    .clip(RoundedCornerShape(2.dp))
-                                    .background(Color.White.copy(alpha = 0.35f)),
-                            )
-                            when (settings.displayMode) {
-                                SubtitleDisplayMode.BOTH -> {
-                                    Text(
-                                        text = "Live transcription demo text",
-                                        fontSize = settings.fontSizeSp.sp,
-                                        color = Color(settings.sourceTextColor.toInt()),
-                                        lineHeight = (settings.fontSizeSp * 1.35f).sp,
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(1.dp)
-                                            .background(Color.White.copy(alpha = 0.18f)),
-                                    )
-                                    Text(
-                                        text = "实时字幕预览示例",
-                                        fontSize = settings.fontSizeSp.sp,
-                                        color = Color(settings.translationTextColor.toInt()),
-                                        fontWeight = FontWeight.SemiBold,
-                                        lineHeight = (settings.fontSizeSp * 1.35f).sp,
-                                    )
-                                }
-                                SubtitleDisplayMode.SOURCE -> {
-                                    Text(
-                                        text = "Live transcription demo text",
-                                        fontSize = settings.fontSizeSp.sp,
-                                        color = Color(settings.sourceTextColor.toInt()),
-                                        lineHeight = (settings.fontSizeSp * 1.35f).sp,
-                                    )
-                                }
-                                SubtitleDisplayMode.TRANSLATION -> {
-                                    Text(
-                                        text = "实时字幕预览示例",
-                                        fontSize = settings.fontSizeSp.sp,
-                                        color = Color(settings.translationTextColor.toInt()),
-                                        fontWeight = FontWeight.SemiBold,
-                                        lineHeight = (settings.fontSizeSp * 1.35f).sp,
-                                    )
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.CenterHorizontally)
+                                        .width(36.dp)
+                                        .height(4.dp)
+                                        .clip(RoundedCornerShape(2.dp))
+                                        .background(Color.White.copy(alpha = 0.35f)),
+                                )
+                                when (settings.displayMode) {
+                                    SubtitleDisplayMode.BOTH -> {
+                                        Text(
+                                            text = "Live transcription demo text",
+                                            fontSize = settings.fontSizeSp.sp,
+                                            color = Color(settings.sourceTextColor.toInt()),
+                                            lineHeight = (settings.fontSizeSp * 1.35f).sp,
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(1.dp)
+                                                .background(Color.White.copy(alpha = 0.18f)),
+                                        )
+                                        Text(
+                                            text = "实时字幕预览示例",
+                                            fontSize = settings.fontSizeSp.sp,
+                                            color = Color(settings.translationTextColor.toInt()),
+                                            fontWeight = FontWeight.SemiBold,
+                                            lineHeight = (settings.fontSizeSp * 1.35f).sp,
+                                        )
+                                    }
+                                    SubtitleDisplayMode.SOURCE -> {
+                                        Text(
+                                            text = "Live transcription demo text",
+                                            fontSize = settings.fontSizeSp.sp,
+                                            color = Color(settings.sourceTextColor.toInt()),
+                                            lineHeight = (settings.fontSizeSp * 1.35f).sp,
+                                        )
+                                    }
+                                    SubtitleDisplayMode.TRANSLATION -> {
+                                        Text(
+                                            text = "实时字幕预览示例",
+                                            fontSize = settings.fontSizeSp.sp,
+                                            color = Color(settings.translationTextColor.toInt()),
+                                            fontWeight = FontWeight.SemiBold,
+                                            lineHeight = (settings.fontSizeSp * 1.35f).sp,
+                                        )
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = stringResource(R.string.settings_font_size, settings.fontSizeSp.roundToInt()),
-                        fontSize = 13.sp,
-                    )
-                    Slider(
-                        value = settings.fontSizeSp,
-                        onValueChange = { s -> onUpdateSettings { it.copy(fontSizeSp = s.roundToInt().toFloat()) } },
-                        valueRange = 12f..32f,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Text(
-                        text = stringResource(
-                            R.string.settings_bg_alpha,
-                            (settings.backgroundAlpha * 100).toInt(),
-                        ),
-                        fontSize = 13.sp,
-                    )
-                    Slider(
-                        value = settings.backgroundAlpha,
-                        onValueChange = { a -> onUpdateSettings { it.copy(backgroundAlpha = a) } },
-                        valueRange = 0.1f..0.95f,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
+                        Spacer(modifier = Modifier.height(10.dp))
                         Text(
-                            text = "译文分段",
+                            text = stringResource(R.string.settings_font_size, settings.fontSizeSp.roundToInt()),
+                            fontSize = 13.sp,
+                        )
+                        Slider(
+                            value = settings.fontSizeSp,
+                            onValueChange = { s -> onUpdateSettings { it.copy(fontSizeSp = s.roundToInt().toFloat()) } },
+                            valueRange = 12f..32f,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.settings_bg_alpha,
+                                (settings.backgroundAlpha * 100).toInt(),
+                            ),
+                            fontSize = 13.sp,
+                        )
+                        Slider(
+                            value = settings.backgroundAlpha,
+                            onValueChange = { a -> onUpdateSettings { it.copy(backgroundAlpha = a) } },
+                            valueRange = 0.1f..0.95f,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "译文分段",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                            )
+                            Text(
+                                text = when (settings.sentencesPerParagraph) {
+                                    0 -> "不分段（连续输出）"
+                                    1 -> "每句一行"
+                                    else -> "每 ${settings.sentencesPerParagraph} 句一行"
+                                },
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            )
+                        }
+                        Slider(
+                            value = settings.sentencesPerParagraph.toFloat().coerceIn(
+                                0f,
+                                UserSettings.Defaults.SENTENCES_PER_PARAGRAPH_MAX.toFloat(),
+                            ),
+                            onValueChange = { v ->
+                                onUpdateSettings {
+                                    it.copy(
+                                        sentencesPerParagraph = v.roundToInt().coerceIn(
+                                            0,
+                                            UserSettings.Defaults.SENTENCES_PER_PARAGRAPH_MAX,
+                                        ),
+                                    )
+                                }
+                            },
+                            valueRange = 0f..UserSettings.Defaults.SENTENCES_PER_PARAGRAPH_MAX.toFloat(),
+                            steps = UserSettings.Defaults.SENTENCES_PER_PARAGRAPH_MAX - 1,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(R.string.settings_bilingual),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
                         )
-                        Text(
-                            text = when (settings.sentencesPerParagraph) {
-                                0 -> "不分段（连续输出）"
-                                1 -> "每句一行"
-                                else -> "每 ${settings.sentencesPerParagraph} 句一行"
-                            },
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        OptionRow(
+                            label = stringResource(R.string.display_mode_both),
+                            summary = stringResource(R.string.display_mode_both_summary),
+                            selected = settings.displayMode == SubtitleDisplayMode.BOTH,
+                            onClick = { onUpdateSettings { it.copy(displayMode = SubtitleDisplayMode.BOTH) } },
+                            horizontalPadding = 0.dp,
                         )
-                    }
-                    Slider(
-                        value = settings.sentencesPerParagraph.toFloat().coerceIn(
-                            0f,
-                            UserSettings.Defaults.SENTENCES_PER_PARAGRAPH_MAX.toFloat(),
-                        ),
-                        onValueChange = { v ->
-                            onUpdateSettings {
-                                it.copy(
-                                    sentencesPerParagraph = v.roundToInt().coerceIn(
-                                        0,
-                                        UserSettings.Defaults.SENTENCES_PER_PARAGRAPH_MAX,
-                                    ),
+                        OptionRow(
+                            label = stringResource(R.string.display_mode_source),
+                            summary = stringResource(R.string.display_mode_source_summary),
+                            selected = settings.displayMode == SubtitleDisplayMode.SOURCE,
+                            onClick = { onUpdateSettings { it.copy(displayMode = SubtitleDisplayMode.SOURCE) } },
+                            horizontalPadding = 0.dp,
+                        )
+                        OptionRow(
+                            label = stringResource(R.string.display_mode_translation),
+                            summary = stringResource(R.string.display_mode_translation_summary),
+                            selected = settings.displayMode == SubtitleDisplayMode.TRANSLATION,
+                            onClick = {
+                                onUpdateSettings { it.copy(displayMode = SubtitleDisplayMode.TRANSLATION) }
+                            },
+                            horizontalPadding = 0.dp,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(R.string.settings_source_color),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        ColorSwatchRow(
+                            selected = settings.sourceTextColor,
+                            onSelect = { c -> onUpdateSettings { it.copy(sourceTextColor = c) } },
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(R.string.settings_translation_color),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        ColorSwatchRow(
+                            selected = settings.translationTextColor,
+                            onSelect = { c -> onUpdateSettings { it.copy(translationTextColor = c) } },
+                        )
+                        TextButton(
+                            text = stringResource(R.string.settings_reset_appearance),
+                            onClick = onResetAppearance,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp),
+                        )
+                    } else {
+                        // ================= 屏幕取词框与气泡外观 =================
+                        val outlineColor = Color(settings.ocrRegionOutlineColor.toInt())
+                        val outlineAlpha = if (settings.ocrRegionOutlineEnabled) {
+                            settings.ocrRegionOutlineAlpha.coerceIn(0.1f, 1f)
+                        } else {
+                            0.15f
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF14151B))
+                                .padding(14.dp),
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                // 模拟屏幕取词区域框（按用户配置的边框颜色与透明度）
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(68.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(
+                                            outlineColor.copy(
+                                                alpha = if (settings.ocrRegionOutlineEnabled) {
+                                                    (outlineAlpha * 0.12f).coerceIn(0.02f, 0.3f)
+                                                } else 0.02f,
+                                            ),
+                                        )
+                                        .border(
+                                            width = if (settings.ocrRegionOutlineEnabled) 2.dp else 1.dp,
+                                            color = outlineColor.copy(alpha = outlineAlpha),
+                                            shape = RoundedCornerShape(8.dp),
+                                        )
+                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(7.dp)
+                                                    .clip(CircleShape)
+                                                    .background(
+                                                        if (settings.ocrRegionOutlineEnabled) outlineColor else Color.Gray,
+                                                    ),
+                                            )
+                                            Text(
+                                                text = if (settings.ocrRegionOutlineEnabled) {
+                                                    "正在取词区域（取词框）"
+                                                } else {
+                                                    "取词选区框已隐藏"
+                                                },
+                                                fontSize = 11.5.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = if (settings.ocrRegionOutlineEnabled) {
+                                                    outlineColor
+                                                } else {
+                                                    MiuixTheme.colorScheme.onSurfaceVariantSummary
+                                                },
+                                            )
+                                        }
+                                        Text(
+                                            text = "拖动四角可调",
+                                            fontSize = 10.sp,
+                                            color = Color.White.copy(alpha = 0.4f),
+                                        )
+                                    }
+                                }
+
+                                // 模拟取词译文气泡（模拟悬浮球旁弹出的译文框）
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(0.9f)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color(0xEC14141C))
+                                        .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(10.dp))
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "屏幕取词实时译文预览效果",
+                                                fontSize = settings.fontSizeSp.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = Color(settings.translationTextColor.toInt()),
+                                                lineHeight = (settings.fontSizeSp * 1.35f).sp,
+                                            )
+                                        }
+                                        Text(
+                                            text = "✕",
+                                            fontSize = 11.sp,
+                                            color = Color.White.copy(alpha = 0.5f),
+                                            modifier = Modifier.padding(start = 6.dp),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        SettingSwitchRow(
+                            title = stringResource(R.string.ocr_outline_enabled),
+                            summary = stringResource(R.string.ocr_outline_enabled_summary),
+                            checked = settings.ocrRegionOutlineEnabled,
+                            onCheckedChange = { v ->
+                                onUpdateSettings { it.copy(ocrRegionOutlineEnabled = v) }
+                            },
+                        )
+
+                        if (settings.ocrRegionOutlineEnabled) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = stringResource(R.string.ocr_outline_color),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            ColorSwatchRow(
+                                selected = settings.ocrRegionOutlineColor,
+                                onSelect = { c -> onUpdateSettings { it.copy(ocrRegionOutlineColor = c) } },
+                            )
+
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "选区框明显程度",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                                Text(
+                                    text = "${(settings.ocrRegionOutlineAlpha * 100).toInt()}%",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                                 )
                             }
-                        },
-                        valueRange = 0f..UserSettings.Defaults.SENTENCES_PER_PARAGRAPH_MAX.toFloat(),
-                        steps = UserSettings.Defaults.SENTENCES_PER_PARAGRAPH_MAX - 1,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                            Slider(
+                                value = settings.ocrRegionOutlineAlpha,
+                                onValueChange = { v ->
+                                    onUpdateSettings { it.copy(ocrRegionOutlineAlpha = v) }
+                                },
+                                valueRange = 0.1f..1f,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
 
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(R.string.settings_bilingual),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    OptionRow(
-                        label = stringResource(R.string.display_mode_both),
-                        summary = stringResource(R.string.display_mode_both_summary),
-                        selected = settings.displayMode == SubtitleDisplayMode.BOTH,
-                        onClick = { onUpdateSettings { it.copy(displayMode = SubtitleDisplayMode.BOTH) } },
-                        horizontalPadding = 0.dp,
-                    )
-                    OptionRow(
-                        label = stringResource(R.string.display_mode_source),
-                        summary = stringResource(R.string.display_mode_source_summary),
-                        selected = settings.displayMode == SubtitleDisplayMode.SOURCE,
-                        onClick = { onUpdateSettings { it.copy(displayMode = SubtitleDisplayMode.SOURCE) } },
-                        horizontalPadding = 0.dp,
-                    )
-                    OptionRow(
-                        label = stringResource(R.string.display_mode_translation),
-                        summary = stringResource(R.string.display_mode_translation_summary),
-                        selected = settings.displayMode == SubtitleDisplayMode.TRANSLATION,
-                        onClick = {
-                            onUpdateSettings { it.copy(displayMode = SubtitleDisplayMode.TRANSLATION) }
-                        },
-                        horizontalPadding = 0.dp,
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(R.string.settings_source_color),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    ColorSwatchRow(
-                        selected = settings.sourceTextColor,
-                        onSelect = { c -> onUpdateSettings { it.copy(sourceTextColor = c) } },
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(R.string.settings_translation_color),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    ColorSwatchRow(
-                        selected = settings.translationTextColor,
-                        onSelect = { c -> onUpdateSettings { it.copy(translationTextColor = c) } },
-                    )
-                    TextButton(
-                        text = stringResource(R.string.settings_reset_appearance),
-                        onClick = onResetAppearance,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
-                    )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "气泡译文字号",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                            )
+                            Text(
+                                text = "${settings.fontSizeSp.roundToInt()} sp",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            )
+                        }
+                        Slider(
+                            value = settings.fontSizeSp,
+                            onValueChange = { s -> onUpdateSettings { it.copy(fontSizeSp = s.roundToInt().toFloat()) } },
+                            valueRange = 12f..32f,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "气泡译文字体颜色",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        ColorSwatchRow(
+                            selected = settings.translationTextColor,
+                            onSelect = { c -> onUpdateSettings { it.copy(translationTextColor = c) } },
+                        )
+
+                        TextButton(
+                            text = "重置为默认取词外观",
+                            onClick = onResetOcrAppearance,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp),
+                        )
+                    }
                 }
             }
         }
+    }
 
         Spacer(modifier = Modifier.height(24.dp))
+        }
     }
+}
 
     val currentPicker = picker
     if (currentPicker != null) {
@@ -1036,10 +1369,20 @@ private fun SourceSegmentChip(
     modifier: Modifier = Modifier,
 ) {
     val scheme = MiuixTheme.colorScheme
+    val animatedBg by animateColorAsState(
+        targetValue = if (selected) Booth.Accent.copy(alpha = 0.15f) else scheme.surfaceVariant,
+        animationSpec = tween(200),
+        label = "chipBg",
+    )
+    val animatedText by animateColorAsState(
+        targetValue = if (selected) Booth.Accent else scheme.onSurface,
+        animationSpec = tween(200),
+        label = "chipText",
+    )
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(if (selected) Booth.Accent.copy(alpha = 0.15f) else scheme.surfaceVariant)
+            .background(animatedBg)
             .clickable(onClick = onClick)
             .padding(vertical = 10.dp, horizontal = 4.dp),
         contentAlignment = Alignment.Center,
@@ -1048,7 +1391,7 @@ private fun SourceSegmentChip(
             text = label,
             fontSize = 12.5.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            color = if (selected) Booth.Accent else scheme.onSurface,
+            color = animatedText,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -1065,6 +1408,16 @@ private fun AudioLevelRow(level: Float, state: CaptureState) {
         CaptureState.DIGITAL_SILENCE -> R.string.audio_level_digital_silence to Color(0xFFFF5C5C)
         CaptureState.STALLED -> R.string.audio_level_stalled to Color(0xFFFF5C5C)
     }
+    val animatedLevel by animateFloatAsState(
+        targetValue = level.coerceIn(0f, 1f),
+        animationSpec = tween(120),
+        label = "audioLevel",
+    )
+    val animatedDotColor by animateColorAsState(
+        targetValue = dotColor,
+        animationSpec = tween(200),
+        label = "dotColor",
+    )
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Box(
             modifier = Modifier
@@ -1075,7 +1428,7 @@ private fun AudioLevelRow(level: Float, state: CaptureState) {
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(level.coerceIn(0f, 1f))
+                    .fillMaxWidth(animatedLevel.coerceIn(0.01f, 1f))
                     .height(4.dp)
                     .clip(RoundedCornerShape(2.dp))
                     .background(if (state == CaptureState.FLOWING) Color(0xFF34C759) else scheme.onSurfaceVariantSummary),
@@ -1090,7 +1443,7 @@ private fun AudioLevelRow(level: Float, state: CaptureState) {
                     .width(6.dp)
                     .height(6.dp)
                     .clip(CircleShape)
-                    .background(dotColor),
+                    .background(animatedDotColor),
             )
             Text(
                 text = stringResource(labelRes),

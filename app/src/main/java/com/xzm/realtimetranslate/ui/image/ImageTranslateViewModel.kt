@@ -206,6 +206,25 @@ class ImageTranslateViewModel(
         _state.update { it.copy(message = null, error = null) }
     }
 
+    fun reset() {
+        original?.recycle()
+        translated?.recycle()
+        original = null
+        translated = null
+        _state.update {
+            it.copy(
+                isWorking = false,
+                error = null,
+                message = null,
+                done = 0,
+                total = 0,
+                sourceText = "",
+                translatedText = "",
+                nothingToTranslate = false,
+            )
+        }
+    }
+
     private suspend fun recordHistory(result: ImageTranslationResult) {
         if (result.sourceText.isBlank() && result.translatedText.isBlank()) return
         val settings = settingsRepository.settings.first()

@@ -529,6 +529,10 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.resetSubtitleAppearance() }
     }
 
+    fun resetOcrAppearance() {
+        viewModelScope.launch { settingsRepository.resetOcrAppearance() }
+    }
+
     fun refreshModelStatus() {
         viewModelScope.launch { _modelStatus.value = describeModelStatus() }
     }

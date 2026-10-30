@@ -159,6 +159,18 @@ class UserSettingsRepository(private val context: Context) {
         }
     }
 
+    suspend fun resetOcrAppearance() {
+        update {
+            it.copy(
+                ocrRegionOutlineEnabled = UserSettings.Defaults.OCR_OUTLINE_ENABLED,
+                ocrRegionOutlineColor = UserSettings.Defaults.OCR_OUTLINE_COLOR,
+                ocrRegionOutlineAlpha = UserSettings.Defaults.OCR_OUTLINE_ALPHA,
+                fontSizeSp = UserSettings.Defaults.FONT_SIZE_SP,
+                translationTextColor = UserSettings.Defaults.TRANSLATION_TEXT_COLOR,
+            )
+        }
+    }
+
     private fun Preferences.toSettings(): UserSettings = UserSettings(
         endpoint = this[Keys.endpoint] ?: UserSettings.Defaults.ENDPOINT,
         modelId = this[Keys.modelId] ?: UserSettings.Defaults.MODEL_ID,

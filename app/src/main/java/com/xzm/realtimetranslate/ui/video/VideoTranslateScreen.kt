@@ -86,6 +86,8 @@ import com.xzm.realtimetranslate.video.VideoTranslationPipeline
 import kotlinx.coroutines.delay
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -130,72 +132,201 @@ fun VideoTranslateScreen(
             .padding(vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        // ================= 顶部一体化导航栏 =================
         item {
-            PageTitle(
-                title = stringResource(R.string.more_video_title),
-                subtitle = stringResource(R.string.more_video_summary),
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(scheme.surfaceVariant)
+                            .clickable(onClick = onBack),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "‹",
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = scheme.onSurface,
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = stringResource(R.string.more_video_title),
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = scheme.onSurface,
+                        )
+                        Text(
+                            text = stringResource(R.string.more_video_summary),
+                            fontSize = 11.5.sp,
+                            color = scheme.onSurfaceVariantSummary,
+                        )
+                    }
+                }
+
+                if (state.durationMs > 0L) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(scheme.surfaceVariant)
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                    ) {
+                        Text(
+                            text = "⏱️ ${formatDuration(state.durationMs)}",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = scheme.onSurfaceVariantSummary,
+                        )
+                    }
+                }
+            }
         }
 
+        // ================= 特性徽章胶囊 =================
         item {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                TextButton(text = stringResource(R.string.common_back), onClick = onBack)
-                if (state.durationMs > 0L) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Booth.Accent.copy(alpha = 0.12f))
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                ) {
                     Text(
-                        text = formatDuration(state.durationMs),
-                        fontSize = 12.sp,
+                        text = "🎬 本地视频离线提取",
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Booth.Accent,
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(scheme.surfaceVariant)
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                ) {
+                    Text(
+                        text = "⚡ 端侧 SenseVoice · 导出 SRT",
+                        fontSize = 11.5.sp,
                         color = scheme.onSurfaceVariantSummary,
                     )
                 }
             }
         }
 
-        item {
-            SectionCard {
-                Row(
+        // ================= 视频文件选择与展示 =================
+        if (!state.hasVideo) {
+            item {
+                Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = state.displayName.ifBlank {
-                                stringResource(R.string.video_empty_title)
-                            },
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 2,
-                        )
-                        if (state.displayName.isBlank()) {
-                            Text(
-                                text = stringResource(R.string.video_empty_hint),
-                                fontSize = 12.sp,
-                                color = scheme.onSurfaceVariantSummary,
-                                modifier = Modifier.padding(top = 2.dp),
-                            )
-                        }
-                    }
-                    TextButton(
-                        text = stringResource(
-                            if (state.hasVideo) R.string.video_change else R.string.video_pick,
-                        ),
-                        onClick = {
+                        .padding(horizontal = 16.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable {
                             if (!state.isRunning && !state.isBurning) {
                                 pickVideo.launch(arrayOf("video/*"))
                             }
                         },
-                        // Swapping the source mid-burn would publish a video with the
-                        // previous file's subtitles while the page shows the new one.
-                        enabled = !state.isRunning && !state.isBurning,
-                    )
+                    colors = CardDefaults.defaultColors(
+                        color = scheme.surfaceContainer,
+                        contentColor = scheme.onSurfaceContainer,
+                    ),
+                    cornerRadius = 16.dp,
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp, horizontal = 16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(CircleShape)
+                                .background(Booth.Accent.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(text = "🎬", fontSize = 28.sp)
+                        }
+                        Text(
+                            text = "点击选择本地视频文件",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = scheme.onSurface,
+                        )
+                        Text(
+                            text = "支持 MP4 / MKV / MOV 等主流视频格式",
+                            fontSize = 12.sp,
+                            color = scheme.onSurfaceVariantSummary,
+                        )
+                    }
+                }
+            }
+        } else {
+            item {
+                SectionCard {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Booth.Accent.copy(alpha = 0.12f)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(text = "🎬", fontSize = 20.sp)
+                            }
+                            Column {
+                                Text(
+                                    text = state.displayName,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 2,
+                                    color = scheme.onSurface,
+                                )
+                                if (state.durationMs > 0L) {
+                                    Text(
+                                        text = "时长：${formatDuration(state.durationMs)}",
+                                        fontSize = 12.sp,
+                                        color = scheme.onSurfaceVariantSummary,
+                                    )
+                                }
+                            }
+                        }
+                        if (!state.isRunning && !state.isBurning) {
+                            TextButton(
+                                text = "更换视频",
+                                onClick = { pickVideo.launch(arrayOf("video/*")) },
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -315,44 +446,86 @@ fun VideoTranslateScreen(
                     )
                 }
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                Button(
+                    onClick = { if (state.isRunning) viewModel.cancel() else viewModel.start() },
+                    enabled = state.isRunning || state.canStart,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    colors = if (state.isRunning) {
+                        ButtonDefaults.buttonColors()
+                    } else {
+                        ButtonDefaults.buttonColorsPrimary()
+                    },
                 ) {
-                    Button(
-                        onClick = { if (state.isRunning) viewModel.cancel() else viewModel.start() },
-                        enabled = state.isRunning || state.canStart,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp),
-                        colors = if (state.isRunning) {
-                            ButtonDefaults.buttonColors()
+                    Text(
+                        text = if (state.isRunning) {
+                            stringResource(R.string.video_stop)
+                        } else if (state.recognizeOnly) {
+                            "▶ 开始提取字幕（仅识别）"
                         } else {
-                            ButtonDefaults.buttonColorsPrimary()
+                            stringResource(R.string.video_start)
                         },
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                    )
+                }
+            }
+        }
+
+        if (state.canExport || state.canBurn) {
+            item {
+                SectionCard {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        Text(
-                            text = if (state.isRunning) {
-                                stringResource(R.string.video_stop)
-                            } else if (state.recognizeOnly) {
-                                "▶ 开始提取字幕（仅识别）"
-                            } else {
-                                stringResource(R.string.video_start)
-                            },
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 16.sp,
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(text = "🎉", fontSize = 18.sp)
+                            Text(
+                                text = "字幕提取与翻译就绪",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF10B981),
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Button(
+                                onClick = viewModel::exportSrt,
+                                enabled = state.canExport,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(46.dp),
+                                colors = ButtonDefaults.buttonColorsPrimary(),
+                            ) {
+                                Text(
+                                    text = "💾 导出 SRT",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                )
+                            }
+                            Button(
+                                onClick = viewModel::burnSubtitles,
+                                enabled = state.canBurn,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(46.dp),
+                                colors = ButtonDefaults.buttonColors(),
+                            ) {
+                                Text(
+                                    text = "🎬 压制视频",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp,
+                                )
+                            }
+                        }
                     }
-                    TextButton(
-                        text = stringResource(R.string.video_export_srt),
-                        onClick = viewModel::exportSrt,
-                        enabled = state.canExport,
-                    )
-                    TextButton(
-                        text = stringResource(R.string.video_burn),
-                        onClick = viewModel::burnSubtitles,
-                        enabled = state.canBurn,
-                    )
                 }
             }
         }

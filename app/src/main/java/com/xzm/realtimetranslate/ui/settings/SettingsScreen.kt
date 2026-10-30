@@ -5,6 +5,17 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -108,6 +119,16 @@ import kotlinx.coroutines.launch
 /** Where Bailian hands out DashScope API keys. The old dashscope.console host is dead. */
 private const val ALIYUN_API_KEY_URL = "https://bailian.console.aliyun.com/model/settings/api-key"
 
+private sealed interface SettingsNavTarget {
+    data object Main : SettingsNavTarget
+    data class EngineConfig(val engine: TranslationEngineType) : SettingsNavTarget
+    data object EnginePicker : SettingsNavTarget
+    data class AsrConfig(val engine: AsrEngineType) : SettingsNavTarget
+    data object AsrPicker : SettingsNavTarget
+    data class ModelPicker(val engine: TranslationEngineType) : SettingsNavTarget
+    data object Logs : SettingsNavTarget
+}
+
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
@@ -115,14 +136,7 @@ fun SettingsScreen(
     onOpenOverlayPermission: () -> Unit,
     onPromptUpdate: (RemoteUpdateInfo) -> Unit = {},
 ) {
-    // The log viewer replaces this screen rather than becoming a tab: MainActivity's
-    // `when(page)` falls through to the history screen for anything unrecognised, so
-    // adding a value there is a silent mis-navigation waiting to happen.
     var showLogs by rememberSaveable { mutableStateOf(false) }
-    if (showLogs) {
-        LogViewerScreen(onBack = { showLogs = false }, modifier = modifier)
-        return
-    }
 
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val deepSeekKey by viewModel.deepSeekKey.collectAsStateWithLifecycle()
@@ -202,154 +216,56 @@ fun SettingsScreen(
     var historyExpanded by rememberSaveable { mutableStateOf(false) }
     var logsExpanded by rememberSaveable { mutableStateOf(false) }
 
-    val pickingEngine = activeModelPickerEngine
-    if (pickingEngine != null) {
-        val (currentModelVal, updateModelFn) = when (pickingEngine) {
-            TranslationEngineType.DEEPSEEK -> deepSeekModel to viewModel::updateDeepSeekModel
-            TranslationEngineType.ZHIPU -> zhipuModel to viewModel::updateZhipuModel
-            TranslationEngineType.GEMINI -> geminiModel to viewModel::updateGeminiModel
-            TranslationEngineType.OPENAI_COMPAT -> genericModel to viewModel::updateGenericModel
-            else -> TextFieldValue("") to { _: TextFieldValue -> }
+    val currentNavTarget: SettingsNavTarget = when {
+        showLogs -> SettingsNavTarget.Logs
+        activeModelPickerEngine != null -> SettingsNavTarget.ModelPicker(activeModelPickerEngine!!)
+        activeConfigEngine != null -> SettingsNavTarget.EngineConfig(activeConfigEngine!!)
+        showEnginePicker -> SettingsNavTarget.EnginePicker
+        activeConfigAsrEngine != null -> SettingsNavTarget.AsrConfig(activeConfigAsrEngine!!)
+        showAsrEnginePicker -> SettingsNavTarget.AsrPicker
+        else -> SettingsNavTarget.Main
+    }
+
+    BackHandler(enabled = currentNavTarget != SettingsNavTarget.Main) {
+        when (currentNavTarget) {
+            SettingsNavTarget.Logs -> showLogs = false
+            is SettingsNavTarget.ModelPicker -> activeModelPickerEngine = null
+            is SettingsNavTarget.EngineConfig -> activeConfigEngine = null
+            SettingsNavTarget.EnginePicker -> showEnginePicker = false
+            is SettingsNavTarget.AsrConfig -> activeConfigAsrEngine = null
+            SettingsNavTarget.AsrPicker -> showAsrEnginePicker = false
+            SettingsNavTarget.Main -> Unit
         }
-        ModelPickerSubScreen(
-            engineType = pickingEngine,
-            model = currentModelVal,
-            onModelChange = updateModelFn,
-            probes = modelProbes,
-            discovered = discoveredModels,
-            checkedAt = modelsCheckedAt,
-            checking = checkingModels,
-            colors = fieldColors,
-            onCheck = viewModel::checkModels,
-            onBack = { activeModelPickerEngine = null },
-            modifier = modifier,
-        )
-        return
     }
 
-    val configEngine = activeConfigEngine
-    if (configEngine != null) {
-        EngineConfigSubScreen(
-            engineType = configEngine,
-            isCurrentEngine = configEngine == engineType,
-            onSetAsCurrent = { viewModel.setEngine(configEngine) },
-            settings = settings,
-            deepSeekKey = deepSeekKey,
-            onDeepSeekKeyChange = viewModel::setDeepSeekKey,
-            deepSeekModel = deepSeekModel,
-            deepSeekBaseUrl = deepSeekBaseUrl,
-            onUpdateDeepSeekBaseUrl = viewModel::updateDeepSeekBaseUrl,
-            zhipuKey = zhipuKey,
-            onZhipuKeyChange = viewModel::setZhipuKey,
-            zhipuModel = zhipuModel,
-            zhipuBaseUrl = zhipuBaseUrl,
-            onUpdateZhipuBaseUrl = viewModel::updateZhipuBaseUrl,
-            geminiKey = geminiKey,
-            onGeminiKeyChange = viewModel::setGeminiKey,
-            geminiModel = geminiModel,
-            geminiBaseUrl = geminiBaseUrl,
-            onUpdateGeminiBaseUrl = viewModel::updateGeminiBaseUrl,
-            genericKey = genericKey,
-            onGenericKeyChange = viewModel::setGenericKey,
-            genericModel = genericModel,
-            genericBaseUrl = genericBaseUrl,
-            onUpdateGenericBaseUrl = viewModel::updateGenericBaseUrl,
-            onUpdateGenericThinkingOffStyle = viewModel::setGenericThinkingOffStyle,
-            onUpdateAiDeepThinking = viewModel::setAiDeepThinking,
-            testing = testing,
-            testResult = testResult,
-            onSaveAndTest = {
-                viewModel.saveApiKey()
-                viewModel.testConnection()
-            },
-            onSaveKeyOnly = viewModel::saveApiKey,
-            fieldColors = fieldColors,
-            onOpenModelPicker = { activeModelPickerEngine = it },
-            onBack = { activeConfigEngine = null },
-            modifier = modifier,
-        )
-        return
-    }
-
-    if (showEnginePicker) {
-        EnginePickerSubScreen(
-            currentEngine = engineType,
-            onSelectEngine = { selected ->
-                viewModel.setEngine(selected)
-                showEnginePicker = false
-                activeConfigEngine = selected
-            },
-            onBack = { showEnginePicker = false },
-            modifier = modifier,
-        )
-        return
-    }
-
-    val configAsr = activeConfigAsrEngine
-    if (configAsr != null) {
-        AsrEngineConfigSubScreen(
-            engineType = configAsr,
-            isCurrentEngine = configAsr == asrEngine,
-            onSetAsCurrent = { viewModel.setAsrEngine(configAsr) },
-            modelStatus = modelStatus,
-            downloading = downloading,
-            downloadProgress = downloadProgress,
-            onDownloadModels = viewModel::downloadModels,
-            onRefreshModelStatus = viewModel::refreshModelStatus,
-            mirrorUrl = mirrorUrl,
-            onUpdateMirrorUrl = viewModel::updateMirrorUrl,
-            hfToken = hfToken,
-            onUpdateHfToken = viewModel::updateHfToken,
-            aliyunAsrKey = aliyunAsrKey,
-            onUpdateAliyunAsrKey = viewModel::updateAliyunAsrKey,
-            aliyunAsrModel = aliyunAsrModel,
-            onUpdateAliyunAsrModel = viewModel::updateAliyunAsrModel,
-            aliyunWorkspaceId = aliyunWorkspaceId,
-            onUpdateAliyunWorkspaceId = viewModel::updateAliyunWorkspaceId,
-            genericAsrBaseUrl = genericAsrBaseUrl,
-            onUpdateGenericAsrBaseUrl = viewModel::updateGenericAsrBaseUrl,
-            genericAsrApiKey = genericAsrApiKey,
-            onUpdateGenericAsrApiKey = viewModel::updateGenericAsrApiKey,
-            genericAsrModel = genericAsrModel,
-            onUpdateGenericAsrModel = viewModel::updateGenericAsrModel,
-            fieldColors = fieldColors,
-            asrTesting = asrTesting,
-            asrTestResult = asrTestResult,
-            onSaveAndTest = { viewModel.testAsrConnection(configAsr) },
-            onSaveOnly = { viewModel.saveAsrConfig(configAsr) },
-            settings = settings,
-            onUpdateSettings = { transform -> viewModel.update(transform) },
-            onBack = { activeConfigAsrEngine = null },
-            modifier = modifier,
-        )
-        return
-    }
-
-    if (showAsrEnginePicker) {
-        AsrEnginePickerSubScreen(
-            currentEngine = asrEngine,
-            onSelectEngine = { selected ->
-                viewModel.setAsrEngine(selected)
-                showAsrEnginePicker = false
-                activeConfigAsrEngine = selected
-            },
-            onBack = { showAsrEnginePicker = false },
-            modifier = modifier,
-        )
-        return
-    }
-
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        PageTitle(
-            title = stringResource(R.string.settings_title),
-            subtitle = stringResource(R.string.settings_subtitle),
-        )
+    AnimatedContent(
+        targetState = currentNavTarget,
+        transitionSpec = {
+            if (targetState != SettingsNavTarget.Main) {
+                (slideInHorizontally(tween(260)) { it } + fadeIn(tween(260))).togetherWith(
+                    slideOutHorizontally(tween(260)) { -it / 3 } + fadeOut(tween(200)),
+                )
+            } else {
+                (slideInHorizontally(tween(260)) { -it / 3 } + fadeIn(tween(260))).togetherWith(
+                    slideOutHorizontally(tween(260)) { it } + fadeOut(tween(200)),
+                )
+            }
+        },
+        modifier = modifier.fillMaxSize(),
+        label = "SettingsNavTransition",
+    ) { navTarget ->
+        when (navTarget) {
+            SettingsNavTarget.Main -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    PageTitle(
+                        title = stringResource(R.string.settings_title),
+                    )
 
         // ================= Group 1: 核心引擎 =================
         SmallTitle(
@@ -684,14 +600,24 @@ fun SettingsScreen(
                             )
                         }
                     }
+                    val historyArrowRotation by animateFloatAsState(
+                        targetValue = if (historyExpanded) 180f else 0f,
+                        animationSpec = tween(220),
+                        label = "historyArrow",
+                    )
                     Text(
-                        text = if (historyExpanded) "▲" else "▼",
+                        text = "▼",
+                        modifier = Modifier.rotate(historyArrowRotation),
                         fontSize = 12.sp,
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     )
                 }
 
-                if (historyExpanded) {
+                AnimatedVisibility(
+                    visible = historyExpanded,
+                    enter = expandVertically(tween(220)) + fadeIn(tween(200)),
+                    exit = shrinkVertically(tween(200)) + fadeOut(tween(180)),
+                ) {
                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
                         OptionRow(
                             label = stringResource(R.string.history_mode_auto_clear),
@@ -788,14 +714,24 @@ fun SettingsScreen(
                             )
                         }
                     }
+                    val logsArrowRotation by animateFloatAsState(
+                        targetValue = if (logsExpanded) 180f else 0f,
+                        animationSpec = tween(220),
+                        label = "logsArrow",
+                    )
                     Text(
-                        text = if (logsExpanded) "▲" else "▼",
+                        text = "▼",
+                        modifier = Modifier.rotate(logsArrowRotation),
                         fontSize = 12.sp,
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     )
                 }
 
-                if (logsExpanded) {
+                AnimatedVisibility(
+                    visible = logsExpanded,
+                    enter = expandVertically(tween(220)) + fadeIn(tween(200)),
+                    exit = shrinkVertically(tween(200)) + fadeOut(tween(180)),
+                ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1073,6 +1009,139 @@ fun SettingsScreen(
         }
 
         Spacer(modifier = Modifier.height(28.dp))
+                }
+            }
+            is SettingsNavTarget.ModelPicker -> {
+                val (currentModelVal, updateModelFn) = when (navTarget.engine) {
+                    TranslationEngineType.DEEPSEEK -> deepSeekModel to viewModel::updateDeepSeekModel
+                    TranslationEngineType.ZHIPU -> zhipuModel to viewModel::updateZhipuModel
+                    TranslationEngineType.GEMINI -> geminiModel to viewModel::updateGeminiModel
+                    TranslationEngineType.OPENAI_COMPAT -> genericModel to viewModel::updateGenericModel
+                    else -> TextFieldValue("") to { _: TextFieldValue -> }
+                }
+                ModelPickerSubScreen(
+                    engineType = navTarget.engine,
+                    model = currentModelVal,
+                    onModelChange = updateModelFn,
+                    probes = modelProbes,
+                    discovered = discoveredModels,
+                    checkedAt = modelsCheckedAt,
+                    checking = checkingModels,
+                    colors = fieldColors,
+                    onCheck = viewModel::checkModels,
+                    onBack = { activeModelPickerEngine = null },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            is SettingsNavTarget.EngineConfig -> {
+                EngineConfigSubScreen(
+                    engineType = navTarget.engine,
+                    isCurrentEngine = navTarget.engine == engineType,
+                    onSetAsCurrent = { viewModel.setEngine(navTarget.engine) },
+                    settings = settings,
+                    deepSeekKey = deepSeekKey,
+                    onDeepSeekKeyChange = viewModel::setDeepSeekKey,
+                    deepSeekModel = deepSeekModel,
+                    deepSeekBaseUrl = deepSeekBaseUrl,
+                    onUpdateDeepSeekBaseUrl = viewModel::updateDeepSeekBaseUrl,
+                    zhipuKey = zhipuKey,
+                    onZhipuKeyChange = viewModel::setZhipuKey,
+                    zhipuModel = zhipuModel,
+                    zhipuBaseUrl = zhipuBaseUrl,
+                    onUpdateZhipuBaseUrl = viewModel::updateZhipuBaseUrl,
+                    geminiKey = geminiKey,
+                    onGeminiKeyChange = viewModel::setGeminiKey,
+                    geminiModel = geminiModel,
+                    geminiBaseUrl = geminiBaseUrl,
+                    onUpdateGeminiBaseUrl = viewModel::updateGeminiBaseUrl,
+                    genericKey = genericKey,
+                    onGenericKeyChange = viewModel::setGenericKey,
+                    genericModel = genericModel,
+                    genericBaseUrl = genericBaseUrl,
+                    onUpdateGenericBaseUrl = viewModel::updateGenericBaseUrl,
+                    onUpdateGenericThinkingOffStyle = viewModel::setGenericThinkingOffStyle,
+                    onUpdateAiDeepThinking = viewModel::setAiDeepThinking,
+                    testing = testing,
+                    testResult = testResult,
+                    onSaveAndTest = {
+                        viewModel.saveApiKey()
+                        viewModel.testConnection()
+                    },
+                    onSaveKeyOnly = viewModel::saveApiKey,
+                    fieldColors = fieldColors,
+                    onOpenModelPicker = { activeModelPickerEngine = it },
+                    onBack = { activeConfigEngine = null },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            SettingsNavTarget.EnginePicker -> {
+                EnginePickerSubScreen(
+                    currentEngine = engineType,
+                    onSelectEngine = { selected ->
+                        viewModel.setEngine(selected)
+                        showEnginePicker = false
+                        activeConfigEngine = selected
+                    },
+                    onBack = { showEnginePicker = false },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            is SettingsNavTarget.AsrConfig -> {
+                AsrEngineConfigSubScreen(
+                    engineType = navTarget.engine,
+                    isCurrentEngine = navTarget.engine == asrEngine,
+                    onSetAsCurrent = { viewModel.setAsrEngine(navTarget.engine) },
+                    modelStatus = modelStatus,
+                    downloading = downloading,
+                    downloadProgress = downloadProgress,
+                    onDownloadModels = viewModel::downloadModels,
+                    onRefreshModelStatus = viewModel::refreshModelStatus,
+                    mirrorUrl = mirrorUrl,
+                    onUpdateMirrorUrl = viewModel::updateMirrorUrl,
+                    hfToken = hfToken,
+                    onUpdateHfToken = viewModel::updateHfToken,
+                    aliyunAsrKey = aliyunAsrKey,
+                    onUpdateAliyunAsrKey = viewModel::updateAliyunAsrKey,
+                    aliyunAsrModel = aliyunAsrModel,
+                    onUpdateAliyunAsrModel = viewModel::updateAliyunAsrModel,
+                    aliyunWorkspaceId = aliyunWorkspaceId,
+                    onUpdateAliyunWorkspaceId = viewModel::updateAliyunWorkspaceId,
+                    genericAsrBaseUrl = genericAsrBaseUrl,
+                    onUpdateGenericAsrBaseUrl = viewModel::updateGenericAsrBaseUrl,
+                    genericAsrApiKey = genericAsrApiKey,
+                    onUpdateGenericAsrApiKey = viewModel::updateGenericAsrApiKey,
+                    genericAsrModel = genericAsrModel,
+                    onUpdateGenericAsrModel = viewModel::updateGenericAsrModel,
+                    fieldColors = fieldColors,
+                    asrTesting = asrTesting,
+                    asrTestResult = asrTestResult,
+                    onSaveAndTest = { viewModel.testAsrConnection(navTarget.engine) },
+                    onSaveOnly = { viewModel.saveAsrConfig(navTarget.engine) },
+                    settings = settings,
+                    onUpdateSettings = { transform -> viewModel.update(transform) },
+                    onBack = { activeConfigAsrEngine = null },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            SettingsNavTarget.AsrPicker -> {
+                AsrEnginePickerSubScreen(
+                    currentEngine = asrEngine,
+                    onSelectEngine = { selected ->
+                        viewModel.setAsrEngine(selected)
+                        showAsrEnginePicker = false
+                        activeConfigAsrEngine = selected
+                    },
+                    onBack = { showAsrEnginePicker = false },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            SettingsNavTarget.Logs -> {
+                LogViewerScreen(
+                    onBack = { showLogs = false },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
     }
 
     if (showRewardDialog) {
@@ -1118,6 +1187,71 @@ private fun ModelPickerEntryRow(
             contentDescription = null,
             tint = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.6f),
         )
+    }
+}
+
+/**
+ * 二级配置与选择页面通用顶部导航栏：左侧带轻微触控圆底的高灵敏度返回胶囊（‹），
+ * 标题与副标题统一规整排布，右侧支持快捷操作（如设为当前引擎、探测模型等）。
+ */
+@Composable
+internal fun SubScreenHeader(
+    title: String,
+    subtitle: String? = null,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    trailingContent: (@Composable () -> Unit)? = null,
+) {
+    val scheme = MiuixTheme.colorScheme
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.weight(1f, fill = false),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(scheme.surfaceVariant)
+                    .clickable(onClick = onBack),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "‹",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = scheme.onSurface,
+                )
+            }
+            Column {
+                Text(
+                    text = title,
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = scheme.onSurface,
+                    maxLines = 1,
+                )
+                if (!subtitle.isNullOrBlank()) {
+                    Text(
+                        text = subtitle,
+                        fontSize = 11.5.sp,
+                        color = scheme.onSurfaceVariantSummary,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+
+        if (trailingContent != null) {
+            trailingContent()
+        }
     }
 }
 
@@ -1184,49 +1318,39 @@ private fun ModelPickerSubScreen(
             .padding(vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        PageTitle(
-            title = stringResource(R.string.settings_model_picker_title),
-            subtitle = stringResource(
-                when (engineType) {
-                    TranslationEngineType.DEEPSEEK -> R.string.engine_deepseek
-                    TranslationEngineType.ZHIPU -> R.string.engine_zhipu
-                    TranslationEngineType.GEMINI -> R.string.engine_gemini
-                    TranslationEngineType.OPENAI_COMPAT -> R.string.engine_generic
-                    else -> R.string.settings_engine
-                }
-            ),
+        val engineLabel = stringResource(
+            when (engineType) {
+                TranslationEngineType.DEEPSEEK -> R.string.engine_deepseek
+                TranslationEngineType.ZHIPU -> R.string.engine_zhipu
+                TranslationEngineType.GEMINI -> R.string.engine_gemini
+                TranslationEngineType.OPENAI_COMPAT -> R.string.engine_generic
+                else -> R.string.settings_engine
+            }
         )
-
-        // 顶部导航与检测操作栏
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            TextButton(
-                text = stringResource(R.string.settings_logs_back),
-                onClick = onBack,
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (checkedAt > 0L) {
-                    Text(
-                        text = stringResource(R.string.settings_model_checked_at, formatCheckedAt(checkedAt)),
-                        fontSize = 12.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        modifier = Modifier.padding(end = 8.dp),
+        SubScreenHeader(
+            title = stringResource(R.string.settings_model_picker_title),
+            subtitle = "为 $engineLabel 挑选或自定义模型",
+            onBack = onBack,
+            trailingContent = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (checkedAt > 0L) {
+                        Text(
+                            text = stringResource(R.string.settings_model_checked_at, formatCheckedAt(checkedAt)),
+                            fontSize = 11.5.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            modifier = Modifier.padding(end = 6.dp),
+                        )
+                    }
+                    TextButton(
+                        text = stringResource(
+                            if (checking) R.string.settings_model_checking else R.string.settings_model_check,
+                        ),
+                        onClick = { if (!checking) onCheck() },
+                        enabled = !checking,
                     )
                 }
-                TextButton(
-                    text = stringResource(
-                        if (checking) R.string.settings_model_checking else R.string.settings_model_check,
-                    ),
-                    onClick = { if (!checking) onCheck() },
-                    enabled = !checking,
-                )
-            }
-        }
+            },
+        )
 
         // 当前模型若有报错详情，置顶醒目提醒
         val probe = probes[current]
@@ -1860,29 +1984,43 @@ private fun EngineConfigSubScreen(
             .padding(vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        PageTitle(
-            title = stringResource(R.string.settings_engine_config_title, stringResource(engineType.titleRes)),
+        SubScreenHeader(
+            title = stringResource(engineType.titleRes) + " 配置",
             subtitle = stringResource(engineType.summaryRes),
+            onBack = onBack,
+            trailingContent = {
+                if (!isCurrentEngine) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Booth.Accent.copy(alpha = 0.12f))
+                            .clickable(onClick = onSetAsCurrent)
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                    ) {
+                        Text(
+                            text = "设为当前引擎",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Booth.Accent,
+                        )
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color(0xFF10B981).copy(alpha = 0.12f))
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                    ) {
+                        Text(
+                            text = "✓ 正在使用",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF10B981),
+                        )
+                    }
+                }
+            },
         )
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            TextButton(
-                text = stringResource(R.string.settings_logs_back),
-                onClick = onBack,
-            )
-            if (!isCurrentEngine) {
-                TextButton(
-                    text = stringResource(R.string.settings_engine_switch_to),
-                    onClick = onSetAsCurrent,
-                )
-            }
-        }
 
         SectionCard {
             Column(
@@ -2120,23 +2258,11 @@ private fun EnginePickerSubScreen(
             .padding(vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        PageTitle(
+        SubScreenHeader(
             title = stringResource(R.string.settings_engine_select_prompt),
             subtitle = stringResource(R.string.settings_engine_desc),
+            onBack = onBack,
         )
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            TextButton(
-                text = stringResource(R.string.settings_logs_back),
-                onClick = onBack,
-            )
-        }
 
         SectionCard {
             Column(modifier = Modifier.padding(vertical = 6.dp)) {
@@ -2405,29 +2531,43 @@ private fun AsrEngineConfigSubScreen(
             .padding(vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        PageTitle(
-            title = stringResource(R.string.settings_asr_engine_configure, stringResource(engineType.titleRes)),
+        SubScreenHeader(
+            title = stringResource(engineType.titleRes) + " 配置",
             subtitle = stringResource(engineType.summaryRes),
+            onBack = onBack,
+            trailingContent = {
+                if (!isCurrentEngine) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Booth.Accent.copy(alpha = 0.12f))
+                            .clickable(onClick = onSetAsCurrent)
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                    ) {
+                        Text(
+                            text = "设为当前引擎",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Booth.Accent,
+                        )
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color(0xFF10B981).copy(alpha = 0.12f))
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                    ) {
+                        Text(
+                            text = "✓ 正在使用",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF10B981),
+                        )
+                    }
+                }
+            },
         )
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            TextButton(
-                text = stringResource(R.string.settings_logs_back),
-                onClick = onBack,
-            )
-            if (!isCurrentEngine) {
-                TextButton(
-                    text = "设为当前识别引擎",
-                    onClick = onSetAsCurrent,
-                )
-            }
-        }
 
         when (engineType) {
             AsrEngineType.LOCAL_SENSEVOICE -> {
@@ -2815,22 +2955,11 @@ private fun AsrEnginePickerSubScreen(
             .padding(vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        PageTitle(
+        SubScreenHeader(
             title = stringResource(R.string.settings_asr_engine),
             subtitle = stringResource(R.string.settings_asr_engine_desc),
+            onBack = onBack,
         )
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextButton(
-                text = stringResource(R.string.settings_logs_back),
-                onClick = onBack,
-            )
-        }
 
         SmallTitle(
             text = "可用语音识别引擎",
