@@ -41,6 +41,26 @@ class BallView(context: Context) : View(context) {
             invalidate()
         }
 
+    /**
+     * Active during edge-expansion animation:
+     * [expandSide]: [SIDE_LEFT] or [SIDE_RIGHT].
+     * [expandProgress]: 0f (docked half-circle) to 1f (full floating circle).
+     * Set [expandSide] to [EXPAND_INACTIVE] when not animating.
+     */
+    var expandSide: Int = EXPAND_INACTIVE
+        set(value) {
+            field = value
+            shadersNeedUpdate = true
+            invalidate()
+        }
+
+    var expandProgress: Float = 0f
+        set(value) {
+            field = value.coerceIn(0f, 1f)
+            shadersNeedUpdate = true
+            invalidate()
+        }
+
     /** Translation paused: dims the ball and shows a ▶ hint. Changing it re-renders. */
     var paused: Boolean = false
         set(value) {
@@ -51,6 +71,8 @@ class BallView(context: Context) : View(context) {
     private var shadersNeedUpdate = true
     private var lastWidth = 0
     private var lastHeight = 0
+    private var lastCx = Float.NaN
+    private var lastCy = Float.NaN
 
     // Paints
     private val glassPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -124,16 +146,37 @@ class BallView(context: Context) : View(context) {
         val radius = diameterPx / 2f
         if (radius <= 0f) return
 
-        val cx = when (side) {
-            SIDE_LEFT -> 0f
-            SIDE_RIGHT -> width.toFloat()
-            else -> width / 2f
+        val (cx, gx) = if (expandSide != EXPAND_INACTIVE) {
+            val p = expandProgress
+            if (expandSide == SIDE_LEFT) {
+                val cxVal = p * radius
+                val gxVal = radius * (0.44f + 0.56f * p)
+                cxVal to gxVal
+            } else {
+                val cxVal = radius
+                val gxVal = radius * (0.56f + 0.44f * p)
+                cxVal to gxVal
+            }
+        } else {
+            val cxVal = when (side) {
+                SIDE_LEFT -> 0f
+                SIDE_RIGHT -> width.toFloat()
+                else -> width / 2f
+            }
+            val gxVal = when (side) {
+                SIDE_LEFT -> radius * 0.44f
+                SIDE_RIGHT -> width - radius * 0.44f
+                else -> width / 2f
+            }
+            cxVal to gxVal
         }
         val cy = height / 2f
 
-        if (shadersNeedUpdate || width != lastWidth || height != lastHeight) {
+        if (shadersNeedUpdate || cx != lastCx || cy != lastCy || width != lastWidth || height != lastHeight) {
             lastWidth = width
             lastHeight = height
+            lastCx = cx
+            lastCy = cy
             updateShaders(cx, cy, radius)
         }
 
@@ -148,13 +191,6 @@ class BallView(context: Context) : View(context) {
         val rimInset = rimPaint.strokeWidth / 2f
         canvas.drawCircle(cx, cy, radius - rimInset, rimPaint)
 
-        // Determine icon center point within the visible area
-        val gx = when (side) {
-            SIDE_LEFT -> radius * 0.44f
-            SIDE_RIGHT -> width - radius * 0.44f
-            else -> width / 2f
-        }
-
         if (paused) {
             // Draw pause / resume icon
             val s = radius * 0.38f
@@ -168,7 +204,13 @@ class BallView(context: Context) : View(context) {
         }
 
         // 3. Draw 4-point sparkle star with prismatic chromatic aberration
-        val starR = if (side == SIDE_FLOAT) radius * 0.38f else radius * 0.30f
+        val starR = if (expandSide != EXPAND_INACTIVE) {
+            radius * (0.30f + 0.08f * expandProgress)
+        } else if (side == SIDE_FLOAT) {
+            radius * 0.38f
+        } else {
+            radius * 0.30f
+        }
         val offset = 1.35f * density
 
         // 3a. Warm chromatic dispersion flare (orange-amber on upper-left)
@@ -205,6 +247,9 @@ class BallView(context: Context) : View(context) {
         const val SIDE_LEFT = 0
         const val SIDE_RIGHT = 1
         const val SIDE_FLOAT = 2
+
+        /** Sentinel for [expandSide]: not currently performing expand animation. */
+        const val EXPAND_INACTIVE = -1
 
         private const val PAUSED_BALL_ALPHA = 140
 

@@ -1,6 +1,9 @@
 package com.xzm.realtimetranslate.overlay
 
 import android.annotation.SuppressLint
+import android.animation.ValueAnimator
+import android.animation.AnimatorListenerAdapter
+import android.animation.Animator
 import android.content.ComponentCallbacks
 import android.content.Context
 import android.content.res.Configuration
@@ -27,6 +30,7 @@ import com.xzm.realtimetranslate.service.HubCommand
 import com.xzm.realtimetranslate.service.HubMode
 import com.xzm.realtimetranslate.service.HubUiState
 import com.xzm.realtimetranslate.service.StaticModeTarget
+import android.view.animation.DecelerateInterpolator
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max
@@ -56,11 +60,63 @@ class HubBallOverlay(
 
     private var currentState: HubUiState = HubUiState()
 
+    private var expandAnimator: ValueAnimator? = null
+
+    /**
+     * Animate the ball growing from a half-circle (edge-snapped) into a full circle.
+     * [fromSide] must be SIDE_LEFT or SIDE_RIGHT.
+     * [onEnd] is called on the main thread when the animation completes or if skipped.
+     */
+    private fun startExpandAnimation(fromSide: Int, snapW: Int, snapH: Int, snapSize: Int, onEnd: () -> Unit) {
+        expandAnimator?.cancel()
+        val params = ballParams ?: run { onEnd(); return }
+        val root = ballWindowView ?: run { onEnd(); return }
+        val bv = ballView ?: run { onEnd(); return }
+
+        bv.expandSide = fromSide
+        bv.expandProgress = 0f
+
+        val startW = snapSize / 2
+        val endW = snapSize
+
+        ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 130L
+            interpolator = DecelerateInterpolator()
+            addUpdateListener { anim ->
+                val p = anim.animatedFraction
+                bv.expandProgress = p
+                val curW = (startW + (endW - startW) * p).roundToInt()
+                params.width = curW
+                params.height = snapSize
+                params.x = if (fromSide == BallView.SIDE_LEFT) 0 else snapW - curW
+                params.y = (centerY - snapSize / 2).coerceIn(0, max(0, snapH - snapSize))
+                runCatching { windowManager.updateViewLayout(root, params) }
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    bv.expandSide = BallView.EXPAND_INACTIVE
+                    bv.side = BallView.SIDE_FLOAT
+                    params.width = snapSize
+                    params.height = snapSize
+                    params.x = (centerX - snapSize / 2).coerceIn(0, max(0, snapW - snapSize))
+                    runCatching { windowManager.updateViewLayout(root, params) }
+                    onEnd()
+                }
+                override fun onAnimationCancel(animation: Animator) {
+                    bv.expandSide = BallView.EXPAND_INACTIVE
+                }
+            })
+            expandAnimator = this
+            start()
+        }
+    }
+
     private val configCallbacks = object : ComponentCallbacks {
         override fun onConfigurationChanged(newConfig: Configuration) {
             runCatching { reclamp() }
         }
 
+        @Deprecated("Deprecated in Java")
         override fun onLowMemory() = Unit
     }
     private var callbacksRegistered = false
@@ -402,6 +458,30 @@ class HubBallOverlay(
         private var grabDx = 0f
         private var grabDy = 0f
 
+        // Cached once per gesture: screenMetrics() is a binder round-trip, and the
+        // drag path needs these on every move event.
+        private var gestureW = 0
+        private var gestureH = 0
+        private var gestureSize = 0
+
+        // Drag targets, flushed to the window manager at most once per frame.
+        private var pendingX = 0
+        private var pendingY = 0
+        private var flushScheduled = false
+        private val flushDrag = Runnable {
+            flushScheduled = false
+            val params = ballParams ?: return@Runnable
+            val root = ballWindowView ?: return@Runnable
+            params.width = gestureSize
+            params.height = gestureSize
+            params.x = (pendingX - gestureSize / 2).coerceIn(0, max(0, gestureW - gestureSize))
+            params.y = (pendingY - gestureSize / 2).coerceIn(0, max(0, gestureH - gestureSize))
+            runCatching { windowManager.updateViewLayout(root, params) }
+        }
+
+        // One updateViewLayout per frame, regardless of event rate.
+        private var expandDone = false
+
         override fun onTouch(v: View, event: MotionEvent): Boolean {
             if (ballWindowView == null) return false
             return try {
@@ -410,8 +490,15 @@ class HubBallOverlay(
                         downX = event.rawX
                         downY = event.rawY
                         dragging = false
+                        expandDone = false
                         grabDx = event.rawX - centerX
                         grabDy = event.rawY - centerY
+                        val (sw, sh, _) = screenMetrics()
+                        gestureW = sw
+                        gestureH = sh
+                        gestureSize = sizePx()
+                        pendingX = centerX
+                        pendingY = centerY
                         true
                     }
                     MotionEvent.ACTION_MOVE -> {
@@ -420,15 +507,37 @@ class HubBallOverlay(
                                 abs(event.rawY - downY) > touchSlopPx)
                         ) {
                             dragging = true
+                            val prevSide = side
                             side = BallView.SIDE_FLOAT
+                            pendingX = (event.rawX - grabDx).roundToInt().coerceIn(0, gestureW)
+                            pendingY = (event.rawY - grabDy).roundToInt().coerceIn(
+                                gestureSize / 2,
+                                max(gestureSize / 2, gestureH - gestureSize / 2),
+                            )
+                            if (prevSide != BallView.SIDE_FLOAT) {
+                                // Animate half → full circle; suppress flushDrag until done
+                                expandDone = false
+                                startExpandAnimation(prevSide, gestureW, gestureH, gestureSize) {
+                                    expandDone = true
+                                }
+                            } else {
+                                expandDone = true
+                                flushDrag.run()
+                            }
                         }
-                        if (dragging) {
-                            val (screenW, screenH, _) = screenMetrics()
-                            val size = sizePx()
-                            centerX = (event.rawX - grabDx).roundToInt().coerceIn(0, screenW)
-                            centerY = (event.rawY - grabDy).roundToInt()
-                                .coerceIn(size / 2, max(size / 2, screenH - size / 2))
-                            applyGeometry()
+                        if (dragging && expandDone) {
+                            pendingX = (event.rawX - grabDx).roundToInt()
+                                .coerceIn(0, gestureW)
+                            pendingY = (event.rawY - grabDy).roundToInt()
+                                .coerceIn(
+                                    gestureSize / 2,
+                                    max(gestureSize / 2, gestureH - gestureSize / 2),
+                                )
+                            // One updateViewLayout per frame, regardless of event rate.
+                            if (!flushScheduled) {
+                                flushScheduled = true
+                                v.postOnAnimation(flushDrag)
+                            }
                         }
                         true
                     }
@@ -439,9 +548,15 @@ class HubBallOverlay(
                             triggerSnapHaptic()
                             showMenu()
                         } else if (dragging) {
-                            val (screenW, _, _) = screenMetrics()
-                            side = if (centerX < screenW / 2) BallView.SIDE_LEFT else BallView.SIDE_RIGHT
-                            centerX = if (side == BallView.SIDE_LEFT) 0 else screenW
+                            // Drop any frame still queued so the snap uses the final
+                            // finger position, not the last rendered one.
+                            expandAnimator?.cancel()
+                            v.removeCallbacks(flushDrag)
+                            flushScheduled = false
+                            centerX = pendingX
+                            centerY = pendingY
+                            side = if (centerX < gestureW / 2) BallView.SIDE_LEFT else BallView.SIDE_RIGHT
+                            centerX = if (side == BallView.SIDE_LEFT) 0 else gestureW
                             triggerSnapHaptic()
                             applyGeometry()
                         }
@@ -449,9 +564,13 @@ class HubBallOverlay(
                         true
                     }
                     MotionEvent.ACTION_CANCEL -> {
-                        val (screenW, _, _) = screenMetrics()
-                        side = if (centerX < screenW / 2) BallView.SIDE_LEFT else BallView.SIDE_RIGHT
-                        centerX = if (side == BallView.SIDE_LEFT) 0 else screenW
+                        expandAnimator?.cancel()
+                        v.removeCallbacks(flushDrag)
+                        flushScheduled = false
+                        centerX = pendingX
+                        centerY = pendingY
+                        side = if (centerX < gestureW / 2) BallView.SIDE_LEFT else BallView.SIDE_RIGHT
+                        centerX = if (side == BallView.SIDE_LEFT) 0 else gestureW
                         dragging = false
                         applyGeometry()
                         true

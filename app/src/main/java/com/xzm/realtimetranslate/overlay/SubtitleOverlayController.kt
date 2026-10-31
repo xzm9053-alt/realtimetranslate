@@ -29,6 +29,7 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.view.animation.AccelerateDecelerateInterpolator
+import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -85,6 +86,47 @@ class SubtitleOverlayController(
     private val autoHideActionBarRunnable = Runnable { hideActionBar() }
     /** 折叠态球吸附边：LEFT / RIGHT（半球贴边）或 FLOAT（完整圆浮动）。 */
     private var ballSide = BallView.SIDE_RIGHT
+    private var expandAnimator: ValueAnimator? = null
+
+    private fun startExpandAnimation(fromSide: Int, snapW: Int, snapH: Int, snapSize: Int, onEnd: () -> Unit) {
+        expandAnimator?.cancel()
+        val params = layoutParams ?: run { onEnd(); return }
+        val root = rootView ?: run { onEnd(); return }
+        val bv = ballView ?: run { onEnd(); return }
+
+        bv.expandSide = fromSide
+        bv.expandProgress = 0f
+
+        val startW = snapSize / 2
+        val endW = snapSize
+
+        ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 130L
+            interpolator = DecelerateInterpolator()
+            addUpdateListener { anim ->
+                val p = anim.animatedFraction
+                bv.expandProgress = p
+                val curW = (startW + (endW - startW) * p).roundToInt()
+                params.width = curW
+                params.height = snapSize
+                params.x = if (fromSide == BallView.SIDE_LEFT) 0 else snapW - curW
+                params.y = (params.y).coerceIn(0, max(0, snapH - snapSize))
+                runCatching { windowManager.updateViewLayout(root, params) }
+                    .onFailure { Log.e(TAG, "ball expand failed", it) }
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    bv.expandSide = BallView.EXPAND_INACTIVE
+                    onEnd()
+                }
+                override fun onAnimationCancel(animation: Animator) {
+                    bv.expandSide = BallView.EXPAND_INACTIVE
+                }
+            })
+            expandAnimator = this
+            start()
+        }
+    }
     private var savedX = 0
     private var savedY = 0
     private var savedW = 0
@@ -120,6 +162,7 @@ class SubtitleOverlayController(
             clampAndApply(persist = true, reason = "config")
         }
 
+        @Deprecated("Deprecated in Java")
         override fun onLowMemory() = Unit
     }
 
@@ -691,11 +734,11 @@ class SubtitleOverlayController(
 
     private fun triggerHaptic() {
         runCatching {
+            @Suppress("DEPRECATION")
             val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
                 vm?.defaultVibrator ?: (context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)
             } else {
-                @Suppress("DEPRECATION")
                 context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
             }
             if (vibrator?.hasVibrator() == true) {
@@ -1231,8 +1274,31 @@ class SubtitleOverlayController(
         private var downX = 0f
         private var downY = 0f
         private var dragging = false
+        private var expandDone = false
         private var grabDx = 0f
         private var grabDy = 0f
+
+        // Cached once per gesture: screenMetrics() is a binder round-trip and the
+        // drag path needs these values on every move event.
+        private var gestureW = 0
+        private var gestureH = 0
+        private var gestureSize = 0
+
+        // Drag targets, flushed to the window manager at most once per frame.
+        private var pendingX = 0
+        private var pendingY = 0
+        private var flushScheduled = false
+        private val flushDrag = Runnable {
+            flushScheduled = false
+            val p = layoutParams ?: return@Runnable
+            val root = rootView ?: return@Runnable
+            p.width = gestureSize
+            p.height = gestureSize
+            p.x = (pendingX - gestureSize / 2).coerceIn(0, max(0, gestureW - gestureSize))
+            p.y = (pendingY - gestureSize / 2).coerceIn(0, max(0, gestureH - gestureSize))
+            runCatching { windowManager.updateViewLayout(root, p) }
+                .onFailure { Log.e(TAG, "ball move failed", it) }
+        }
 
         @SuppressLint("ClickableViewAccessibility")
         override fun onTouch(v: View, event: MotionEvent): Boolean {
@@ -1245,10 +1311,16 @@ class SubtitleOverlayController(
                         downX = event.rawX
                         downY = event.rawY
                         dragging = false
-                        val (screenW, _, _) = screenMetrics()
-                        val (cx, cy) = ballCenter(params, screenW)
+                        expandDone = false
+                        val (sw, sh, _) = screenMetrics()
+                        gestureW = sw
+                        gestureH = sh
+                        gestureSize = ballSizePx()
+                        val (cx, cy) = ballCenter(params, sw)
                         grabDx = event.rawX - cx
                         grabDy = event.rawY - cy
+                        pendingX = cx
+                        pendingY = cy
                         true
                     }
                     MotionEvent.ACTION_MOVE -> {
@@ -1257,22 +1329,33 @@ class SubtitleOverlayController(
                                 abs(event.rawY - downY) > touchSlopPx)
                         ) {
                             dragging = true
-                            // 拖离贴边：窗口变 size×size，完整圆跟手。
-                            setBallFloat(params)
+                            // 拖离贴边：动画从半圆胀到整圆，结束后才开始跟手。
+                            val prevSide = ballSide
+                            pendingX = (event.rawX - grabDx).roundToInt()
+                                .coerceIn(gestureSize / 2, max(gestureSize / 2, gestureW - gestureSize / 2))
+                            pendingY = (event.rawY - grabDy).roundToInt()
+                                .coerceIn(gestureSize / 2, max(gestureSize / 2, gestureH - gestureSize / 2))
+                            if (prevSide != BallView.SIDE_FLOAT) {
+                                expandDone = false
+                                startExpandAnimation(prevSide, gestureW, gestureH, gestureSize) {
+                                    expandDone = true
+                                    setBallFloat(params)
+                                }
+                            } else {
+                                expandDone = true
+                                setBallFloat(params)
+                            }
                         }
-                        if (dragging) {
-                            val (screenW, screenH, _) = screenMetrics()
-                            val size = ballSizePx()
-                            val cx = (event.rawX - grabDx).roundToInt()
-                                .coerceIn(size / 2, max(size / 2, screenW - size / 2))
-                            val cy = (event.rawY - grabDy).roundToInt()
-                                .coerceIn(size / 2, max(size / 2, screenH - size / 2))
-                            params.width = size
-                            params.height = size
-                            params.x = cx - size / 2
-                            params.y = cy - size / 2
-                            runCatching { windowManager.updateViewLayout(root, params) }
-                                .onFailure { Log.e(TAG, "ball move failed", it) }
+                        if (dragging && expandDone) {
+                            pendingX = (event.rawX - grabDx).roundToInt()
+                                .coerceIn(gestureSize / 2, max(gestureSize / 2, gestureW - gestureSize / 2))
+                            pendingY = (event.rawY - grabDy).roundToInt()
+                                .coerceIn(gestureSize / 2, max(gestureSize / 2, gestureH - gestureSize / 2))
+                            // One updateViewLayout per frame, regardless of event rate.
+                            if (!flushScheduled) {
+                                flushScheduled = true
+                                v.postOnAnimation(flushDrag)
+                            }
                         }
                         true
                     }
@@ -1281,11 +1364,23 @@ class SubtitleOverlayController(
                             // 轻点（未滑动）→ 展开回大框。
                             expand()
                         } else {
+                            expandAnimator?.cancel()
+                            v.removeCallbacks(flushDrag)
+                            flushScheduled = false
+                            params.width = gestureSize
+                            params.height = gestureSize
+                            params.x = (pendingX - gestureSize / 2)
+                                .coerceIn(0, max(0, gestureW - gestureSize))
+                            params.y = (pendingY - gestureSize / 2)
+                                .coerceIn(0, max(0, gestureH - gestureSize))
                             parkBall(params)
                         }
                         true
                     }
                     MotionEvent.ACTION_CANCEL -> {
+                        expandAnimator?.cancel()
+                        v.removeCallbacks(flushDrag)
+                        flushScheduled = false
                         dragging = false
                         true
                     }

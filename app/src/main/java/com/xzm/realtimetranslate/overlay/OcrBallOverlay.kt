@@ -1,6 +1,9 @@
 package com.xzm.realtimetranslate.overlay
 
 import android.annotation.SuppressLint
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ComponentCallbacks
@@ -27,6 +30,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowManager
+import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -111,6 +115,53 @@ class OcrBallOverlay(
 
     private var menuWindowView: FrameLayout? = null
 
+    private var expandAnimator: ValueAnimator? = null
+
+    private fun startExpandAnimation(fromSide: Int, snapW: Int, snapH: Int, snapSize: Int, onEnd: () -> Unit) {
+        expandAnimator?.cancel()
+        val params = ballParams ?: run { onEnd(); return }
+        val root = ballWindowView ?: run { onEnd(); return }
+        val bv = ballView ?: run { onEnd(); return }
+
+        bv.expandSide = fromSide
+        bv.expandProgress = 0f
+
+        val startW = snapSize / 2
+        val endW = snapSize
+
+        ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 130L
+            interpolator = DecelerateInterpolator()
+            addUpdateListener { anim ->
+                val p = anim.animatedFraction
+                bv.expandProgress = p
+                val curW = (startW + (endW - startW) * p).roundToInt()
+                params.width = curW
+                params.height = snapSize
+                params.x = if (fromSide == BallView.SIDE_LEFT) 0 else snapW - curW
+                params.y = (centerY - snapSize / 2).coerceIn(0, max(0, snapH - snapSize))
+                runCatching { windowManager.updateViewLayout(root, params) }
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    bv.expandSide = BallView.EXPAND_INACTIVE
+                    bv.side = BallView.SIDE_FLOAT
+                    params.width = snapSize
+                    params.height = snapSize
+                    params.x = (centerX - snapSize / 2).coerceIn(0, max(0, snapW - snapSize))
+                    runCatching { windowManager.updateViewLayout(root, params) }
+                    movePopup()
+                    onEnd()
+                }
+                override fun onAnimationCancel(animation: Animator) {
+                    bv.expandSide = BallView.EXPAND_INACTIVE
+                }
+            })
+            expandAnimator = this
+            start()
+        }
+    }
+
     private val touchSlopPx: Int = ViewConfiguration.get(context).scaledTouchSlop
 
     private val configCallbacks = object : ComponentCallbacks {
@@ -118,6 +169,7 @@ class OcrBallOverlay(
             runCatching { reclamp() }
         }
 
+        @Deprecated("Deprecated in Java")
         override fun onLowMemory() = Unit
     }
     private var callbacksRegistered = false
@@ -409,6 +461,31 @@ class OcrBallOverlay(
         private var grabDx = 0f
         private var grabDy = 0f
         private var longPressTriggered = false
+        private var expandDone = false
+
+        // Cached once per gesture: screenMetrics() is a binder round-trip and the
+        // drag path needs these values on every move event.
+        private var gestureW = 0
+        private var gestureH = 0
+        private var gestureSize = 0
+
+        // Drag targets, flushed to the window manager at most once per frame.
+        private var pendingX = 0
+        private var pendingY = 0
+        private var flushScheduled = false
+        private val flushDrag = Runnable {
+            flushScheduled = false
+            val params = ballParams ?: return@Runnable
+            val root = ballWindowView ?: return@Runnable
+            params.width = gestureSize
+            params.height = gestureSize
+            params.x = (pendingX - gestureSize / 2).coerceIn(0, max(0, gestureW - gestureSize))
+            params.y = (pendingY - gestureSize / 2).coerceIn(0, max(0, gestureH - gestureSize))
+            runCatching { windowManager.updateViewLayout(root, params) }
+            centerX = pendingX
+            centerY = pendingY
+            movePopup()
+        }
 
         private val longPressRunnable = Runnable {
             if (!dragging) {
@@ -427,8 +504,15 @@ class OcrBallOverlay(
                         downY = event.rawY
                         dragging = false
                         longPressTriggered = false
+                        expandDone = false
                         grabDx = event.rawX - centerX
                         grabDy = event.rawY - centerY
+                        val (sw, sh, _) = screenMetrics()
+                        gestureW = sw
+                        gestureH = sh
+                        gestureSize = sizePx()
+                        pendingX = centerX
+                        pendingY = centerY
                         v.postDelayed(longPressRunnable, 500L)
                         true
                     }
@@ -439,15 +523,33 @@ class OcrBallOverlay(
                         ) {
                             dragging = true
                             v.removeCallbacks(longPressRunnable)
-                            // Pull it off the edge — the full circle reveals itself.
+                            // Pull it off the edge — animate half → full circle.
+                            val prevSide = side
                             side = BallView.SIDE_FLOAT
-                            applyGeometry()
+                            pendingX = (event.rawX - grabDx).roundToInt().coerceIn(0, gestureW)
+                            pendingY = (event.rawY - grabDy).roundToInt().coerceIn(
+                                gestureSize / 2,
+                                max(gestureSize / 2, gestureH - gestureSize / 2),
+                            )
+                            if (prevSide != BallView.SIDE_FLOAT) {
+                                expandDone = false
+                                startExpandAnimation(prevSide, gestureW, gestureH, gestureSize) {
+                                    expandDone = true
+                                }
+                            } else {
+                                expandDone = true
+                                flushDrag.run()
+                            }
                         }
-                        if (dragging) {
-                            centerX = (event.rawX - grabDx).roundToInt()
-                            centerY = (event.rawY - grabDy).roundToInt()
-                            applyGeometry()
-                            movePopup()
+                        if (dragging && expandDone) {
+                            pendingX = (event.rawX - grabDx).roundToInt()
+                            pendingY = (event.rawY - grabDy).roundToInt()
+                            // One window update per frame; the bubble follows in the
+                            // same flush so the two never tear apart visually.
+                            if (!flushScheduled) {
+                                flushScheduled = true
+                                v.postOnAnimation(flushDrag)
+                            }
                         }
                         true
                     }
@@ -459,18 +561,21 @@ class OcrBallOverlay(
                             runCatching { onTogglePause() }
                             true
                         } else {
-                            val (screenW, _, _) = screenMetrics()
-                            val size = sizePx()
-                            centerX = (event.rawX - grabDx).roundToInt()
-                            centerY = (event.rawY - grabDy).roundToInt()
+                            // Drop any frame still queued so the snap uses the final
+                            // finger position rather than the last rendered one.
+                            expandAnimator?.cancel()
+                            v.removeCallbacks(flushDrag)
+                            flushScheduled = false
+                            centerX = pendingX
+                            centerY = pendingY
                             val prevSide = side
                             side = when {
-                                centerX <= size * 3 / 4 -> BallView.SIDE_LEFT
-                                centerX >= screenW - size * 3 / 4 -> BallView.SIDE_RIGHT
+                                centerX <= gestureSize * 3 / 4 -> BallView.SIDE_LEFT
+                                centerX >= gestureW - gestureSize * 3 / 4 -> BallView.SIDE_RIGHT
                                 else -> BallView.SIDE_FLOAT
                             }
                             if (side == BallView.SIDE_LEFT) centerX = 0
-                            if (side == BallView.SIDE_RIGHT) centerX = screenW
+                            if (side == BallView.SIDE_RIGHT) centerX = gestureW
                             applyGeometry()
                             if (side != BallView.SIDE_FLOAT && side != prevSide) {
                                 triggerSnapHaptic()
@@ -481,6 +586,9 @@ class OcrBallOverlay(
                     }
                     MotionEvent.ACTION_CANCEL -> {
                         v.removeCallbacks(longPressRunnable)
+                        expandAnimator?.cancel()
+                        v.removeCallbacks(flushDrag)
+                        flushScheduled = false
                         dragging = false
                         true
                     }
