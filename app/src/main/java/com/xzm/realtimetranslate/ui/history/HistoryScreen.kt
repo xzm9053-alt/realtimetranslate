@@ -21,9 +21,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -69,6 +73,20 @@ fun HistoryScreen(
     val clipboard = LocalClipboardManager.current
     var expandedId by remember { mutableStateOf<Long?>(null) }
     var showClearConfirmDialog by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+
+    // 纯本地过滤：原文或译文任一命中即可，大小写不敏感。
+    val visibleEntries = remember(entries, query) {
+        val q = query.trim()
+        if (q.isEmpty()) {
+            entries
+        } else {
+            entries.filter {
+                it.inputFull.contains(q, ignoreCase = true) ||
+                    it.outputFull.contains(q, ignoreCase = true)
+            }
+        }
+    }
 
     if (showClearConfirmDialog) {
         AlertDialog(
@@ -131,8 +149,17 @@ fun HistoryScreen(
             )
         }
 
+        if (entries.isNotEmpty()) {
+            HistorySearchField(
+                query = query,
+                onQueryChange = { query = it },
+            )
+        }
+
         if (entries.isEmpty()) {
             HistoryEmptyState()
+        } else if (visibleEntries.isEmpty()) {
+            HistoryNoMatchState(query = query)
         } else {
             LazyColumn(
                 modifier = Modifier
@@ -140,7 +167,7 @@ fun HistoryScreen(
                     .padding(top = 2.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                items(entries, key = { it.stoppedAtEpochMs }) { entry ->
+                items(visibleEntries, key = { it.stoppedAtEpochMs }) { entry ->
                     HistoryEntryCard(
                         entry = entry,
                         expanded = expandedId == entry.stoppedAtEpochMs,
@@ -162,6 +189,87 @@ fun HistoryScreen(
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * 历史搜索框：纯本地过滤，不走 ViewModel，输入即筛选。
+ */
+@Composable
+private fun HistorySearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+) {
+    val scheme = MiuixTheme.colorScheme
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        placeholder = {
+            Text(
+                text = "搜索原文或译文…",
+                fontSize = 13.sp,
+                color = scheme.onSurfaceVariantSummary,
+            )
+        },
+        leadingIcon = {
+            Icon(
+                imageVector = Icons.Outlined.Search,
+                contentDescription = null,
+                tint = scheme.onSurfaceVariantSummary,
+                modifier = Modifier.size(20.dp),
+            )
+        },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                Icon(
+                    imageVector = Icons.Outlined.Close,
+                    contentDescription = "清除",
+                    tint = scheme.onSurfaceVariantSummary,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clickable { onQueryChange("") },
+                )
+            }
+        },
+        singleLine = true,
+        shape = RoundedCornerShape(12.dp),
+        textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
+    )
+}
+
+/**
+ * 搜索无结果时的提示卡片。
+ */
+@Composable
+private fun HistoryNoMatchState(query: String) {
+    val scheme = MiuixTheme.colorScheme
+    SectionCard(modifier = Modifier.padding(top = 8.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 36.dp, horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(text = "🔍", fontSize = 26.sp)
+            Text(
+                text = "没有匹配「$query」的记录",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = scheme.onSurface,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = "换个关键词试试，原文和译文都会被搜索",
+                fontSize = 12.5.sp,
+                lineHeight = 17.sp,
+                color = scheme.onSurfaceVariantSummary,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }
