@@ -44,6 +44,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -548,54 +549,81 @@ fun ImageTranslateScreen(
                                     fontWeight = FontWeight.Bold,
                                     color = scheme.onSurface,
                                 )
-                                Text(
-                                    text = "复制译文",
-                                    fontSize = 12.sp,
-                                    color = Booth.Accent,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .clickable {
-                                            clipboard.setText(AnnotatedString(state.translatedText))
-                                            Toast.makeText(context, "已复制译文到剪贴板", Toast.LENGTH_SHORT).show()
-                                        }
-                                        .padding(4.dp),
-                                )
+                                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                                    if (state.sourceText.isNotBlank()) {
+                                        Text(
+                                            text = "复制原文",
+                                            fontSize = 12.sp,
+                                            color = scheme.onSurfaceVariantSummary,
+                                            fontWeight = FontWeight.SemiBold,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .clickable {
+                                                    clipboard.setText(AnnotatedString(state.sourceText))
+                                                    Toast.makeText(context, "已复制原文到剪贴板", Toast.LENGTH_SHORT).show()
+                                                }
+                                                .padding(4.dp),
+                                        )
+                                    }
+                                    Text(
+                                        text = "复制译文",
+                                        fontSize = 12.sp,
+                                        color = Booth.Accent,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .clickable {
+                                                clipboard.setText(AnnotatedString(state.translatedText))
+                                                Toast.makeText(context, "已复制译文到剪贴板", Toast.LENGTH_SHORT).show()
+                                            }
+                                            .padding(4.dp),
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = "长按下方任意文字即可选中、划选或复制",
+                                fontSize = 11.sp,
+                                color = scheme.onSurfaceVariantSummary,
+                            )
+
+                            SettingDivider()
+
+                            SelectionContainer {
+                                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    Text(
+                                        text = stringResource(R.string.image_source_label),
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = scheme.onSurfaceVariantSummary,
+                                    )
+                                    Text(
+                                        text = state.sourceText.ifBlank { "—" },
+                                        fontSize = 13.sp,
+                                        lineHeight = 18.sp,
+                                        color = scheme.onSurface.copy(alpha = 0.8f),
+                                    )
+                                }
                             }
 
                             SettingDivider()
 
-                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                Text(
-                                    text = stringResource(R.string.image_source_label),
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = scheme.onSurfaceVariantSummary,
-                                )
-                                Text(
-                                    text = state.sourceText.ifBlank { "—" },
-                                    fontSize = 13.sp,
-                                    lineHeight = 18.sp,
-                                    color = scheme.onSurface.copy(alpha = 0.8f),
-                                )
-                            }
-
-                            SettingDivider()
-
-                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                Text(
-                                    text = stringResource(R.string.image_translation_label),
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Booth.Accent,
-                                )
-                                Text(
-                                    text = state.translatedText.ifBlank { "—" },
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    lineHeight = 20.sp,
-                                    color = scheme.onSurface,
-                                )
+                            SelectionContainer {
+                                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    Text(
+                                        text = stringResource(R.string.image_translation_label),
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Booth.Accent,
+                                    )
+                                    Text(
+                                        text = state.translatedText.ifBlank { "—" },
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        lineHeight = 20.sp,
+                                        color = scheme.onSurface,
+                                    )
+                                }
                             }
                         }
                     }
