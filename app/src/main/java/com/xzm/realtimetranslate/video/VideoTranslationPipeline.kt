@@ -10,21 +10,23 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
-import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * 视频翻译流水线：解码 → 重采样 → VAD 切段 → SenseVoice 识别 → 逐段翻译 → 字幕时间轴。
+ * 视频翻译流水线：解码 → 重采样 → VAD 切段 → 识别 → 逐段翻译 → 字幕时间轴。
  *
  * 三个环节并行推进，中间用有界 Channel 连接：解码比识别快得多，有界通道负责背压，
  * 让内存只跟"正在处理的那几段"成正比，而不是跟着片长走。整片处理完才产出最终
  * 字幕列表（[SubtitleCueBuilder] 需要前后文才能合并与去重）。
+ *
+ * 识别器由调用方注入（本地 SenseVoice 或云端 Whisper），流水线只依赖
+ * [BatchSpeechRecognizer] 这个"整段进、一句出"的契约。
  */
 class VideoTranslationPipeline(
     private val context: Context,
-    private val modelDir: File,
     private val vadModelPath: String,
+    private val recognizerFactory: () -> BatchSpeechRecognizer,
 ) {
 
     enum class Stage { EXTRACTING, RECOGNIZING }
@@ -39,7 +41,6 @@ class VideoTranslationPipeline(
 
     suspend fun run(
         uri: Uri,
-        language: String,
         translate: suspend (String) -> String?,
         onProgress: (Stage, Float) -> Unit = { _, _ -> },
         onSegment: (Int) -> Unit = {},
@@ -55,7 +56,7 @@ class VideoTranslationPipeline(
         val durationMs = AtomicLong(0L)
         val cues = ArrayList<TimedText>()
 
-        var recognizer: SenseVoiceBatchRecognizer? = null
+        var recognizer: BatchSpeechRecognizer? = null
         try {
             val producer = launch(Dispatchers.Default) {
                 try {
@@ -84,7 +85,7 @@ class VideoTranslationPipeline(
             }
 
             val consumer = launch(Dispatchers.Default) {
-                val asr = SenseVoiceBatchRecognizer(modelDir, language).also { recognizer = it }
+                val asr = recognizerFactory().also { recognizer = it }
                 var lastReported = 0f
                 try {
                     for (segment in segments) {

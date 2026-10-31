@@ -18,7 +18,7 @@ class SenseVoiceBatchRecognizer(
     modelDir: File,
     language: String = "auto",
     numThreads: Int = 2,
-) : AutoCloseable {
+) : BatchSpeechRecognizer {
 
     private val recognizer = OfflineRecognizer(
         assetManager = null,
@@ -36,7 +36,7 @@ class SenseVoiceBatchRecognizer(
     )
 
     /** Returns null for silence/noise so the caller can drop the segment. */
-    fun recognize(samples: FloatArray): String? {
+    override suspend fun recognize(samples: FloatArray): String? {
         if (samples.isEmpty()) return null
         val stream = recognizer.createStream()
         return try {

@@ -458,7 +458,10 @@
     <string name="video_change">Change video</string>
     <string name="video_empty_title">No video selected</string>
     <string name="video_empty_hint">Pick a local video to recognize its speech and generate translated subtitles</string>
-    <string name="video_local_asr_hint">Speech recognition always runs on-device with SenseVoice (fully offline) and supports Chinese (incl. Cantonese), English, Japanese and Korean only</string>
+    <string name="video_local_asr_hint">On-device SenseVoice is fully offline and needs no key, but supports Chinese (incl. Cantonese), English, Japanese and Korean only</string>
+    <string name="video_cloud_asr_hint">Cloud Whisper covers 99 languages and needs a network; it reuses the endpoint and key configured under Settings → Speech recognition → Generic OpenAI</string>
+    <string name="video_cloud_asr_need_config">Cloud recognition is not configured yet: choose the Generic OpenAI engine under Settings → Speech recognition and fill in the transcription endpoint</string>
+    <string name="video_cloud_asr_need_key">Cloud recognition has no API key: add one under Settings → Speech recognition and try again</string>
     <string name="video_start">Recognize and translate</string>
     <string name="video_stop">Cancel</string>
     <string name="video_stage_extract">Extracting audio…</string>

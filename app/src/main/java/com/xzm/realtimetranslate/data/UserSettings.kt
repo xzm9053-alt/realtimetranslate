@@ -93,6 +93,9 @@ data class UserSettings(
      * exported SRT all read this one value so the three never disagree.
      */
     val videoSubtitleMode: VideoSubtitleMode = Defaults.VIDEO_SUBTITLE_MODE,
+    // 视频字幕的语音识别引擎：默认本地 SenseVoice（免 Key 离线），
+    // 需要五种以外的语言时切云端 Whisper。与声音同传的 asrEngine 互不影响。
+    val videoAsrEngine: VideoAsrEngine = Defaults.VIDEO_ASR_ENGINE,
     // 阿里百炼 FunASR 静音断句门槛（毫秒）：说话停顿超过此阈值即判定为句子结束并送翻。默认 400ms。
     val aliyunAsrSilenceMs: Int = Defaults.ALIYUN_ASR_SILENCE_MS,
     val genericAsrBaseUrl: String = Defaults.GENERIC_ASR_BASE_URL,
@@ -174,6 +177,7 @@ data class UserSettings(
         const val SENTENCES_PER_PARAGRAPH = 0
         const val SENTENCES_PER_PARAGRAPH_MAX = 5
         val VIDEO_SUBTITLE_MODE: VideoSubtitleMode = VideoSubtitleMode.TRANSLATION
+        val VIDEO_ASR_ENGINE: VideoAsrEngine = VideoAsrEngine.LOCAL
         const val ALIYUN_ASR_SILENCE_MS = 200
         const val GENERIC_ASR_BASE_URL = "https://api.siliconflow.cn/v1"
         const val GENERIC_ASR_API_KEY = ""

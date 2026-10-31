@@ -457,7 +457,10 @@
     <string name="video_change">换个视频</string>
     <string name="video_empty_title">还没有选择视频</string>
     <string name="video_empty_hint">从本地选一个视频，识别其中的人声并生成译文字幕</string>
-    <string name="video_local_asr_hint">语音识别固定使用本地 SenseVoice（完全离线），仅支持中文（含粤语）、英语、日语、韩语</string>
+    <string name="video_local_asr_hint">本地 SenseVoice 完全离线、免 Key，仅支持中文（含粤语）、英语、日语、韩语</string>
+    <string name="video_cloud_asr_hint">云端 Whisper 支持 99 种语言，需要联网；使用「设置 → 语音识别 → 通用 OpenAI」里已填好的地址与 Key</string>
+    <string name="video_cloud_asr_need_config">云端识别尚未配置：请到「设置 → 语音识别」选择通用 OpenAI 引擎并填写转录地址</string>
+    <string name="video_cloud_asr_need_key">云端识别缺少 API Key：请到「设置 → 语音识别」填写后再试</string>
     <string name="video_start">开始识别并翻译</string>
     <string name="video_stop">取消</string>
     <string name="video_stage_extract">正在抽取音频…</string>

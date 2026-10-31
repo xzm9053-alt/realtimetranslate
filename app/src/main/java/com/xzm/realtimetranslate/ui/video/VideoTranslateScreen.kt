@@ -73,6 +73,7 @@ import androidx.media3.ui.PlayerView
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.LanguageOption
 import com.xzm.realtimetranslate.data.SupportedLanguages
+import com.xzm.realtimetranslate.data.VideoAsrEngine
 import com.xzm.realtimetranslate.data.VideoSubtitleMode
 import com.xzm.realtimetranslate.ui.components.LanguageChip
 import com.xzm.realtimetranslate.ui.components.LanguagePickerSheet
@@ -94,8 +95,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 private enum class LangField { Source, Target }
 
-/** SenseVoice recognizes these; anything else would be silently mistranscribed. */
-private val VIDEO_SOURCE_CODES = listOf("auto", "zh-Hans", "zh-Hant", "en", "ja", "ko")
+/** SenseVoice 只认这五种；切云端后没有这个限制。 */
+private val LOCAL_SOURCE_CODES = VideoAsrEngine.LOCAL_SOURCE_CODES
 
 @Composable
 fun VideoTranslateScreen(
@@ -116,9 +117,15 @@ fun VideoTranslateScreen(
         if (uri != null) viewModel.setVideo(uri, queryDisplayName(context, uri))
     }
 
-    val sourceOptions = remember {
+    val sourceOptions = remember(state.asrEngine) {
         val known = SupportedLanguages.sourceOptions.associateBy { it.code }
-        VIDEO_SOURCE_CODES.mapNotNull { known[it] }
+        // 本地 SenseVoice 只认五种，云端 Whisper 支持 99 种，所以下拉长度跟引擎走。
+        val codes = if (state.asrEngine == VideoAsrEngine.LOCAL) {
+            LOCAL_SOURCE_CODES
+        } else {
+            SupportedLanguages.sourceOptions.map { it.code }
+        }
+        codes.mapNotNull { known[it] }
     }
     val targetOptions: List<LanguageOption> = SupportedLanguages.targetOptions
     val sourceLabel = sourceOptions.firstOrNull { it.code == state.sourceCode }
@@ -209,7 +216,7 @@ fun VideoTranslateScreen(
                         .padding(horizontal = 10.dp, vertical = 5.dp),
                 ) {
                     Text(
-                        text = "🎬 本地视频离线提取",
+                        text = "🎬 视频字幕提取与翻译",
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Booth.Accent,
@@ -359,8 +366,30 @@ fun VideoTranslateScreen(
                         onCheckedChange = viewModel::setRecognizeOnly,
                         enabled = !state.isRunning,
                     )
+                    SettingDivider()
                     Text(
-                        text = stringResource(R.string.video_local_asr_hint),
+                        text = "语音识别引擎",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ModeChip(
+                            label = "📱 本地 SenseVoice",
+                            selected = state.asrEngine == VideoAsrEngine.LOCAL,
+                            onClick = { if (!state.isRunning) viewModel.setAsrEngine(VideoAsrEngine.LOCAL) },
+                        )
+                        ModeChip(
+                            label = "☁️ 云端 Whisper",
+                            selected = state.asrEngine == VideoAsrEngine.CLOUD,
+                            onClick = { if (!state.isRunning) viewModel.setAsrEngine(VideoAsrEngine.CLOUD) },
+                        )
+                    }
+                    Text(
+                        text = if (state.asrEngine == VideoAsrEngine.LOCAL) {
+                            stringResource(R.string.video_local_asr_hint)
+                        } else {
+                            stringResource(R.string.video_cloud_asr_hint)
+                        },
                         fontSize = 11.sp,
                         lineHeight = 16.sp,
                         color = scheme.onSurfaceVariantSummary,

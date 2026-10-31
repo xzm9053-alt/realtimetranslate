@@ -11,7 +11,9 @@ import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.ApiKeyStore
 import com.xzm.realtimetranslate.data.SupportedLanguages
 import com.xzm.realtimetranslate.data.TranslationEngineType
+import com.xzm.realtimetranslate.data.UserSettings
 import com.xzm.realtimetranslate.data.UserSettingsRepository
+import com.xzm.realtimetranslate.data.VideoAsrEngine
 import com.xzm.realtimetranslate.data.VideoSubtitleMode
 import com.xzm.realtimetranslate.service.SessionBus
 import com.xzm.realtimetranslate.translate.AsrEngine
@@ -21,6 +23,8 @@ import com.xzm.realtimetranslate.translate.TranslationEngineFactory
 import com.xzm.realtimetranslate.util.ExportTranslator
 import com.xzm.realtimetranslate.util.ModelDownloader
 import com.xzm.realtimetranslate.util.SrtFormatter
+import com.xzm.realtimetranslate.video.CloudBatchRecognizer
+import com.xzm.realtimetranslate.video.SenseVoiceBatchRecognizer
 import com.xzm.realtimetranslate.video.SubtitleBurnIn
 import com.xzm.realtimetranslate.video.VideoCue
 import com.xzm.realtimetranslate.video.VideoTranslationPipeline
@@ -46,6 +50,8 @@ data class VideoTranslateUiState(
     val sourceCode: String = "auto",
     val targetCode: String = "zh-Hans",
     val recognizeOnly: Boolean = false,
+    /** 视频字幕用哪个识别引擎；默认本地 SenseVoice。 */
+    val asrEngine: VideoAsrEngine = VideoAsrEngine.LOCAL,
     val isRunning: Boolean = false,
     val stage: VideoTranslationPipeline.Stage? = null,
     val progress: Float = 0f,
@@ -86,7 +92,11 @@ class VideoTranslateViewModel(
                 SupportedLanguages.targetOptions.any { it.code == code }
             } ?: "zh-Hans"
             _state.update {
-                it.copy(targetCode = target, subtitleMode = settings.videoSubtitleMode)
+                it.copy(
+                    targetCode = target,
+                    subtitleMode = settings.videoSubtitleMode,
+                    asrEngine = settings.videoAsrEngine,
+                )
             }
         }
     }
@@ -136,6 +146,23 @@ class VideoTranslateViewModel(
         _state.update { it.copy(recognizeOnly = enabled) }
     }
 
+    /** 切换视频字幕的语音识别引擎（本地 / 云端）。下次开始提取时生效。 */
+    fun setAsrEngine(engine: VideoAsrEngine) {
+        _state.update { current ->
+            // 从云端切回本地时，已选的西语等本地不支持的源语言必须退回 auto，
+            // 否则下拉显示「自动」而实际仍按西语识别。
+            val source = if (engine == VideoAsrEngine.LOCAL &&
+                current.sourceCode !in VideoAsrEngine.LOCAL_SOURCE_CODES
+            ) {
+                "auto"
+            } else {
+                current.sourceCode
+            }
+            current.copy(asrEngine = engine, sourceCode = source)
+        }
+        viewModelScope.launch { settingsRepository.update { it.copy(videoAsrEngine = engine) } }
+    }
+
     fun start() {
         val snapshot = _state.value
         val uri = snapshot.uri?.let(Uri::parse) ?: return
@@ -179,7 +206,7 @@ class VideoTranslateViewModel(
                 val ready = withContext(Dispatchers.IO) {
                     modelManager.seedFromAssetsIfNeeded() || modelManager.paths.isReady()
                 }
-                if (!ready) {
+                if (!ready && snapshot.asrEngine == VideoAsrEngine.LOCAL) {
                     _state.update {
                         it.copy(
                             isRunning = false,
@@ -188,6 +215,16 @@ class VideoTranslateViewModel(
                         )
                     }
                     return@launch
+                }
+
+                if (snapshot.asrEngine == VideoAsrEngine.CLOUD) {
+                    val missing = cloudAsrMissingReason(settings)
+                    if (missing != null) {
+                        _state.update {
+                            it.copy(isRunning = false, stage = null, error = missing)
+                        }
+                        return@launch
+                    }
                 }
 
                 val paths = modelManager.paths
@@ -202,15 +239,31 @@ class VideoTranslateViewModel(
                         liveSettings = { settingsRepository.settings.first() },
                     )
                 }
+
+                val sourceCode = snapshot.sourceCode
+                val useCloud = snapshot.asrEngine == VideoAsrEngine.CLOUD
                 val pipeline = VideoTranslationPipeline(
                     context = getApplication(),
-                    modelDir = modelDir,
                     vadModelPath = paths.sileroVad.absolutePath,
+                    recognizerFactory = {
+                        if (useCloud) {
+                            CloudBatchRecognizer(
+                                baseUrl = settings.genericAsrBaseUrl,
+                                apiKey = apiKeyStore.getGenericAsrKey(),
+                                model = settings.genericAsrModel,
+                                language = sourceCode,
+                            )
+                        } else {
+                            SenseVoiceBatchRecognizer(
+                                modelDir = modelDir,
+                                language = AsrEngine.senseVoiceLanguageFor(sourceCode),
+                            )
+                        }
+                    },
                 )
 
                 val result = pipeline.run(
                     uri = uri,
-                    language = AsrEngine.senseVoiceLanguageFor(snapshot.sourceCode),
                     translate = { text ->
                         if (isRecognizeOnly) {
                             text
@@ -386,6 +439,17 @@ class VideoTranslateViewModel(
 
     fun dismissMessage() {
         _state.update { it.copy(message = null, error = null) }
+    }
+
+    /** 云端识别缺什么就直说，不要让用户开了才发现报错。 */
+    private fun cloudAsrMissingReason(settings: UserSettings): String? {
+        if (settings.genericAsrBaseUrl.isBlank()) {
+            return getApplication<Application>().getString(R.string.video_cloud_asr_need_config)
+        }
+        if (apiKeyStore.getGenericAsrKey().isBlank()) {
+            return getApplication<Application>().getString(R.string.video_cloud_asr_need_key)
+        }
+        return null
     }
 
     private companion object {
