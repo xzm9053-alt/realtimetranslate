@@ -2,6 +2,7 @@ package com.xzm.realtimetranslate.translate
 
 import com.xzm.realtimetranslate.data.ApiKeyStore
 import com.xzm.realtimetranslate.data.ThinkingOffStyle
+import com.xzm.realtimetranslate.data.TranslationDomain
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
 
@@ -76,6 +77,7 @@ private fun UserSettings.deepSeekConfig(): LlmRequestConfig = LlmRequestConfig(
     model = deepseekModel.ifBlank { UserSettings.Defaults.DEEPSEEK_MODEL },
     thinking = aiDeepThinking,
     thinkingOffStyle = ThinkingOffStyle.THINKING_OBJECT,
+    domainStylePrompt = translationDomain.promptFor(),
 )
 
 private fun UserSettings.zhipuConfig(): LlmRequestConfig = LlmRequestConfig(
@@ -83,6 +85,7 @@ private fun UserSettings.zhipuConfig(): LlmRequestConfig = LlmRequestConfig(
     model = zhipuModel.ifBlank { UserSettings.Defaults.ZHIPU_MODEL },
     thinking = aiDeepThinking,
     thinkingOffStyle = ThinkingOffStyle.THINKING_OBJECT,
+    domainStylePrompt = translationDomain.promptFor(),
 )
 
 // The compatibility layer silently drops a `thinking` object, so Gemini needs the flat
@@ -92,6 +95,7 @@ private fun UserSettings.geminiConfig(): LlmRequestConfig = LlmRequestConfig(
     model = geminiModel.ifBlank { UserSettings.Defaults.GEMINI_MODEL },
     thinking = aiDeepThinking,
     thinkingOffStyle = ThinkingOffStyle.REASONING_EFFORT,
+    domainStylePrompt = translationDomain.promptFor(),
 )
 
 private fun UserSettings.genericConfig(): LlmRequestConfig = LlmRequestConfig(
@@ -105,4 +109,26 @@ private fun UserSettings.genericConfig(): LlmRequestConfig = LlmRequestConfig(
     model = genericModel.trim(),
     thinking = aiDeepThinking,
     thinkingOffStyle = genericThinkingOffStyle,
+    domainStylePrompt = translationDomain.promptFor(),
 )
+
+/**
+ * 领域风格 → 系统提示词片段。GENERAL 返回空串：保持原来的提示词逐字不变，
+ * 这是已验证过的行为，没理由因为加了领域选项就去改默认输出。
+ */
+private fun TranslationDomain.promptFor(): String = when (this) {
+    TranslationDomain.GENERAL -> ""
+    TranslationDomain.GAME_ANIME ->
+        "Domain: anime and video games (ACG). Translate game terminology, ACG memes and " +
+            "each character's persona faithfully (tsundere, honorifics, verbal tics, etc.). " +
+            "Keep the anime flavour in the target language."
+    TranslationDomain.BUSINESS ->
+        "Domain: business and workplace. Use formal, polite and professional wording, " +
+            "standard commercial terminology and a measured, precise tone."
+    TranslationDomain.ACADEMIC ->
+        "Domain: science and academia. Keep technical terminology, proper nouns and " +
+            "algorithms precise; the register must be rigorous and logical."
+    TranslationDomain.ENTERTAINMENT ->
+        "Domain: film and variety shows. Preserve emotion, humour, puns and internet slang; " +
+            "the result should sound colloquial and vivid."
+}

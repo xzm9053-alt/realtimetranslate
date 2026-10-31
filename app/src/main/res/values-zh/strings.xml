@@ -98,6 +98,18 @@
     <string name="engine_gemini">谷歌 Gemini</string>
     <string name="engine_gemini_summary">流式 · 有免费额度 · 需要 Google AI Studio 的 Key</string>
     <string name="settings_deepseek_key">DeepSeek API Key</string>
+    <string name="settings_translation_domain">翻译领域风格</string>
+    <string name="settings_translation_domain_summary">同一句话在不同场景该译成不同语气。仅对 AI 大模型引擎生效，改完下一句即生效。</string>
+    <string name="domain_general">🌐 通用日常</string>
+    <string name="domain_general_summary">标准口语与自然交流，兼顾通顺与地道（默认）</string>
+    <string name="domain_game_anime">🎮 动漫游戏</string>
+    <string name="domain_game_anime_summary">精准还原 ACG 术语、流行梗、角色语气与口癖</string>
+    <string name="domain_business">💼 商务职场</string>
+    <string name="domain_business_summary">正式得体的商务用语、规范术语，语气稳重严谨</string>
+    <string name="domain_academic">🔬 科技学术</string>
+    <string name="domain_academic_summary">精确还原专有名词、算法与技术术语，行文严密</string>
+    <string name="domain_entertainment">🎬 影视综艺</string>
+    <string name="domain_entertainment_summary">还原台词情感、幽默梗与网络热词，接地气有感染力</string>
     <string name="settings_deepseek_base_url">API 地址（高级）</string>
     <string name="settings_zhipu_key">智谱 GLM API Key</string>
     <string name="settings_zhipu_base_url">API 地址（高级）</string>
@@ -520,7 +532,7 @@
     <string name="document_file_info_title">当前文档</string>
     <string name="document_bilingual_toggle">PDF 双语交替导出</string>
     <string name="document_bilingual_summary">每页原文后紧跟一页译文，方便对照阅读（关掉则仅导出译文页）</string>
-    <string name="document_scope_notice">说明：PDF 单次最多支持 50 页；Word 替换正文段落与表格文字，页眉页脚与艺术字不作替换。</string>
+    <string name="document_scope_notice">说明：PDF 单次最多支持 50 页；Word 替换正文段落与表格文字，页眉页脚与艺术字不作替换；TXT / Markdown / Excel / PPT 抽取文字后导出双语对照的 .txt。</string>
     <string name="document_start">开始翻译文档</string>
     <string name="document_translating">正在翻译文档…</string>
     <string name="document_done_title">文档翻译完成</string>

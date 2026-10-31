@@ -44,6 +44,7 @@ class UserSettingsRepository(private val context: Context) {
         val genericBaseUrl = stringPreferencesKey("generic_base_url")
         val genericThinkingOffStyle = stringPreferencesKey("generic_thinking_off_style")
         val aiDeepThinking = booleanPreferencesKey("ai_deep_thinking")
+        val translationDomain = stringPreferencesKey("translation_domain")
         val modelMirrorUrl = stringPreferencesKey("model_mirror_url")
         val huggingfaceToken = stringPreferencesKey("huggingface_token")
         val historyMode = stringPreferencesKey("history_mode")
@@ -69,6 +70,10 @@ class UserSettingsRepository(private val context: Context) {
         val sentencesPerParagraph = intPreferencesKey("sentences_per_paragraph")
         val videoSubtitleMode = stringPreferencesKey("video_subtitle_mode")
         val videoAsrEngine = stringPreferencesKey("video_asr_engine")
+        val videoFontScale = floatPreferencesKey("video_font_scale")
+        val videoBackgroundAlpha = floatPreferencesKey("video_background_alpha")
+        val videoTextColor = longPreferencesKey("video_text_color")
+        val videoSourceTextColor = longPreferencesKey("video_source_text_color")
         val aliyunAsrSilenceMs = intPreferencesKey("aliyun_asr_silence_ms")
         val genericAsrBaseUrl = stringPreferencesKey("generic_asr_base_url")
         val genericAsrApiKey = stringPreferencesKey("generic_asr_api_key")
@@ -111,6 +116,7 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.genericBaseUrl] = next.genericBaseUrl
             prefs[Keys.genericThinkingOffStyle] = next.genericThinkingOffStyle.name
             prefs[Keys.aiDeepThinking] = next.aiDeepThinking
+            prefs[Keys.translationDomain] = next.translationDomain.name
             prefs[Keys.modelMirrorUrl] = next.modelMirrorUrl
             prefs[Keys.huggingfaceToken] = next.huggingfaceToken
             prefs[Keys.historyMode] = next.historyMode.name
@@ -138,6 +144,10 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.sentencesPerParagraph] = next.sentencesPerParagraph
             prefs[Keys.videoSubtitleMode] = next.videoSubtitleMode.name
             prefs[Keys.videoAsrEngine] = next.videoAsrEngine.name
+            prefs[Keys.videoFontScale] = next.videoSubtitleStyle.fontScale
+            prefs[Keys.videoBackgroundAlpha] = next.videoSubtitleStyle.backgroundAlpha
+            prefs[Keys.videoTextColor] = next.videoSubtitleStyle.textColor
+            prefs[Keys.videoSourceTextColor] = next.videoSubtitleStyle.sourceTextColor
             prefs[Keys.aliyunAsrSilenceMs] = next.aliyunAsrSilenceMs
             prefs[Keys.genericAsrBaseUrl] = next.genericAsrBaseUrl
             prefs[Keys.genericAsrApiKey] = next.genericAsrApiKey
@@ -202,6 +212,7 @@ class UserSettingsRepository(private val context: Context) {
         genericThinkingOffStyle = ThinkingOffStyle.fromStorage(this[Keys.genericThinkingOffStyle]),
         // Absent key (existing installs) → Defaults, i.e. false. No migration needed.
         aiDeepThinking = this[Keys.aiDeepThinking] ?: UserSettings.Defaults.AI_DEEP_THINKING,
+        translationDomain = TranslationDomain.fromStorage(this[Keys.translationDomain]),
         modelMirrorUrl = this[Keys.modelMirrorUrl] ?: UserSettings.Defaults.MODEL_MIRROR_URL,
         huggingfaceToken = this[Keys.huggingfaceToken] ?: UserSettings.Defaults.HF_TOKEN,
         historyMode = HistoryMode.fromStorage(this[Keys.historyMode]),
@@ -235,6 +246,14 @@ class UserSettingsRepository(private val context: Context) {
             ?: UserSettings.Defaults.SENTENCES_PER_PARAGRAPH,
         videoSubtitleMode = VideoSubtitleMode.fromStorage(this[Keys.videoSubtitleMode]),
         videoAsrEngine = VideoAsrEngine.fromStorage(this[Keys.videoAsrEngine]),
+        videoSubtitleStyle = VideoSubtitleStyle(
+            fontScale = this[Keys.videoFontScale] ?: VideoSubtitleStyle.Defaults.FONT_SCALE,
+            backgroundAlpha = this[Keys.videoBackgroundAlpha]
+                ?: VideoSubtitleStyle.Defaults.BACKGROUND_ALPHA,
+            textColor = this[Keys.videoTextColor] ?: VideoSubtitleStyle.Defaults.TEXT_COLOR,
+            sourceTextColor = this[Keys.videoSourceTextColor]
+                ?: VideoSubtitleStyle.Defaults.SOURCE_TEXT_COLOR,
+        ),
         aliyunAsrSilenceMs = this[Keys.aliyunAsrSilenceMs] ?: UserSettings.Defaults.ALIYUN_ASR_SILENCE_MS,
         genericAsrBaseUrl = this[Keys.genericAsrBaseUrl] ?: UserSettings.Defaults.GENERIC_ASR_BASE_URL,
         genericAsrApiKey = this[Keys.genericAsrApiKey] ?: UserSettings.Defaults.GENERIC_ASR_API_KEY,

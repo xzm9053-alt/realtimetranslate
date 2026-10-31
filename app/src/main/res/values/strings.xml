@@ -98,6 +98,18 @@
     <string name="engine_gemini">Google Gemini</string>
     <string name="engine_gemini_summary">Streaming · has a free tier · needs a Google AI Studio key</string>
     <string name="settings_deepseek_key">DeepSeek API Key</string>
+    <string name="settings_translation_domain">Translation domain</string>
+    <string name="settings_translation_domain_summary">The same sentence should read differently by context. Applies to LLM engines only, and takes effect on the next sentence.</string>
+    <string name="domain_general">🌐 General</string>
+    <string name="domain_general_summary">Natural everyday speech, both fluent and idiomatic (default)</string>
+    <string name="domain_game_anime">🎮 Anime &amp; games</string>
+    <string name="domain_game_anime_summary">Faithful ACG terminology, memes, character voice and verbal tics</string>
+    <string name="domain_business">💼 Business</string>
+    <string name="domain_business_summary">Formal, polite commercial wording and standard terminology</string>
+    <string name="domain_academic">🔬 Science &amp; academia</string>
+    <string name="domain_academic_summary">Precise proper nouns, algorithms and technical terms; rigorous register</string>
+    <string name="domain_entertainment">🎬 Film &amp; variety</string>
+    <string name="domain_entertainment_summary">Preserve emotion, humour, puns and internet slang; colloquial and vivid</string>
     <string name="settings_deepseek_base_url">API base URL (advanced)</string>
     <string name="settings_zhipu_key">Zhipu GLM API Key</string>
     <string name="settings_zhipu_base_url">API base URL (advanced)</string>
@@ -521,7 +533,7 @@
     <string name="document_file_info_title">Selected document</string>
     <string name="document_bilingual_toggle">Bilingual alternating pages</string>
     <string name="document_bilingual_summary">Each original page is followed by its translated page (turn off for translation only)</string>
-    <string name="document_scope_notice">Notice: PDF supports up to 50 pages per run; Word replaces body paragraphs and tables.</string>
+    <string name="document_scope_notice">Notice: PDF supports up to 50 pages per run; Word replaces body paragraphs and tables; TXT / Markdown / Excel / PPT are extracted to a bilingual .txt file.</string>
     <string name="document_start">Start translating document</string>
     <string name="document_translating">Translating document…</string>
     <string name="document_done_title">Document translation complete</string>

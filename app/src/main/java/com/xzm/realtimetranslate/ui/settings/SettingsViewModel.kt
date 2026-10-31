@@ -10,6 +10,7 @@ import com.xzm.realtimetranslate.data.ApiKeyStore
 import com.xzm.realtimetranslate.data.AsrEngineType
 import com.xzm.realtimetranslate.data.HistoryMode
 import com.xzm.realtimetranslate.data.ThinkingOffStyle
+import com.xzm.realtimetranslate.data.TranslationDomain
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
 import com.xzm.realtimetranslate.data.UserSettingsRepository
@@ -288,6 +289,13 @@ class SettingsViewModel(
      */
     fun setAiDeepThinking(enabled: Boolean) {
         update { it.copy(aiDeepThinking = enabled) }
+    }
+
+    /**
+     * 翻译领域风格。同样下一句即生效（引擎每次请求都重读设置）。
+     */
+    fun setTranslationDomain(domain: TranslationDomain) {
+        update { it.copy(translationDomain = domain) }
     }
 
     /**

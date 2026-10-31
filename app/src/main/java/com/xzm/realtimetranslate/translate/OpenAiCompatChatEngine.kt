@@ -45,6 +45,11 @@ data class LlmRequestConfig(
      * overrides it from user settings, where `NONE` means "send nothing at all".
      */
     val thinkingOffStyle: ThinkingOffStyle = ThinkingOffStyle.THINKING_OBJECT,
+    /**
+     * 领域风格提示词。空串 = 不追加任何领域指导（保持原来的通用提示词）。
+     * 通过 provider 每次请求重新求值，所以改领域下一句即生效。
+     */
+    val domainStylePrompt: String = "",
 )
 
 /**
@@ -120,7 +125,7 @@ abstract class OpenAiCompatChatEngine(
     ): Flow<String> = flow {
         val cfg = config()
         val target = targetLabel(targetLang.ifBlank { "zh-Hans" })
-        val messages = buildMessages(text, target)
+        val messages = buildMessages(text, target, cfg.domainStylePrompt)
         val url = endpoint(cfg, "/chat/completions")
 
         // ---- TRANSPROF 诊断（只读埋点，不影响任何行为）----------------------
@@ -540,7 +545,7 @@ abstract class OpenAiCompatChatEngine(
         }
     }
 
-    private fun buildMessages(text: String, target: String): JSONArray {
+    private fun buildMessages(text: String, target: String, domainPrompt: String = ""): JSONArray {
         val messages = JSONArray()
             .put(
                 JSONObject()
@@ -549,7 +554,10 @@ abstract class OpenAiCompatChatEngine(
                         "content",
                         "You are a professional translation engine. Translate the user's text into " +
                             "$target. Output ONLY the translated text. No explanations, no notes, " +
-                            "no quotation marks, no code fences.",
+                            "no quotation marks, no code fences." +
+                            // 领域风格提示词接在硬性规则之后：它只调整语气与术语，
+                            // 不应该覆盖“只输出译文”这条更高优先级的约束。
+                            if (domainPrompt.isBlank()) "" else "\n$domainPrompt",
                     ),
             )
         // 上下文：把最近几轮（原文→译文）作为对话历史带入，翻译时参考前文（人称、指代、省略等）。

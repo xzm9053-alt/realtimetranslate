@@ -41,6 +41,8 @@ data class UserSettings(
     // latency, which is what made DeepSeek feel slow. No effect on the pure
     // translation APIs (Microsoft / Google) — see TranslationEngineType.isLlm.
     val aiDeepThinking: Boolean = Defaults.AI_DEEP_THINKING,
+    // 翻译领域风格：同一句话在不同领域该译成不同语气。仅对大模型引擎生效。
+    val translationDomain: TranslationDomain = Defaults.TRANSLATION_DOMAIN,
     val modelMirrorUrl: String = Defaults.MODEL_MIRROR_URL,
     val huggingfaceToken: String = Defaults.HF_TOKEN,
     val historyMode: HistoryMode = Defaults.HISTORY_MODE,
@@ -96,6 +98,8 @@ data class UserSettings(
     // 视频字幕的语音识别引擎：默认本地 SenseVoice（免 Key 离线），
     // 需要五种以外的语言时切云端 Whisper。与声音同传的 asrEngine 互不影响。
     val videoAsrEngine: VideoAsrEngine = Defaults.VIDEO_ASR_ENGINE,
+    // 视频字幕外观：预览层与压制层共用。
+    val videoSubtitleStyle: VideoSubtitleStyle = VideoSubtitleStyle(),
     // 阿里百炼 FunASR 静音断句门槛（毫秒）：说话停顿超过此阈值即判定为句子结束并送翻。默认 400ms。
     val aliyunAsrSilenceMs: Int = Defaults.ALIYUN_ASR_SILENCE_MS,
     val genericAsrBaseUrl: String = Defaults.GENERIC_ASR_BASE_URL,
@@ -134,6 +138,7 @@ data class UserSettings(
         const val GENERIC_MODEL = ""
         val GENERIC_THINKING_OFF_STYLE: ThinkingOffStyle = ThinkingOffStyle.NONE
         const val AI_DEEP_THINKING = false
+        val TRANSLATION_DOMAIN: TranslationDomain = TranslationDomain.GENERAL
         const val MODEL_MIRROR_URL = "https://hf-mirror.com"
         const val HF_TOKEN = ""
         val TRANSLATION_ENGINE: TranslationEngineType = TranslationEngineType.DEEPSEEK

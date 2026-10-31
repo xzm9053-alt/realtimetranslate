@@ -82,6 +82,7 @@ import com.xzm.realtimetranslate.data.HistoryMode
 import com.xzm.realtimetranslate.data.OcrScript
 import com.xzm.realtimetranslate.data.SubtitleDisplayMode
 import com.xzm.realtimetranslate.data.ThinkingOffStyle
+import com.xzm.realtimetranslate.data.TranslationDomain
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
 import com.xzm.realtimetranslate.translate.AsrModelCatalog
@@ -1061,6 +1062,7 @@ fun SettingsScreen(
                     onUpdateGenericBaseUrl = viewModel::updateGenericBaseUrl,
                     onUpdateGenericThinkingOffStyle = viewModel::setGenericThinkingOffStyle,
                     onUpdateAiDeepThinking = viewModel::setAiDeepThinking,
+                    onUpdateTranslationDomain = viewModel::setTranslationDomain,
                     testing = testing,
                     testResult = testResult,
                     onSaveAndTest = {
@@ -1964,6 +1966,7 @@ private fun EngineConfigSubScreen(
     onUpdateGenericBaseUrl: (TextFieldValue) -> Unit,
     onUpdateGenericThinkingOffStyle: (ThinkingOffStyle) -> Unit,
     onUpdateAiDeepThinking: (Boolean) -> Unit,
+    onUpdateTranslationDomain: (TranslationDomain) -> Unit,
     testing: Boolean,
     testResult: String?,
     onSaveAndTest: () -> Unit,
@@ -2187,6 +2190,28 @@ private fun EngineConfigSubScreen(
                     onCheckedChange = onUpdateAiDeepThinking,
                     enabled = true,
                 )
+                SettingDivider()
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                    Text(
+                        text = stringResource(R.string.settings_translation_domain),
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_translation_domain_summary),
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
+                    )
+                    TranslationDomain.entries.forEach { domain ->
+                        OptionRow(
+                            label = stringResource(domain.labelRes),
+                            summary = stringResource(domain.summaryRes),
+                            selected = settings.translationDomain == domain,
+                            horizontalPadding = 0.dp,
+                            onClick = { onUpdateTranslationDomain(domain) },
+                        )
+                    }
+                }
             }
         }
 
