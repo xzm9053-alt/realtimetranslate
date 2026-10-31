@@ -25,6 +25,7 @@ import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.ProgressHolder
 import androidx.media3.transformer.Transformer
 import com.xzm.realtimetranslate.data.VideoSubtitleMode
+import com.xzm.realtimetranslate.data.VideoSubtitleStyle
 import com.xzm.realtimetranslate.util.SrtFormatter
 import com.xzm.realtimetranslate.util.AppLog as Log
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -54,6 +55,7 @@ object SubtitleBurnIn {
         cues: List<VideoCue>,
         outputFile: File,
         mode: VideoSubtitleMode = VideoSubtitleMode.TRANSLATION,
+        style: VideoSubtitleStyle = VideoSubtitleStyle(),
         onProgress: (Float) -> Unit = {},
     ): Result<File> {
         if (cues.isEmpty()) {
@@ -67,7 +69,7 @@ object SubtitleBurnIn {
             .setBackgroundFrameAnchor(0f, -0.82f)
             .build()
 
-        val effects = Effects(emptyList(), listOf(OverlayEffect(listOf(CueBitmapOverlay(cues, mode)))))
+        val effects = Effects(emptyList(), listOf(OverlayEffect(listOf(CueBitmapOverlay(cues, mode, style)))))
         val item = EditedMediaItem.Builder(MediaItem.fromUri(source))
             .setEffects(effects)
             .build()
@@ -138,6 +140,7 @@ object SubtitleBurnIn {
 private class CueBitmapOverlay(
     private val cues: List<VideoCue>,
     private val mode: VideoSubtitleMode,
+    private val style: VideoSubtitleStyle,
 ) : BitmapOverlay() {
 
     private var cachedKey: String? = null
@@ -172,6 +175,9 @@ private class CueBitmapOverlay(
         val source = cue.source.trim()
         val translation = cue.translation.trim()
 
+        val textSize = TEXT_SIZE_PX * style.fontScale
+        val sourceSize = SOURCE_SIZE_PX * style.fontScale
+
         val lines = ArrayList<StaticLayout>(2)
         val primary = when (mode) {
             VideoSubtitleMode.SOURCE -> source.ifBlank { translation }
@@ -181,14 +187,14 @@ private class CueBitmapOverlay(
         // translation. With a blank translation the primary already *is* the source, and
         // drawing both would show the same sentence twice.
         if (mode == VideoSubtitleMode.BOTH && translation.isNotEmpty() && source != translation) {
-            lines += layout(source, SOURCE_SIZE_PX, SOURCE_COLOR)
+            lines += layout(source, sourceSize, style.sourceTextColor.toInt())
         }
-        if (primary.isNotEmpty()) lines += layout(primary, TEXT_SIZE_PX, Color.WHITE)
+        if (primary.isNotEmpty()) lines += layout(primary, textSize, style.textColor.toInt())
         if (lines.isEmpty()) return blank.value
 
-        val padH = (TEXT_SIZE_PX * 0.55f).toInt()
-        val padV = (TEXT_SIZE_PX * 0.32f).toInt()
-        val gap = (TEXT_SIZE_PX * 0.18f).toInt()
+        val padH = (textSize * 0.55f).toInt()
+        val padV = (textSize * 0.32f).toInt()
+        val gap = (textSize * 0.18f).toInt()
         val contentW = lines.maxOf { it.width }
         val contentH = lines.sumOf { it.height } + gap * (lines.size - 1)
 
@@ -198,7 +204,11 @@ private class CueBitmapOverlay(
             Bitmap.Config.ARGB_8888,
         )
         val canvas = Canvas(bitmap)
-        canvas.drawColor(PLATE_COLOR)
+        // 背景层带 alpha：0 = 完全不画底板（字直接压在画面上）。
+        // 直接按 0..1 换算成 0..255，与预览层 Color.Black.copy(alpha) 逐值对齐；
+        // 默认 0.667 正好还原改动前写死的 0xAA。
+        val plateAlpha = (style.backgroundAlpha.coerceIn(0f, 1f) * 255f).toInt()
+        if (plateAlpha > 0) canvas.drawColor(plateAlpha shl 24)
         var y = padV.toFloat()
         lines.forEach { line ->
             canvas.save()
@@ -238,8 +248,5 @@ private class CueBitmapOverlay(
         const val TEXT_SIZE_PX = 100f
         const val SOURCE_SIZE_PX = 72f
         const val MAX_TEXT_WIDTH_PX = 1400
-        const val PLATE_COLOR = 0xAA000000.toInt()
-        /** Slightly dimmed so the translation reads as the primary line. */
-        const val SOURCE_COLOR = 0xDDFFFFFF.toInt()
     }
 }

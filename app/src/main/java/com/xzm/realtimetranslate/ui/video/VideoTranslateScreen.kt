@@ -8,6 +8,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -75,6 +76,7 @@ import com.xzm.realtimetranslate.data.LanguageOption
 import com.xzm.realtimetranslate.data.SupportedLanguages
 import com.xzm.realtimetranslate.data.VideoAsrEngine
 import com.xzm.realtimetranslate.data.VideoSubtitleMode
+import com.xzm.realtimetranslate.data.VideoSubtitleStyle
 import com.xzm.realtimetranslate.ui.components.LanguageChip
 import com.xzm.realtimetranslate.ui.components.LanguagePickerSheet
 import com.xzm.realtimetranslate.ui.components.PageTitle
@@ -89,9 +91,11 @@ import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.Slider
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import kotlin.math.roundToInt
 
 private enum class LangField { Source, Target }
 
@@ -404,6 +408,7 @@ fun VideoTranslateScreen(
                     uri = state.uri!!,
                     cues = state.cues,
                     mode = state.subtitleMode,
+                    style = state.subtitleStyle,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
@@ -438,6 +443,17 @@ fun VideoTranslateScreen(
                         color = scheme.onSurfaceVariantSummary,
                     )
                 }
+            }
+        }
+
+        // 外观卡片跟着字幕走：没有字幕时调了也看不到效果。
+        if (state.cues.isNotEmpty()) {
+            item {
+                SubtitleStyleCard(
+                    style = state.subtitleStyle,
+                    onStyleChange = viewModel::setSubtitleStyle,
+                    onReset = viewModel::resetSubtitleStyle,
+                )
             }
         }
 
@@ -658,6 +674,7 @@ private fun VideoPlayerBox(
     uri: String,
     cues: List<VideoCue>,
     mode: VideoSubtitleMode,
+    style: VideoSubtitleStyle,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -725,6 +742,7 @@ private fun VideoPlayerBox(
                 player = player,
                 cues = cues,
                 mode = mode,
+                style = style,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(horizontal = 16.dp, vertical = 52.dp),
@@ -753,6 +771,7 @@ private fun VideoPlayerBox(
             player = player,
             cues = cues,
             mode = mode,
+            style = style,
             onDismiss = { fullscreen = false },
         )
     }
@@ -772,6 +791,7 @@ private fun FullscreenVideoDialog(
     player: Player,
     cues: List<VideoCue>,
     mode: VideoSubtitleMode,
+    style: VideoSubtitleStyle,
     onDismiss: () -> Unit,
 ) {
     androidx.compose.ui.window.Dialog(
@@ -849,6 +869,7 @@ private fun FullscreenVideoDialog(
                 player = player,
                 cues = cues,
                 mode = mode,
+                style = style,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
@@ -965,6 +986,7 @@ private fun SubtitleOverlay(
     player: Player,
     cues: List<VideoCue>,
     mode: VideoSubtitleMode,
+    style: VideoSubtitleStyle,
     modifier: Modifier = Modifier,
 ) {
     var positionMs by remember { mutableLongStateOf(0L) }
@@ -994,25 +1016,117 @@ private fun SubtitleOverlay(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
-            .background(Color.Black.copy(alpha = 0.62f))
+            .background(Color.Black.copy(alpha = style.backgroundAlpha.coerceIn(0f, 1f)))
             .padding(horizontal = 10.dp, vertical = 5.dp),
     ) {
         if (showSource) {
             Text(
                 text = source,
-                color = Color.White.copy(alpha = 0.85f),
-                fontSize = 12.sp,
-                lineHeight = 16.sp,
+                color = Color(style.sourceTextColor),
+                fontSize = (12f * style.fontScale).sp,
+                lineHeight = (16f * style.fontScale).sp,
                 textAlign = TextAlign.Center,
             )
         }
         if (primary.isNotEmpty()) {
             Text(
                 text = primary,
-                color = Color.White,
-                fontSize = 16.sp,
-                lineHeight = 22.sp,
+                color = Color(style.textColor),
+                fontSize = (16f * style.fontScale).sp,
+                lineHeight = (22f * style.fontScale).sp,
                 textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SubtitleStyleCard(
+    style: VideoSubtitleStyle,
+    onStyleChange: (VideoSubtitleStyle) -> Unit,
+    onReset: () -> Unit,
+) {
+    val scheme = MiuixTheme.colorScheme
+    SectionCard {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(text = "字幕外观", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+
+            Text(
+                text = "字号 ${(style.fontScale * 100).roundToInt()}%",
+                fontSize = 13.sp,
+            )
+            Slider(
+                value = style.fontScale,
+                onValueChange = { onStyleChange(style.copy(fontScale = it)) },
+                valueRange = VideoSubtitleStyle.Defaults.FONT_SCALE_MIN..
+                    VideoSubtitleStyle.Defaults.FONT_SCALE_MAX,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Text(
+                text = "底板不透明度 ${(style.backgroundAlpha * 100).roundToInt()}%",
+                fontSize = 13.sp,
+            )
+            Slider(
+                value = style.backgroundAlpha,
+                onValueChange = { onStyleChange(style.copy(backgroundAlpha = it)) },
+                valueRange = 0f..1f,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Text(text = "译文颜色", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            SubtitleColorRow(
+                selected = style.textColor,
+                onSelect = { onStyleChange(style.copy(textColor = it)) },
+            )
+
+            Text(text = "原文颜色", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            SubtitleColorRow(
+                selected = style.sourceTextColor,
+                onSelect = { onStyleChange(style.copy(sourceTextColor = it)) },
+            )
+
+            TextButton(
+                text = "恢复默认外观",
+                onClick = onReset,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+private val SUBTITLE_COLOR_PRESETS: List<Long> = listOf(
+    0xFFFFFFFF, 0xFFD6D6D6, 0xFF000000, 0xFFFFD600, 0xFFFF9800,
+    0xFFFF5252, 0xFF448AFF, 0xFF00E5FF, 0xFF69F0AE,
+)
+
+@Composable
+private fun SubtitleColorRow(
+    selected: Long,
+    onSelect: (Long) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        SUBTITLE_COLOR_PRESETS.forEach { c ->
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .aspectRatio(1f)
+                    .clip(CircleShape)
+                    .background(Color(c.toInt()))
+                    .then(
+                        if (c == selected) {
+                            Modifier.border(3.dp, Booth.Accent, CircleShape)
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .clickable { onSelect(c) },
             )
         }
     }

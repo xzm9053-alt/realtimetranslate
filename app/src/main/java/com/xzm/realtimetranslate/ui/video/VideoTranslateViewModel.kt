@@ -15,6 +15,7 @@ import com.xzm.realtimetranslate.data.UserSettings
 import com.xzm.realtimetranslate.data.UserSettingsRepository
 import com.xzm.realtimetranslate.data.VideoAsrEngine
 import com.xzm.realtimetranslate.data.VideoSubtitleMode
+import com.xzm.realtimetranslate.data.VideoSubtitleStyle
 import com.xzm.realtimetranslate.service.SessionBus
 import com.xzm.realtimetranslate.translate.AsrEngine
 import com.xzm.realtimetranslate.translate.PassthroughTranslationEngine
@@ -66,6 +67,8 @@ data class VideoTranslateUiState(
     val burnProgress: Float = 0f,
     /** 单语 / 双语：压制、预览、SRT 导出三处共用同一个值。 */
     val subtitleMode: VideoSubtitleMode = VideoSubtitleMode.TRANSLATION,
+    /** 字幕外观：同样三处共用，改完立即可见。 */
+    val subtitleStyle: VideoSubtitleStyle = VideoSubtitleStyle(),
 ) {
     val hasVideo: Boolean get() = uri != null
     val canStart: Boolean get() = hasVideo && !isRunning
@@ -96,6 +99,7 @@ class VideoTranslateViewModel(
                     targetCode = target,
                     subtitleMode = settings.videoSubtitleMode,
                     asrEngine = settings.videoAsrEngine,
+                    subtitleStyle = settings.videoSubtitleStyle,
                 )
             }
         }
@@ -145,6 +149,14 @@ class VideoTranslateViewModel(
     fun setRecognizeOnly(enabled: Boolean) {
         _state.update { it.copy(recognizeOnly = enabled) }
     }
+
+    /** 字幕外观改动：存盘 + 立即刷新预览（不重跑识别）。 */
+    fun setSubtitleStyle(style: VideoSubtitleStyle) {
+        _state.update { it.copy(subtitleStyle = style) }
+        viewModelScope.launch { settingsRepository.update { it.copy(videoSubtitleStyle = style) } }
+    }
+
+    fun resetSubtitleStyle() = setSubtitleStyle(VideoSubtitleStyle())
 
     /** 切换视频字幕的语音识别引擎（本地 / 云端）。下次开始提取时生效。 */
     fun setAsrEngine(engine: VideoAsrEngine) {
@@ -401,6 +413,7 @@ class VideoTranslateViewModel(
                 cues = snapshot.cues,
                 outputFile = target,
                 mode = snapshot.subtitleMode,
+                style = snapshot.subtitleStyle,
                 onProgress = { fraction ->
                     if (fraction >= 0f) {
                         _state.update { it.copy(burnProgress = fraction) }
