@@ -8,7 +8,14 @@ import android.net.Uri
 enum class DocumentType(val extension: String, val mimeType: String, val displayName: String) {
     PDF("pdf", "application/pdf", "PDF 文档"),
     DOCX("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "Word 文档"),
+    TXT("txt", "text/plain", "纯文本"),
+    MARKDOWN("md", "text/markdown", "Markdown 文档"),
+    XLSX("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Excel 表格"),
+    PPTX("pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "PPT 演示文稿"),
     UNKNOWN("", "", "未知类型");
+
+    /** 能否原格式回写（保留排版）。否则走抽取文本 → 导出双语 .txt。 */
+    val keepsLayout: Boolean get() = this == PDF || this == DOCX
 
     companion object {
         fun fromFileName(name: String): DocumentType {
@@ -16,6 +23,10 @@ enum class DocumentType(val extension: String, val mimeType: String, val display
             return when (ext) {
                 "pdf" -> PDF
                 "docx" -> DOCX
+                "txt" -> TXT
+                "md", "markdown" -> MARKDOWN
+                "xlsx" -> XLSX
+                "pptx" -> PPTX
                 else -> UNKNOWN
             }
         }
@@ -26,6 +37,10 @@ enum class DocumentType(val extension: String, val mimeType: String, val display
                 mime.equals("application/pdf", ignoreCase = true) -> PDF
                 mime.equals("application/vnd.openxmlformats-officedocument.wordprocessingml.document", ignoreCase = true) ||
                     mime.equals("application/msword", ignoreCase = true) -> DOCX
+                mime.startsWith("text/plain", ignoreCase = true) -> TXT
+                mime.equals("text/markdown", ignoreCase = true) -> MARKDOWN
+                mime.equals("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ignoreCase = true) -> XLSX
+                mime.equals("application/vnd.openxmlformats-officedocument.presentationml.presentation", ignoreCase = true) -> PPTX
                 else -> UNKNOWN
             }
         }

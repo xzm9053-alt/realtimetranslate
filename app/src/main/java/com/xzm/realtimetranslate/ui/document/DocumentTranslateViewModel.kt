@@ -14,6 +14,7 @@ import com.xzm.realtimetranslate.data.UserSettingsRepository
 import com.xzm.realtimetranslate.document.DocxTranslator
 import com.xzm.realtimetranslate.document.DocumentInfo
 import com.xzm.realtimetranslate.document.DocumentTranslationConfig
+import com.xzm.realtimetranslate.document.DocumentTextExtractors
 import com.xzm.realtimetranslate.document.DocumentType
 import com.xzm.realtimetranslate.document.PdfTranslator
 import com.xzm.realtimetranslate.ocr.ScreenTextOcr
@@ -26,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -252,7 +254,73 @@ class DocumentTranslateViewModel(
                             }
                         }
 
-                        DocumentType.UNKNOWN -> error("不支持的文档格式，仅支持 PDF 和 Word (.docx)")
+                        // TXT / Markdown / Excel / PPT：没有能原位回写文本的结构，
+                        // 统一抽成纯文本段落翻译，导出一份双语对照的 .txt。
+                        DocumentType.TXT, DocumentType.MARKDOWN,
+                        DocumentType.XLSX, DocumentType.PPTX,
+                        -> {
+                            val uri = info.uri ?: error("无法读取文档路径")
+                            val extractor = DocumentTextExtractors.forType(info.type)
+                                ?: error("不支持的文档格式")
+                            val paragraphs = withContext(Dispatchers.IO) {
+                                context.contentResolver.openInputStream(uri)?.use {
+                                    extractor.extract(it)
+                                } ?: error("无法读取文档")
+                            }
+                            if (paragraphs.isEmpty()) error("文档里没有可翻译的文字")
+
+                            val translated = ArrayList<String>(paragraphs.size)
+                            paragraphs.forEachIndexed { index, paragraph ->
+                                if (!_state.value.isWorking) return@forEachIndexed
+                                val target = runCatching {
+                                    engine.translate(
+                                        paragraph,
+                                        settings.sourceLanguageCode,
+                                        settings.targetLanguageCode,
+                                    ).last()
+                                }.getOrNull() ?: paragraph
+                                translated += target
+                                _state.update {
+                                    it.copy(
+                                        done = index + 1,
+                                        total = paragraphs.size,
+                                        progressDescription =
+                                            "正在翻译第 ${index + 1} / ${paragraphs.size} 段…",
+                                    )
+                                }
+                            }
+
+                            val tempOut = File.createTempFile("text_trans_", ".txt", context.cacheDir)
+                            try {
+                                tempOut.writeText(
+                                    buildBilingualText(paragraphs, translated),
+                                    Charsets.UTF_8,
+                                )
+                                val outName = DocumentExporter.generateOutputFileName(
+                                    originalName = info.name,
+                                    bilingual = true,
+                                    fallbackExt = "txt",
+                                )
+                                val saved = DocumentExporter.saveFileToDownloads(
+                                    context = context,
+                                    fileName = outName,
+                                    mimeType = "text/plain",
+                                    sourceFile = tempOut,
+                                ).getOrThrow()
+
+                                recordHistory(
+                                    sourceSummary = paragraphs.take(3).joinToString("\n"),
+                                    translatedSummary =
+                                        "文档翻译完成（共 ${paragraphs.size} 段）",
+                                )
+                                saved
+                            } finally {
+                                tempOut.delete()
+                            }
+                        }
+
+                        DocumentType.UNKNOWN ->
+                            error("不支持的文档格式，仅支持 PDF / Word / TXT / Markdown / Excel / PPT")
                     }
                 }
 
@@ -277,6 +345,24 @@ class DocumentTranslateViewModel(
             }
         }
     }
+
+    /**
+     * 双语对照版式：每段先原文再译文，段间空一行。
+     * 没有原格式可依的格式（TXT/Excel/PPT）用这个保留两边。
+     */
+    private fun buildBilingualText(source: List<String>, translated: List<String>): String =
+        buildString {
+            source.indices.forEach { i ->
+                append(source[i])
+                append('\n')
+                val t = translated.getOrNull(i).orEmpty()
+                if (t.isNotBlank() && t != source[i]) {
+                    append(t)
+                    append('\n')
+                }
+                if (i != source.lastIndex) append('\n')
+            }
+        }
 
     private fun recordHistory(sourceSummary: String, translatedSummary: String) {
         viewModelScope.launch {

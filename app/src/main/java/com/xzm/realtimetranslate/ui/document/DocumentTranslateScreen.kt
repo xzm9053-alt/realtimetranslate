@@ -335,7 +335,7 @@ fun DocumentTranslateScreen(
                             color = scheme.onSurface,
                         )
                         Text(
-                            text = "支持 PDF (.pdf) 与 Word (.docx / .doc)",
+                            text = "支持 PDF / Word (.docx) / TXT / Markdown / Excel (.xlsx) / PPT (.pptx)",
                             fontSize = 12.sp,
                             color = scheme.onSurfaceVariantSummary,
                         )
