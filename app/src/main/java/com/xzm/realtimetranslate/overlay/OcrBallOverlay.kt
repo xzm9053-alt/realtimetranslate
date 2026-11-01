@@ -99,6 +99,10 @@ class OcrBallOverlay(
     private var centerX = 0
     private var centerY = 0
 
+    /** 取词选区：球和气泡都不能落进来，否则会被自己的录屏录到，画面每帧
+     *  都在动 → 哈希每帧变 → OCR 每帧读到不同文本 → 无限重翻。 */
+    private var avoidRect: Rect? = null
+
     // Popup state.
     private var popupVisible = false
     private var popupUserClosed = false
@@ -865,22 +869,21 @@ class OcrBallOverlay(
         val rightRoom = screenW - ballRight - margin
         val leftRoom = ballLeft - margin
         val centeredY = (centerY - ph / 2).coerceIn(margin, max(margin, screenH - ph - margin))
-        val (x, y) = when {
-            pw <= rightRoom -> ballRight + margin to centeredY
-            pw <= leftRoom -> ballLeft - margin - pw to centeredY
-            else -> {
-                // Too wide to sit beside the ball: drop below it (or above) on the
-                // side with more room, so the ball is never covered.
-                val xv = (if (rightRoom >= leftRoom) screenW - pw else 0)
-                    .coerceIn(0, max(0, screenW - pw))
-                val yv = when {
-                    ph <= screenH - ballBottom - margin -> ballBottom + margin
-                    ph <= ballTop - margin -> ballTop - margin - ph
-                    else -> margin
-                }
-                xv to yv
-            }
+        val candidates = buildList {
+            if (pw <= rightRoom) add(ballRight + margin to centeredY)
+            if (pw <= leftRoom) add(ballLeft - margin - pw to centeredY)
+            val xv = (if (rightRoom >= leftRoom) screenW - pw else 0)
+                .coerceIn(0, max(0, screenW - pw))
+            if (ph <= screenH - ballBottom - margin) add(xv to ballBottom + margin)
+            if (ph <= ballTop - margin) add(xv to ballTop - margin - ph)
+            add(xv to margin)
         }
+        // 选第一个不压选区的位置；都压就退回最初的选项。
+        val avoid = avoidRect
+        val (x, y) = candidates.firstOrNull { (cx, cy) ->
+            avoid == null || !Rect(cx, cy, cx + pw, cy + ph)
+                .intersects(avoid.left, avoid.top, avoid.right, avoid.bottom)
+        } ?: candidates.first()
         params.x = x
         params.y = y
         runCatching { windowManager.updateViewLayout(view, params) }
@@ -891,6 +894,35 @@ class OcrBallOverlay(
     /** Shows (or moves) the subtle outline of the OCR capture area. Touch-transparent.
      *  No-ops (and hides) when the user disabled it in settings. Always re-applies
      *  the appearance so color/opacity changes take effect live. */
+    /** 告诉悬浮层选区在哪，球与气泡会自动躲到它外面。传 null 恢复自由摆放。 */
+    fun setAvoidRect(rect: Rect?) {
+        avoidRect = rect?.let { Rect(it) }
+        if (rect != null) parkOutsideAvoid()
+    }
+
+    /** 把球和气泡移到避让区外：优先保持当前 x，在屏幕上下找空间。 */
+    private fun parkOutsideAvoid() {
+        val avoid = avoidRect ?: return
+        if (ballWindowView == null) return
+        val (screenW, screenH, _) = screenMetrics()
+        val size = sizePx()
+        val topRoom = avoid.top
+        val bottomRoom = screenH - avoid.bottom
+        val need = size / 2 + size / 2 // 球直径，留足余量
+        centerY = when {
+            topRoom >= need -> avoid.top / 2
+            bottomRoom >= need -> (avoid.bottom + screenH) / 2
+            // 上下都不够：贴近离它最远的那个边
+            else -> if (topRoom >= bottomRoom) size / 2 else screenH - size / 2
+        }.coerceIn(size / 2, max(size / 2, screenH - size / 2))
+        if (side != BallView.SIDE_FLOAT) {
+            centerX = if (side == BallView.SIDE_LEFT) 0 else screenW
+        }
+        applyGeometry()
+        // 气泡如果已开着也跟着躲开
+        if (popupVisible) movePopup()
+    }
+
     fun showRegionOutline(rect: Rect) {
         lastRegion = Rect(rect)
         if (!settings.ocrRegionOutlineEnabled) {

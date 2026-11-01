@@ -1,5 +1,6 @@
 package com.xzm.realtimetranslate.service
 
+import android.graphics.Rect
 import com.xzm.realtimetranslate.data.ScreenOcrMode
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,6 +42,8 @@ data class HubUiState(
     val mode: HubMode = HubMode.IDLE,
     val isPaused: Boolean = false,
     val isSubtitleWindowVisible: Boolean = true,
+    /** 取词选区（屏幕 px）。非空时常驻球会自动挪出去，避免被录进帧。 */
+    val avoidRect: Rect? = null,
 )
 
 /**
@@ -83,6 +86,11 @@ object HubBus {
             else -> if (_state.value.mode == HubMode.VOICE) HubMode.IDLE else _state.value.mode
         }
         _state.value = _state.value.copy(mode = newMode)
+    }
+
+    /** 告诉常驻球取词选区在哪（null = 无选区，恢复自由摆放）。 */
+    fun setAvoidRect(rect: Rect?) {
+        _state.value = _state.value.copy(avoidRect = rect?.let { Rect(it) })
     }
 
     fun syncFromScreenOcr(ocrStatus: ScreenOcrBus.Status, ocrMode: ScreenOcrMode = ScreenOcrMode.REGION) {

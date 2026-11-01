@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
@@ -57,6 +58,9 @@ class HubBallOverlay(
     private var side = BallView.SIDE_RIGHT
     private var centerX = 0
     private var centerY = 0
+
+    /** 取词选区：常驻球也不能落进去，否则会被录进帧里造成每帧都变。 */
+    private var avoidRect: Rect? = null
 
     private var currentState: HubUiState = HubUiState()
 
@@ -181,6 +185,26 @@ class HubBallOverlay(
         val size = sizePx()
         centerX = if (side == BallView.SIDE_LEFT) 0 else screenW
         centerY = centerY.coerceIn(size / 2, max(size / 2, screenH - size / 2))
+        applyGeometry()
+    }
+
+    /** 告诉常驻球取词选区在哪，它会自动挪到区外。null 恢复自由。 */
+    fun setAvoidRect(rect: Rect?) {
+        avoidRect = rect?.let { Rect(it) }
+        val avoid = avoidRect ?: return
+        if (ballWindowView == null) return
+        val (screenW, screenH, _) = screenMetrics()
+        val size = sizePx()
+        val topRoom = avoid.top
+        val bottomRoom = screenH - avoid.bottom
+        centerY = when {
+            topRoom >= size -> avoid.top / 2
+            bottomRoom >= size -> (avoid.bottom + screenH) / 2
+            else -> if (topRoom >= bottomRoom) size / 2 else screenH - size / 2
+        }.coerceIn(size / 2, max(size / 2, screenH - size / 2))
+        if (side != BallView.SIDE_FLOAT) {
+            centerX = if (side == BallView.SIDE_LEFT) 0 else screenW
+        }
         applyGeometry()
     }
 

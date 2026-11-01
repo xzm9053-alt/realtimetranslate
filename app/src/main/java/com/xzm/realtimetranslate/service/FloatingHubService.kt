@@ -54,6 +54,7 @@ class FloatingHubService : Service() {
         scope.launch {
             HubBus.state.collect { state ->
                 overlay?.updateState(state)
+                overlay?.setAvoidRect(state.avoidRect)
             }
         }
     }

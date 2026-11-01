@@ -317,6 +317,10 @@ class ScreenTextSessionService : Service() {
         ocrOverlay.show(currentSettings)
         // 在球旁用一条淡色细框标出当前 OCR 选区，让用户知道在翻译屏幕哪块。
         ocrOverlay.showRegionOutline(region)
+        // 球和气泡必须躲出选区，否则会被自己录进帧里 → 画面每帧都在动
+        // → 哈希每帧变 → OCR 每帧读到不同文本 → 无限重翻。
+        ocrOverlay.setAvoidRect(region)
+        HubBus.setAvoidRect(region)
 
         // The virtual display must match the real (full) display size so the
         // region Rect — which lives in full-screen coordinates — maps 1:1.
@@ -378,6 +382,8 @@ class ScreenTextSessionService : Service() {
         lastHash = Long.MIN_VALUE
         lastText = ""
         overlay?.showRegionOutline(currentRegion)
+        overlay?.setAvoidRect(currentRegion)
+        HubBus.setAvoidRect(currentRegion)
         ScreenOcrBus.setStatus(
             if (paused) ScreenOcrBus.Status.Paused else ScreenOcrBus.Status.Running,
             getString(R.string.ocr_region_updated),
@@ -488,6 +494,12 @@ class ScreenTextSessionService : Service() {
                 }
                 val captureMs = SystemClock.elapsedRealtime() - tCapture
                 val frameHash = frame?.hash ?: Long.MIN_VALUE
+                Log.i(
+                    TAG,
+                    "TRANSPROF framechk region=$currentRegion " +
+                        "bmp=${frame?.bitmap?.width}x${frame?.bitmap?.height} " +
+                        "hash=$frameHash lastHash=$lastHash same=${frameHash == lastHash}",
+                )
                 if (frame != null && frameHash != lastHash) {
                     lastHash = frameHash
                     val tOcr = SystemClock.elapsedRealtime()
@@ -654,6 +666,8 @@ class ScreenTextSessionService : Service() {
         currentRegion = region
         lastHash = Long.MIN_VALUE // 换了坐标系，强制下一帧重新识别
         overlay?.showRegionOutline(region) // 必须同步，否则外框还画在旧位置
+        overlay?.setAvoidRect(region)
+        HubBus.setAvoidRect(region)
         if (!regionFits(region, newW, newH)) {
             // clamp 不变式的哨兵；真打印了说明 remapRegion/clampRegion 被改坏了。
             Log.e(TAG, "BUG: remapped region $region out of ${newW}x$newH")
@@ -730,6 +744,7 @@ class ScreenTextSessionService : Service() {
         paused = false
         ScreenOcrBus.setStatus(ScreenOcrBus.Status.Stopped, message)
         HubBus.syncFromScreenOcr(ScreenOcrBus.Status.Stopped, mode)
+        HubBus.setAvoidRect(null) // 会话结束，球恢复自由摆放
         val historyList = synchronized(ocrRecords) { ocrRecords.toList() }
         if (historyList.isNotEmpty()) {
             val inFull = historyList.joinToString("\n\n") { it.first }
