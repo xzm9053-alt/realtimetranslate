@@ -99,7 +99,6 @@
     <string name="engine_gemini_summary">流式 · 有免费额度 · 需要 Google AI Studio 的 Key</string>
     <string name="settings_deepseek_key">DeepSeek API Key</string>
     <string name="settings_translation_domain">翻译领域风格</string>
-    <string name="settings_translation_domain_summary">同一句话在不同场景该译成不同语气。仅对 AI 大模型引擎生效，改完下一句即生效。</string>
     <string name="domain_general">🌐 通用日常</string>
     <string name="domain_general_summary">标准口语与自然交流，兼顾通顺与地道（默认）</string>
     <string name="domain_game_anime">🎮 动漫游戏</string>

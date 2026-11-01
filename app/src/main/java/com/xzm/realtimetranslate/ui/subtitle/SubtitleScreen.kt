@@ -21,6 +21,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
@@ -73,6 +74,7 @@ import com.xzm.realtimetranslate.data.OcrScript
 import com.xzm.realtimetranslate.data.ScreenOcrMode
 import com.xzm.realtimetranslate.data.SubtitleDisplayMode
 import com.xzm.realtimetranslate.data.SupportedLanguages
+import com.xzm.realtimetranslate.data.TranslationDomain
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
 import com.xzm.realtimetranslate.service.ScreenOcrBus
@@ -650,6 +652,14 @@ fun SubtitleScreen(
                     }
                 }
             }
+        }
+
+        // 翻译领域风格（紧贴大发射按钮下方，仅大模型引擎可用）
+        if (settings.translationEngine.isLlm) {
+            TranslationDomainRow(
+                selected = settings.translationDomain,
+                onSelect = { domain -> onUpdateSettings { it.copy(translationDomain = domain) } },
+            )
         }
 
         // 实时预览卡片（当存在识别或翻译文本时显现）
@@ -1487,6 +1497,41 @@ private fun OptionRow(
         }
         if (selected) {
             Text(text = "✓", color = Booth.Accent, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+/** 翻译领域风格：横向滑动的胶囊，开跑前就能切，不必进设置。 */
+@Composable
+private fun TranslationDomainRow(
+    selected: TranslationDomain,
+    onSelect: (TranslationDomain) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.settings_translation_domain),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            TranslationDomain.entries.forEach { domain ->
+                SourceSegmentChip(
+                    label = stringResource(domain.labelRes),
+                    selected = domain == selected,
+                    onClick = { onSelect(domain) },
+                )
+            }
         }
     }
 }

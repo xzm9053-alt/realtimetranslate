@@ -82,7 +82,6 @@ import com.xzm.realtimetranslate.data.HistoryMode
 import com.xzm.realtimetranslate.data.OcrScript
 import com.xzm.realtimetranslate.data.SubtitleDisplayMode
 import com.xzm.realtimetranslate.data.ThinkingOffStyle
-import com.xzm.realtimetranslate.data.TranslationDomain
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
 import com.xzm.realtimetranslate.translate.AsrModelCatalog
@@ -1062,7 +1061,6 @@ fun SettingsScreen(
                     onUpdateGenericBaseUrl = viewModel::updateGenericBaseUrl,
                     onUpdateGenericThinkingOffStyle = viewModel::setGenericThinkingOffStyle,
                     onUpdateAiDeepThinking = viewModel::setAiDeepThinking,
-                    onUpdateTranslationDomain = viewModel::setTranslationDomain,
                     testing = testing,
                     testResult = testResult,
                     onSaveAndTest = {
@@ -1966,7 +1964,6 @@ private fun EngineConfigSubScreen(
     onUpdateGenericBaseUrl: (TextFieldValue) -> Unit,
     onUpdateGenericThinkingOffStyle: (ThinkingOffStyle) -> Unit,
     onUpdateAiDeepThinking: (Boolean) -> Unit,
-    onUpdateTranslationDomain: (TranslationDomain) -> Unit,
     testing: Boolean,
     testResult: String?,
     onSaveAndTest: () -> Unit,
@@ -2190,28 +2187,6 @@ private fun EngineConfigSubScreen(
                     onCheckedChange = onUpdateAiDeepThinking,
                     enabled = true,
                 )
-                SettingDivider()
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-                    Text(
-                        text = stringResource(R.string.settings_translation_domain),
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Text(
-                        text = stringResource(R.string.settings_translation_domain_summary),
-                        fontSize = 12.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
-                    )
-                    TranslationDomain.entries.forEach { domain ->
-                        OptionRow(
-                            label = stringResource(domain.labelRes),
-                            summary = stringResource(domain.summaryRes),
-                            selected = settings.translationDomain == domain,
-                            horizontalPadding = 0.dp,
-                            onClick = { onUpdateTranslationDomain(domain) },
-                        )
-                    }
-                }
             }
         }
 
@@ -3097,10 +3072,23 @@ private fun AsrEnginePickerSubScreen(
 }
 
 /**
- * 微信赞赏收款码弹窗。
+ * 打赏弹窗：四档固定金额的微信收款码，外加一档自定义金额。
+ * 微信收款码不支持 URL 带金额，所以每一档都是一张独立生成的码。
  */
 @Composable
 private fun RewardDialog(onDismiss: () -> Unit) {
+    data class Tier(val label: String, val res: Int)
+
+    val tiers = listOf(
+        Tier("0.5 元", R.drawable.img_reward_05),
+        Tier("1 元", R.drawable.img_reward_10),
+        Tier("6.6 元", R.drawable.img_reward_66),
+        Tier("9.9 元", R.drawable.img_reward_99),
+        Tier("自定义", R.drawable.img_reward_qrcode),
+    )
+    var selected by remember { mutableIntStateOf(0) }
+    val isCustom = selected == tiers.lastIndex
+
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         Card(
             modifier = Modifier
@@ -3117,7 +3105,7 @@ private fun RewardDialog(onDismiss: () -> Unit) {
                     .fillMaxWidth()
                     .padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(
                     text = stringResource(R.string.settings_reward_dialog_title),
@@ -3132,22 +3120,58 @@ private fun RewardDialog(onDismiss: () -> Unit) {
                     textAlign = TextAlign.Center,
                     lineHeight = 18.sp,
                 )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    tiers.forEachIndexed { index, tier ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(
+                                    if (selected == index) Booth.Accent.copy(alpha = 0.15f)
+                                    else MiuixTheme.colorScheme.surfaceVariant,
+                                )
+                                .clickable { selected = index }
+                                .padding(vertical = 9.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = tier.label,
+                                fontSize = 13.sp,
+                                fontWeight = if (selected == index) FontWeight.Bold else FontWeight.Normal,
+                                color = if (selected == index) Booth.Accent else MiuixTheme.colorScheme.onSurface,
+                            )
+                        }
+                    }
+                }
+
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth(0.88f)
+                        .fillMaxWidth(0.86f)
                         .clip(RoundedCornerShape(16.dp))
                         .background(Color.White)
-                        .padding(8.dp),
+                        .padding(10.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Image(
-                        painter = painterResource(R.drawable.img_reward_qrcode),
-                        contentDescription = "WeChat Reward QR Code",
+                        painter = painterResource(tiers[selected].res),
+                        contentDescription = "WeChat Reward QR Code ${tiers[selected].label}",
                         modifier = Modifier
                             .fillMaxWidth()
                             .aspectRatio(3f / 4.2f),
                     )
                 }
+
+                Text(
+                    text = if (isCustom) "扫码后自己输入金额" else "扫码支付 ${tiers[selected].label}",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Booth.Accent,
+                )
+
                 Button(
                     onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth(),
@@ -3196,34 +3220,54 @@ private fun UserGuideDialog(onDismiss: () -> Unit) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 420.dp)
+                        .heightIn(max = 460.dp)
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     GuideItem(
                         icon = "🎧",
-                        title = "系统音频与麦克风翻译",
-                        desc = "在字幕主页选择声音来源（系统内录/麦克风/混合），点击「开始翻译」即可监听其他 App（YouTube、Bilibili、游戏等）的声音，实时输出同传字幕。"
+                        title = "声音同传与离线听写",
+                        desc = "• 声音来源：媒体音（内录其他 App 声音，戴耳机或静音仍有效）/ 麦克风 / 混合。\n• 离线听写：开启「仅识别（不翻译）」可纯本地生成字幕，零网络、零 Token、零延迟。\n• 字幕外观：首页折叠抽屉可实时调字号、透明度与 14 种双语颜色。"
                     )
                     GuideItem(
                         icon = "🪟",
-                        title = "悬浮窗手势与交互",
-                        desc = "• 拖动：按住顶部细条移动位置\n• 缩放：按住右下角圆点自由拉伸大小\n• 折叠：拖到屏幕左右边缘自动收起为贴边半球，轻点半球展开\n• 锁定：点锁图标开启点击穿透，长按解锁"
+                        title = "悬浮窗高级手势与穿透锁定",
+                        desc = "• 拖动与缩放：按住顶部横条移动位置，拖右下角小把手自由拉伸。\n• 贴边半球：拖到屏幕左右边缘自动折叠为半球，拉出带有 60fps 平滑圆球展开动效，支持沿屏幕边缘上下滑。\n• 快捷操作栏：点击顶部把手展开快捷栏，支持一键复制译文、切换双语/单语模式、开启防误触穿透锁定（长按边缘微型胶囊解锁）。"
                     )
                     GuideItem(
                         icon = "🔍",
-                        title = "屏幕取词翻译",
-                        desc = "在字幕主页点击「屏幕取词」，框选屏幕任意区域（游戏剧情、漫画、无字幕视频），悬浮球将实时 OCR 并弹窗翻译，点击悬浮球可重选区域。"
+                        title = "屏幕取词（智能避让与手势）",
+                        desc = "• 选区微调：直接拖选区右下角圆点为缩放，长按 500ms 拖动为平移整框。\n• 悬浮球控制：点球暂停/继续；长按 500ms 弹出菜单（可一键隐藏/恢复红色取词框、重选区域或停止）。\n• 智能避让：悬浮球与译文气泡会自动躲避取词选区，防止遮挡内容引发重复识别。"
+                    )
+                    GuideItem(
+                        icon = "🧰",
+                        title = "离线多功能工具箱（首页托盘）",
+                        desc = "• 📄 文档翻译：支持 PDF（双语交替/仅译文）、Word、Excel、PPT、TXT、Markdown 六大格式，排版原位保留并导出。\n• 🎬 视频翻译：提取本地视频音轨生成时间戳字幕，支持画质自适应预览、导出 SRT 与原画画质压制烧录 MP4。\n• 📷 相机/相册图文：现场拍照或导入图片覆盖翻译，文本支持长按自由划选复制。\n• 📝 快速文本：双向互译、一键粘贴与字数统计。"
+                    )
+                    GuideItem(
+                        icon = "🌐",
+                        title = "翻译领域风格（让大模型更懂情境）",
+                        desc = "在大模型翻译引擎下，首页大按钮下方提供横向胶囊切换：通用日常 / 动漫游戏 / 商务职场 / 学术科技 / 影视综艺。针对不同场景自动适配地道口语、游戏黑话或专业术语，下一句即时生效。"
                     )
                     GuideItem(
                         icon = "⚡",
-                        title = "语音识别引擎推荐",
-                        desc = "• 本地 SenseVoice：纯离线运行，零流量消耗，端侧秒切词\n• 阿里百炼 FunASR：云端极速流式，识别精度高\n• 进入识别引擎二级页可调节「静音断句门槛」（默认 200ms），快语速建议 200~400ms，慢语速建议 500~800ms。"
+                        title = "语音识别引擎解析",
+                        desc = "• 本地 SenseVoice：内置端侧运行，支持中英日韩粤，零流量不耗电，支持「边说边出」草稿字幕。\n• 阿里百炼 FunASR：云端极速流式 WebSocket 识别，高并发低延迟，官方 8 大实时模型预设。\n• 通用 OpenAI ASR：支持接入硅基流动、Groq 等任意云端 Whisper 服务。"
                     )
                     GuideItem(
                         icon = "💡",
                         title = "翻译大模型与省钱技巧",
-                        desc = "推荐使用 DeepSeek（deepseek-v4-flash 模型极速且实惠）。DeepSeek 实行闲时半价优惠，每日 00:30 ~ 08:30 享受 5 折优惠（低至 0.5元 / 百万Token）。"
+                        desc = "• 免费引擎：微软与谷歌翻译免配置 Key，国内直连开箱即用；智谱 GLM 免费额度充足。\n• 推荐大模型：DeepSeek（deepseek-v4-flash 模型极速且实惠，每日 00:30 ~ 08:30 享受闲时 5 折优惠）。\n• 通用 OpenAI 兼容：支持接入中转站、Ollama 或自建模型。"
+                    )
+                    GuideItem(
+                        icon = "📜",
+                        title = "历史记录与导出管理",
+                        desc = "每次声音同传或屏幕取词结束后整场聚合归档；支持页内即时关键词模糊搜索、展开双语对照、单条删除与一键导出保存为 .txt 文本文件。"
+                    )
+                    GuideItem(
+                        icon = "⚙️",
+                        title = "权限与后台保活建议",
+                        desc = "• 必备权限：悬浮窗权限（显示字幕/气泡）+ 录屏权限（音频内录与屏幕截帧）。\n• DRM 版权保护限制：部分 App（如部分银行、受保护流媒体）系统禁止内录画面或声音，此情况请将声音来源切至「麦克风」。\n• 小米/华为等系统：建议在系统设置中为本应用开启「后台无限制」与「允许自启动」，防止锁屏或切后台时被系统杀进程。"
                     )
                 }
 

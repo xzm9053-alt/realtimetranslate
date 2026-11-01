@@ -99,7 +99,6 @@
     <string name="engine_gemini_summary">Streaming · has a free tier · needs a Google AI Studio key</string>
     <string name="settings_deepseek_key">DeepSeek API Key</string>
     <string name="settings_translation_domain">Translation domain</string>
-    <string name="settings_translation_domain_summary">The same sentence should read differently by context. Applies to LLM engines only, and takes effect on the next sentence.</string>
     <string name="domain_general">🌐 General</string>
     <string name="domain_general_summary">Natural everyday speech, both fluent and idiomatic (default)</string>
     <string name="domain_game_anime">🎮 Anime &amp; games</string>
