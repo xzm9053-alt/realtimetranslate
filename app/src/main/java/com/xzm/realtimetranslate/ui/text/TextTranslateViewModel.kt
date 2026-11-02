@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.xzm.realtimetranslate.LiveTranslateApp
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.ApiKeyStore
 import com.xzm.realtimetranslate.data.HistoryEntry
@@ -106,7 +107,12 @@ class TextTranslateViewModel(
                     _state.update { it.copy(isTranslating = false, missingKey = true) }
                     return@launch
                 }
-                val engine = TranslationEngineFactory.create(settings, apiKeyStore)
+                val app = getApplication<Application>() as LiveTranslateApp
+                val engine = TranslationEngineFactory.create(
+                    settings = settings,
+                    keys = apiKeyStore,
+                    liveGlossaryPrompt = { app.glossaryRepository.getEnabledTermsPrompt() },
+                )
                 val chunks = TextChunker.split(text)
                 _state.update { it.copy(chunkCount = chunks.size) }
                 val finished = StringBuilder()

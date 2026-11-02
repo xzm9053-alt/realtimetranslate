@@ -251,6 +251,7 @@ class RealtimeTranslationClient(private val app: LiveTranslateApp) {
                         val s = app.settingsRepository.settings.first()
                         if (s.voiceRecognizeOnly) s.copy(translationEngine = TranslationEngineType.NONE) else s
                     },
+                    liveGlossaryPrompt = { app.glossaryRepository.getEnabledTermsPrompt() },
                 )
 
                 // 预热翻译连接池：后台建立 TLS 与 HTTP/2 握手，消除首句翻译 3~4 秒的冷启动延迟

@@ -139,11 +139,16 @@ object ModelListFilter {
  */
 object ModelPresets {
 
-    /** 阿里云百炼 / 通用兼容端点常用推荐翻译与对话模型 */
+    /** 阿里云百炼 / Ollama / 本地与通用兼容端点常用推荐开源与翻译模型 */
     val RECOMMENDED_COMPAT_MODELS = listOf(
+        "qwen2.5:7b",
+        "qwen2.5:3b",
+        "qwen2.5:1.5b",
+        "deepseek-r1:7b",
+        "deepseek-r1:1.5b",
+        "Qwen/Qwen2.5-7B-Instruct",
+        "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
         "qwen3.8-livetranslate-flash-realtime",
-        "qwen3.8livetranslate-realtime",
-        "qwen3-livetranslate-flash",
         "qwen-plus",
         "qwen-turbo",
         "qwen-mt-turbo",

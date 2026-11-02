@@ -2,6 +2,7 @@ package com.xzm.realtimetranslate.translate
 
 import android.os.SystemClock
 import com.xzm.realtimetranslate.util.AppLog as Log
+import com.xzm.realtimetranslate.util.ChineseTextNormalizer
 import com.xzm.realtimetranslate.util.LogSanitizer
 import com.xzm.realtimetranslate.data.ThinkingOffStyle
 import kotlinx.coroutines.Dispatchers
@@ -50,6 +51,10 @@ data class LlmRequestConfig(
      * 通过 provider 每次请求重新求值，所以改领域下一句即生效。
      */
     val domainStylePrompt: String = "",
+    /**
+     * 专业术语库提示词。将启用的术语映射编译为强制约束注入。
+     */
+    val glossaryPrompt: String = "",
 )
 
 /**
@@ -125,7 +130,8 @@ abstract class OpenAiCompatChatEngine(
     ): Flow<String> = flow {
         val cfg = config()
         val target = targetLabel(targetLang.ifBlank { "zh-Hans" })
-        val messages = buildMessages(text, target, cfg.domainStylePrompt)
+        val isSimplified = ChineseTextNormalizer.isSimplifiedTarget(target)
+        val messages = buildMessages(text, target, cfg.domainStylePrompt, cfg.glossaryPrompt)
         val url = endpoint(cfg, "/chat/completions")
 
         // ---- TRANSPROF 诊断（只读埋点，不影响任何行为）----------------------
@@ -196,8 +202,9 @@ abstract class OpenAiCompatChatEngine(
                     // reasoning_content) — skip anything that isn't a real String so
                     // the translation never fills with "null" spam.
                     if (content is String && content.isNotEmpty()) {
+                        val cleanChunk = if (isSimplified) ChineseTextNormalizer.toSimplified(content) else content
                         if (ttf < 0) ttf = SystemClock.elapsedRealtime() - t0
-                        builder.append(content)
+                        builder.append(cleanChunk)
                         emit(builder.toString())
                     }
                     // 只读：累计 reasoning_content 的体量（它照旧被跳过，只是数一下）。
@@ -222,8 +229,9 @@ abstract class OpenAiCompatChatEngine(
                 // 草稿不写：半句话进上下文只会把下一句带偏。加锁是因为草稿请求和正式请求
                 // 会并发跑，而 ArrayDeque 并发读写会抛 ConcurrentModificationException。
                 if (!draft) {
+                    val finalOutput = if (isSimplified) ChineseTextNormalizer.toSimplified(builder.toString()) else builder.toString()
                     synchronized(history) {
-                        history.addLast(text to builder.toString())
+                        history.addLast(text to finalOutput)
                         if (history.size > historyWindow) history.removeFirst()
                     }
                 }
@@ -545,7 +553,22 @@ abstract class OpenAiCompatChatEngine(
         }
     }
 
-    private fun buildMessages(text: String, target: String, domainPrompt: String = ""): JSONArray {
+    private fun buildMessages(
+        text: String,
+        target: String,
+        domainPrompt: String = "",
+        glossaryPrompt: String = "",
+    ): JSONArray {
+        val isSimplified = ChineseTextNormalizer.isSimplifiedTarget(target)
+        val negativeConstraint = if (isSimplified) {
+            " You MUST strictly output in standard Simplified Chinese (中国大陆规范简体字). NEVER output Traditional Chinese characters (严禁输出繁体字) or Japanese Kanji. Ensure every character is standard Simplified Chinese."
+        } else {
+            ""
+        }
+        val extraGuidelines = buildString {
+            if (domainPrompt.isNotBlank()) append("\n$domainPrompt")
+            if (glossaryPrompt.isNotBlank()) append("\n$glossaryPrompt")
+        }
         val messages = JSONArray()
             .put(
                 JSONObject()
@@ -554,17 +577,15 @@ abstract class OpenAiCompatChatEngine(
                         "content",
                         "You are a professional translation engine. Translate the user's text into " +
                             "$target. Output ONLY the translated text. No explanations, no notes, " +
-                            "no quotation marks, no code fences." +
-                            // 领域风格提示词接在硬性规则之后：它只调整语气与术语，
-                            // 不应该覆盖“只输出译文”这条更高优先级的约束。
-                            if (domainPrompt.isBlank()) "" else "\n$domainPrompt",
+                            "no quotation marks, no code fences.$negativeConstraint$extraGuidelines",
                     ),
             )
         // 上下文：把最近几轮（原文→译文）作为对话历史带入，翻译时参考前文（人称、指代、省略等）。
         // 先取快照：草稿翻译会并发读，正式翻译会并发写。
         for ((src, dst) in historySnapshot()) {
+            val cleanDst = if (isSimplified) ChineseTextNormalizer.toSimplified(dst) else dst
             messages.put(JSONObject().put("role", "user").put("content", src))
-            messages.put(JSONObject().put("role", "assistant").put("content", dst))
+            messages.put(JSONObject().put("role", "assistant").put("content", cleanDst))
         }
         messages.put(JSONObject().put("role", "user").put("content", text))
         return messages
@@ -574,17 +595,17 @@ abstract class OpenAiCompatChatEngine(
 
     private fun historySize(): Int = synchronized(history) { history.size }
 
-    private fun targetLabel(code: String): String = when (code) {
-        "zh-Hans" -> "Simplified Chinese (简体中文)"
-        "zh-Hant" -> "Traditional Chinese (繁體中文)"
-        "en" -> "English"
+    private fun targetLabel(code: String): String = when (code.trim().lowercase()) {
+        "zh-hans", "zh-cn", "zh", "chi", "zho", "zh_cn" -> "Simplified Chinese (中国大陆规范简体中文)"
+        "zh-hant", "zh-tw", "zh-hk", "zh_tw", "zh_hk" -> "Traditional Chinese (繁體中文)"
+        "en", "en-us", "en-gb" -> "English"
         "ja" -> "Japanese (日本語)"
         "ko" -> "Korean (한국어)"
         "es" -> "Spanish"
         "fr" -> "French"
         "de" -> "German"
         "ru" -> "Russian"
-        else -> code
+        else -> if (code.trim().lowercase().startsWith("zh")) "Simplified Chinese (中国大陆规范简体中文)" else code
     }
 
     private companion object {

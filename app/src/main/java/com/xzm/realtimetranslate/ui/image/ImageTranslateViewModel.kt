@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.xzm.realtimetranslate.LiveTranslateApp
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.ApiKeyStore
 import com.xzm.realtimetranslate.data.HistoryEntry
@@ -135,6 +136,7 @@ class ImageTranslateViewModel(
                     settings,
                     apiKeyStore,
                     liveSettings = { settingsRepository.settings.first() },
+                    liveGlossaryPrompt = { (context as LiveTranslateApp).glossaryRepository.getEnabledTermsPrompt() },
                 )
                 val (screenWidth, _, density) = context.realScreenMetrics()
                 val result = pipeline.run(

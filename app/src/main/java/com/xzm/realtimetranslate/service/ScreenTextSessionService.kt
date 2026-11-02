@@ -446,6 +446,7 @@ class ScreenTextSessionService : Service() {
                         s
                     }
                 },
+                liveGlossaryPrompt = { app.glossaryRepository.getEnabledTermsPrompt() },
             )
             // 翻译 worker：单槽（conflated）Channel = 同时最多一个翻译在飞，且翻译
             // 期间画面又换了只保留最新的那份文本。引擎再慢也冻不住上面的采集节拍，

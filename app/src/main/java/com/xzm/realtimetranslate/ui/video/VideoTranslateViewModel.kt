@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.xzm.realtimetranslate.LiveTranslateApp
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.ApiKeyStore
 import com.xzm.realtimetranslate.data.SupportedLanguages
@@ -249,6 +250,7 @@ class VideoTranslateViewModel(
                         settings,
                         apiKeyStore,
                         liveSettings = { settingsRepository.settings.first() },
+                        liveGlossaryPrompt = { (getApplication<Application>() as LiveTranslateApp).glossaryRepository.getEnabledTermsPrompt() },
                     )
                 }
 

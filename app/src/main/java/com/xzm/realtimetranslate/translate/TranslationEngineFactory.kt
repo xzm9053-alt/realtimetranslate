@@ -26,22 +26,23 @@ object TranslationEngineFactory {
         settings: UserSettings,
         apiKey: String,
         liveSettings: suspend () -> UserSettings = { settings },
+        liveGlossaryPrompt: suspend () -> String = { "" },
     ): TranslationEngine = when (settings.translationEngine) {
         TranslationEngineType.DEEPSEEK -> DeepSeekTranslationEngine(
             apiKey = apiKey,
-            config = { liveSettings().deepSeekConfig() },
+            config = { liveSettings().deepSeekConfig(liveGlossaryPrompt()) },
         )
         TranslationEngineType.ZHIPU -> ZhipuTranslationEngine(
             apiKey = apiKey,
-            config = { liveSettings().zhipuConfig() },
+            config = { liveSettings().zhipuConfig(liveGlossaryPrompt()) },
         )
         TranslationEngineType.GEMINI -> GeminiTranslationEngine(
             apiKey = apiKey,
-            config = { liveSettings().geminiConfig() },
+            config = { liveSettings().geminiConfig(liveGlossaryPrompt()) },
         )
         TranslationEngineType.OPENAI_COMPAT -> GenericOpenAiEngine(
             apiKey = apiKey,
-            config = { liveSettings().genericConfig() },
+            config = { liveSettings().genericConfig(liveGlossaryPrompt()) },
         )
         TranslationEngineType.MICROSOFT -> MicrosoftFreeTranslationEngine()
         TranslationEngineType.GOOGLE_FREE -> GoogleFreeTranslationEngine()
@@ -54,8 +55,9 @@ object TranslationEngineFactory {
         settings: UserSettings,
         keys: ApiKeyStore,
         liveSettings: suspend () -> UserSettings = { settings },
+        liveGlossaryPrompt: suspend () -> String = { "" },
     ): TranslationEngine =
-        create(settings, keys.getKeyFor(settings.translationEngine), liveSettings)
+        create(settings, keys.getKeyFor(settings.translationEngine), liveSettings, liveGlossaryPrompt)
 
     /** One-shot connectivity check for the settings screen. */
     suspend fun testConnection(
@@ -72,33 +74,36 @@ object TranslationEngineFactory {
     ): ModelCheck = create(settings, keys).checkModels(candidates)
 }
 
-private fun UserSettings.deepSeekConfig(): LlmRequestConfig = LlmRequestConfig(
+private fun UserSettings.deepSeekConfig(glossaryPrompt: String = ""): LlmRequestConfig = LlmRequestConfig(
     baseUrl = deepseekBaseUrl.ifBlank { UserSettings.Defaults.DEEPSEEK_BASE_URL },
     model = deepseekModel.ifBlank { UserSettings.Defaults.DEEPSEEK_MODEL },
     thinking = aiDeepThinking,
     thinkingOffStyle = ThinkingOffStyle.THINKING_OBJECT,
     domainStylePrompt = translationDomain.promptFor(),
+    glossaryPrompt = glossaryPrompt,
 )
 
-private fun UserSettings.zhipuConfig(): LlmRequestConfig = LlmRequestConfig(
+private fun UserSettings.zhipuConfig(glossaryPrompt: String = ""): LlmRequestConfig = LlmRequestConfig(
     baseUrl = zhipuBaseUrl.ifBlank { UserSettings.Defaults.ZHIPU_BASE_URL },
     model = zhipuModel.ifBlank { UserSettings.Defaults.ZHIPU_MODEL },
     thinking = aiDeepThinking,
     thinkingOffStyle = ThinkingOffStyle.THINKING_OBJECT,
     domainStylePrompt = translationDomain.promptFor(),
+    glossaryPrompt = glossaryPrompt,
 )
 
 // The compatibility layer silently drops a `thinking` object, so Gemini needs the flat
 // spelling. This used to be a method override on GeminiTranslationEngine.
-private fun UserSettings.geminiConfig(): LlmRequestConfig = LlmRequestConfig(
+private fun UserSettings.geminiConfig(glossaryPrompt: String = ""): LlmRequestConfig = LlmRequestConfig(
     baseUrl = geminiBaseUrl.ifBlank { UserSettings.Defaults.GEMINI_BASE_URL },
     model = geminiModel.ifBlank { UserSettings.Defaults.GEMINI_MODEL },
     thinking = aiDeepThinking,
     thinkingOffStyle = ThinkingOffStyle.REASONING_EFFORT,
     domainStylePrompt = translationDomain.promptFor(),
+    glossaryPrompt = glossaryPrompt,
 )
 
-private fun UserSettings.genericConfig(): LlmRequestConfig = LlmRequestConfig(
+private fun UserSettings.genericConfig(glossaryPrompt: String = ""): LlmRequestConfig = LlmRequestConfig(
     // Deliberately no `ifBlank { default }`: this engine's whole point is that the
     // destination is the user's choice, so a blank URL must fail with its own error
     // instead of quietly sending their speech to some other provider.
@@ -110,6 +115,7 @@ private fun UserSettings.genericConfig(): LlmRequestConfig = LlmRequestConfig(
     thinking = aiDeepThinking,
     thinkingOffStyle = genericThinkingOffStyle,
     domainStylePrompt = translationDomain.promptFor(),
+    glossaryPrompt = glossaryPrompt,
 )
 
 /**

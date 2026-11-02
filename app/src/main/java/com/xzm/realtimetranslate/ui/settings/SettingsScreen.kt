@@ -60,7 +60,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -74,7 +76,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xzm.realtimetranslate.BuildConfig
+import com.xzm.realtimetranslate.LiveTranslateApp
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.ApiKeyProviders
 import com.xzm.realtimetranslate.data.AsrEngineType
@@ -94,6 +98,9 @@ import com.xzm.realtimetranslate.ui.components.SectionCard
 import com.xzm.realtimetranslate.ui.components.SettingDivider
 import com.xzm.realtimetranslate.ui.components.SettingRowIcon
 import com.xzm.realtimetranslate.ui.components.SettingSwitchRow
+import com.xzm.realtimetranslate.ui.glossary.GlossaryScreen
+import com.xzm.realtimetranslate.ui.glossary.GlossaryViewModel
+import com.xzm.realtimetranslate.ui.glossary.GlossaryViewModelFactory
 import com.xzm.realtimetranslate.ui.theme.Booth
 import com.xzm.realtimetranslate.util.PermissionUtils
 import top.yukonga.miuix.kmp.basic.Button
@@ -127,6 +134,7 @@ private sealed interface SettingsNavTarget {
     data object AsrPicker : SettingsNavTarget
     data class ModelPicker(val engine: TranslationEngineType) : SettingsNavTarget
     data object Logs : SettingsNavTarget
+    data object Glossary : SettingsNavTarget
 }
 
 @Composable
@@ -137,6 +145,7 @@ fun SettingsScreen(
     onPromptUpdate: (RemoteUpdateInfo) -> Unit = {},
 ) {
     var showLogs by rememberSaveable { mutableStateOf(false) }
+    var showGlossary by rememberSaveable { mutableStateOf(false) }
 
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val deepSeekKey by viewModel.deepSeekKey.collectAsStateWithLifecycle()
@@ -218,6 +227,7 @@ fun SettingsScreen(
 
     val currentNavTarget: SettingsNavTarget = when {
         showLogs -> SettingsNavTarget.Logs
+        showGlossary -> SettingsNavTarget.Glossary
         activeModelPickerEngine != null -> SettingsNavTarget.ModelPicker(activeModelPickerEngine!!)
         activeConfigEngine != null -> SettingsNavTarget.EngineConfig(activeConfigEngine!!)
         showEnginePicker -> SettingsNavTarget.EnginePicker
@@ -229,6 +239,7 @@ fun SettingsScreen(
     BackHandler(enabled = currentNavTarget != SettingsNavTarget.Main) {
         when (currentNavTarget) {
             SettingsNavTarget.Logs -> showLogs = false
+            SettingsNavTarget.Glossary -> showGlossary = false
             is SettingsNavTarget.ModelPicker -> activeModelPickerEngine = null
             is SettingsNavTarget.EngineConfig -> activeConfigEngine = null
             SettingsNavTarget.EnginePicker -> showEnginePicker = false
@@ -483,6 +494,49 @@ fun SettingsScreen(
                             fontSize = 11.5.sp,
                             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         )
+                    }
+                    Icon(
+                        imageVector = Icons.Outlined.ExpandMore,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.5f),
+                        modifier = Modifier.rotate(-90f),
+                    )
+                }
+
+                SettingDivider()
+
+                // 4. 专业术语库
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showGlossary = true }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        SettingRowIcon(
+                            emoji = "📖",
+                            bg = Color(0xFF10B981).copy(alpha = 0.12f),
+                        )
+                        Column {
+                            Text(
+                                text = "专业术语库",
+                                fontSize = 15.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MiuixTheme.colorScheme.onSurface,
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "自定义专有名词精准对齐，防止大模型误翻",
+                                fontSize = 12.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            )
+                        }
                     }
                     Icon(
                         imageVector = Icons.Outlined.ExpandMore,
@@ -1057,6 +1111,7 @@ fun SettingsScreen(
                     genericKey = genericKey,
                     onGenericKeyChange = viewModel::setGenericKey,
                     genericModel = genericModel,
+                    onUpdateGenericModel = viewModel::updateGenericModel,
                     genericBaseUrl = genericBaseUrl,
                     onUpdateGenericBaseUrl = viewModel::updateGenericBaseUrl,
                     onUpdateGenericThinkingOffStyle = viewModel::setGenericThinkingOffStyle,
@@ -1138,6 +1193,17 @@ fun SettingsScreen(
             SettingsNavTarget.Logs -> {
                 LogViewerScreen(
                     onBack = { showLogs = false },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            SettingsNavTarget.Glossary -> {
+                val app = context.applicationContext as LiveTranslateApp
+                val glossaryVm: GlossaryViewModel = viewModel(
+                    factory = GlossaryViewModelFactory(app, app.glossaryRepository),
+                )
+                GlossaryScreen(
+                    onBack = { showGlossary = false },
+                    viewModel = glossaryVm,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -1960,6 +2026,7 @@ private fun EngineConfigSubScreen(
     genericKey: TextFieldValue,
     onGenericKeyChange: (TextFieldValue) -> Unit,
     genericModel: TextFieldValue,
+    onUpdateGenericModel: (TextFieldValue) -> Unit,
     genericBaseUrl: TextFieldValue,
     onUpdateGenericBaseUrl: (TextFieldValue) -> Unit,
     onUpdateGenericThinkingOffStyle: (ThinkingOffStyle) -> Unit,
@@ -2170,6 +2237,13 @@ private fun EngineConfigSubScreen(
                             )
                         }
                         EngineHint(R.string.settings_generic_thinking_hint)
+
+                        OpenSourceModelHubCard(
+                            onFillPreset = { url, model ->
+                                onUpdateGenericBaseUrl(TextFieldValue(url))
+                                onUpdateGenericModel(TextFieldValue(model))
+                            },
+                        )
                     }
                     TranslationEngineType.MICROSOFT -> EngineHint(R.string.settings_microsoft_desc)
                     TranslationEngineType.GOOGLE_FREE -> EngineHint(R.string.settings_google_free_desc)
@@ -3318,5 +3392,220 @@ private fun GuideItem(
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             lineHeight = 17.sp,
         )
+    }
+}
+
+@Composable
+private fun OpenSourceModelHubCard(
+    onFillPreset: (baseUrl: String, model: String) -> Unit,
+) {
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    var expanded by remember { mutableStateOf(false) }
+
+    SectionCard {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    SettingRowIcon(
+                        emoji = "🚀",
+                        bg = Color(0xFF10B981).copy(alpha = 0.12f),
+                    )
+                    Column {
+                        Text(
+                            text = "开源模型国内下载与部署助手",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MiuixTheme.colorScheme.onSurface,
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "支持 Ollama / LM Studio · 提供魔搭国内免翻墙镜像",
+                            fontSize = 12.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                    }
+                }
+                Icon(
+                    imageVector = Icons.Outlined.ExpandMore,
+                    contentDescription = null,
+                    tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier.rotate(if (expanded) 180f else 0f),
+                )
+            }
+
+            if (expanded) {
+                SettingDivider()
+
+                Text(
+                    text = "一键预填常见服务端点：",
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MiuixTheme.colorScheme.onSurface,
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Button(
+                        onClick = { onFillPreset("http://192.168.1.100:11434/v1", "qwen2.5:7b") },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(),
+                    ) {
+                        Text("Ollama", fontSize = 12.sp)
+                    }
+                    Button(
+                        onClick = { onFillPreset("http://192.168.1.100:1234/v1", "qwen2.5-7b-instruct") },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(),
+                    ) {
+                        Text("LM Studio", fontSize = 12.sp)
+                    }
+                    Button(
+                        onClick = { onFillPreset("https://api.siliconflow.cn/v1", "Qwen/Qwen2.5-7B-Instruct") },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(),
+                    ) {
+                        Text("硅基流动", fontSize = 12.sp)
+                    }
+                }
+
+                SettingDivider()
+
+                Text(
+                    text = "推荐翻译开源模型与国内高速镜像下载：",
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MiuixTheme.colorScheme.onSurface,
+                )
+
+                // Model 1: Qwen2.5-7B
+                OpenSourceModelRow(
+                    name = "Qwen2.5-7B-Instruct (通义千问)",
+                    desc = "公认中文与综合翻译最强开源模型，8G显存推荐",
+                    ollamaCmd = "ollama run qwen2.5:7b",
+                    modelScopeUrl = "https://www.modelscope.cn/models/qwen/Qwen2.5-7B-Instruct/summary",
+                    hfMirrorUrl = "https://hf-mirror.com/Qwen/Qwen2.5-7B-Instruct-GGUF",
+                    onCopy = { cmd ->
+                        clipboard.setText(AnnotatedString(cmd))
+                        Toast.makeText(context, "已复制拉取命令: $cmd", Toast.LENGTH_SHORT).show()
+                    },
+                    onOpenUrl = { url -> openUrl(context, url) },
+                )
+
+                // Model 2: Qwen2.5-1.5B
+                OpenSourceModelRow(
+                    name = "Qwen2.5-1.5B-Instruct (极速轻量)",
+                    desc = "低资源设备首选，低延迟、低显存占用",
+                    ollamaCmd = "ollama run qwen2.5:1.5b",
+                    modelScopeUrl = "https://www.modelscope.cn/models/qwen/Qwen2.5-1.5B-Instruct/summary",
+                    hfMirrorUrl = "https://hf-mirror.com/Qwen/Qwen2.5-1.5B-Instruct-GGUF",
+                    onCopy = { cmd ->
+                        clipboard.setText(AnnotatedString(cmd))
+                        Toast.makeText(context, "已复制拉取命令: $cmd", Toast.LENGTH_SHORT).show()
+                    },
+                    onOpenUrl = { url -> openUrl(context, url) },
+                )
+
+                // Model 3: DeepSeek-R1-Distill-Qwen-7B
+                OpenSourceModelRow(
+                    name = "DeepSeek-R1-Distill-Qwen-7B",
+                    desc = "深度求索蒸馏版，推理与句式理解极佳",
+                    ollamaCmd = "ollama run deepseek-r1:7b",
+                    modelScopeUrl = "https://www.modelscope.cn/models/deepseek-ai/DeepSeek-R1-Distill-Qwen-7B/summary",
+                    hfMirrorUrl = "https://hf-mirror.com/deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
+                    onCopy = { cmd ->
+                        clipboard.setText(AnnotatedString(cmd))
+                        Toast.makeText(context, "已复制拉取命令: $cmd", Toast.LENGTH_SHORT).show()
+                    },
+                    onOpenUrl = { url -> openUrl(context, url) },
+                )
+
+                SettingDivider()
+
+                // Phone connection guide
+                Text(
+                    text = "💡 手机连接电脑本地模型指南：\n" +
+                        "1. 电脑端配置：设置环境变量 OLLAMA_HOST=0.0.0.0:11434 并重启 Ollama（允许局域网设备连接）。\n" +
+                        "2. 电脑查看局域网 IP：终端输入 ipconfig 查看 IPv4 地址（如 192.168.1.100）。\n" +
+                        "3. 手机端连接：确保手机与电脑处于同一 Wi-Fi，Base URL 填写 http://<电脑IP>:11434/v1 即可免 Key 直接畅享本地模型！",
+                    fontSize = 11.5.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    lineHeight = 16.sp,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OpenSourceModelRow(
+    name: String,
+    desc: String,
+    ollamaCmd: String,
+    modelScopeUrl: String,
+    hfMirrorUrl: String,
+    onCopy: (String) -> Unit,
+    onOpenUrl: (String) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            text = name,
+            fontSize = 13.5.sp,
+            fontWeight = FontWeight.Bold,
+            color = MiuixTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = desc,
+            fontSize = 11.5.sp,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Button(
+                onClick = { onCopy(ollamaCmd) },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColorsPrimary(),
+            ) {
+                Text("复制命令", fontSize = 11.sp)
+            }
+            Button(
+                onClick = { onOpenUrl(modelScopeUrl) },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(),
+            ) {
+                Text("魔搭国内下载", fontSize = 11.sp)
+            }
+            Button(
+                onClick = { onOpenUrl(hfMirrorUrl) },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(),
+            ) {
+                Text("HF镜像", fontSize = 11.sp)
+            }
+        }
     }
 }
