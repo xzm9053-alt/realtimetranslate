@@ -24,9 +24,10 @@ import java.io.File
  * past the moment the SubtitleSessionService is destroyed (its own ioScope is
  * cancelled in onDestroy) — [append] is fire-and-forget.
  */
-class HistoryRepository(private val context: Context) {
-
-    private val historyFile: File = File(context.filesDir, "history.json")
+class HistoryRepository(
+    private val historyFile: File,
+) {
+    constructor(context: Context) : this(File(context.filesDir, "history.json"))
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
@@ -37,7 +38,11 @@ class HistoryRepository(private val context: Context) {
 
     init {
         // Load in the background so the main thread never touches the file.
-        scope.launch { _entries.value = load() }
+        scope.launch {
+            mutex.withLock {
+                _entries.value = load()
+            }
+        }
     }
 
     /** Fire-and-forget: newest first, capped at [maxEntries] (null = never trim).
@@ -45,6 +50,14 @@ class HistoryRepository(private val context: Context) {
     fun append(entry: HistoryEntry, maxEntries: Int? = DEFAULT_MAX_ENTRIES) {
         scope.launch {
             mutex.withLock {
+                val current = _entries.value
+                val isDuplicate = current.firstOrNull()?.let { latest ->
+                    latest.inputFull == entry.inputFull &&
+                        latest.outputFull == entry.outputFull &&
+                        kotlin.math.abs(latest.stoppedAtEpochMs - entry.stoppedAtEpochMs) < 10_000L
+                } ?: false
+                if (isDuplicate) return@launch
+
                 _entries.value = capped(
                     (_entries.value + entry).sortedByDescending { it.stoppedAtEpochMs },
                     maxEntries,
@@ -90,8 +103,16 @@ class HistoryRepository(private val context: Context) {
         if (!historyFile.isFile) {
             emptyList()
         } else {
-            json.decodeFromString<List<HistoryEntry>>(historyFile.readText(Charsets.UTF_8))
+            val list = json.decodeFromString<List<HistoryEntry>>(historyFile.readText(Charsets.UTF_8))
                 .sortedByDescending { it.stoppedAtEpochMs }
+            val deduped = mutableListOf<HistoryEntry>()
+            for (item in list) {
+                val prev = deduped.lastOrNull()
+                if (prev == null || prev.inputFull != item.inputFull || prev.outputFull != item.outputFull) {
+                    deduped.add(item)
+                }
+            }
+            deduped
         }
     }.getOrDefault(emptyList()) // 文件损坏兜底：返回空历史，不崩溃
 

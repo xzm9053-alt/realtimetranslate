@@ -58,6 +58,8 @@ class SubtitleSessionService : Service() {
     private var currentSettings: UserSettings = UserSettings()
     private var audioSourceMode: AudioSourceMode = AudioSourceMode.MEDIA
     private var captureStarted = false
+    @Volatile
+    private var stopped = false
 
     // 纯 Kotlin 流式双语文本缓冲状态机：接管增量拼接、累计重写、草稿世代隔离、CJK 智能排版与滚动截断
     private val inputBuffer = TextStreamBuffer(maxHistoryChars = 800)
@@ -130,6 +132,7 @@ class SubtitleSessionService : Service() {
     }
 
     private fun startSession(resultCode: Int?, data: Intent?) {
+        stopped = false
         SessionBus.setStatus(SessionBus.Status.Starting, "正在启动…")
         SessionBus.clearExport()
         inputBuffer.reset()
@@ -415,8 +418,12 @@ class SubtitleSessionService : Service() {
     }
 
     private fun stopEverything(message: String) {
+        if (stopped) return
+        stopped = true
         val inFull = inputBuffer.getFullExportText()
         val outFull = outputBuffer.getFullExportText()
+        inputBuffer.reset()
+        outputBuffer.reset()
         if (inFull.isNotBlank() || outFull.isNotBlank()) {
             SessionBus.markSessionFinished(inFull, outFull, message)
             // Fire-and-forget via the repository's process-scoped IO scope:
