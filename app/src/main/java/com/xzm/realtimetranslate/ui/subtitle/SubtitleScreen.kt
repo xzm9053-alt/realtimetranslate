@@ -7,8 +7,13 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -536,11 +541,35 @@ fun SubtitleScreen(
                                 .height(52.dp),
                             colors = if (running) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColorsPrimary(),
                         ) {
-                            Text(
-                                text = if (running) "⏹ 停止声音同传" else if (settings.voiceRecognizeOnly) "▶ 开始实时听写（仅识别）" else "▶ 开始同传翻译",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.5.sp,
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                            ) {
+                                if (running) {
+                                    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+                                    val pulseAlpha by infiniteTransition.animateFloat(
+                                        initialValue = 0.35f,
+                                        targetValue = 1f,
+                                        animationSpec = infiniteRepeatable(
+                                            animation = tween(800, easing = LinearEasing),
+                                            repeatMode = RepeatMode.Reverse,
+                                        ),
+                                        label = "pulseAlpha",
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .size(9.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF34C759).copy(alpha = pulseAlpha)),
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                }
+                                Text(
+                                    text = if (running) "⏹ 停止声音同传" else if (settings.voiceRecognizeOnly) "▶ 开始实时听写（仅识别）" else "▶ 开始同传翻译",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.5.sp,
+                                )
+                            }
                         }
 
                         if (ocrRunning) {
@@ -634,11 +663,35 @@ fun SubtitleScreen(
                                 .height(52.dp),
                             colors = if (ocrRunning) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColorsPrimary(),
                         ) {
-                            Text(
-                                text = if (ocrRunning) "⏹ 停止屏幕取词" else "▶ 开始画框取词",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.5.sp,
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                            ) {
+                                if (ocrRunning) {
+                                    val infiniteTransition = rememberInfiniteTransition(label = "ocrPulse")
+                                    val ocrPulseAlpha by infiniteTransition.animateFloat(
+                                        initialValue = 0.35f,
+                                        targetValue = 1f,
+                                        animationSpec = infiniteRepeatable(
+                                            animation = tween(800, easing = LinearEasing),
+                                            repeatMode = RepeatMode.Reverse,
+                                        ),
+                                        label = "ocrPulseAlpha",
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .size(9.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF34C759).copy(alpha = ocrPulseAlpha)),
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                }
+                                Text(
+                                    text = if (ocrRunning) "⏹ 停止屏幕取词" else "▶ 开始画框取词",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.5.sp,
+                                )
+                            }
                         }
 
                         if (running) {
@@ -1302,6 +1355,7 @@ private fun QuickToolsTray(
                     emoji = "📄",
                     title = "文档翻译",
                     subtitle = "PDF/Word",
+                    accentColor = Color(0xFFF59E0B),
                     onClick = onOpenDocument,
                     modifier = Modifier.weight(1f),
                 )
@@ -1309,6 +1363,7 @@ private fun QuickToolsTray(
                     emoji = "🖼️",
                     title = "图片翻译",
                     subtitle = "拍照/相册",
+                    accentColor = Color(0xFF10B981),
                     onClick = onOpenImage,
                     modifier = Modifier.weight(1f),
                 )
@@ -1316,6 +1371,7 @@ private fun QuickToolsTray(
                     emoji = "🎬",
                     title = "视频翻译",
                     subtitle = "离线字幕",
+                    accentColor = Color(0xFF8B5CF6),
                     onClick = onOpenVideo,
                     modifier = Modifier.weight(1f),
                 )
@@ -1323,6 +1379,7 @@ private fun QuickToolsTray(
                     emoji = "📝",
                     title = "文本翻译",
                     subtitle = "分段长文",
+                    accentColor = Color(0xFF3B82F6),
                     onClick = onOpenText,
                     modifier = Modifier.weight(1f),
                 )
@@ -1336,6 +1393,7 @@ private fun QuickToolItem(
     emoji: String,
     title: String,
     subtitle: String,
+    accentColor: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1346,16 +1404,21 @@ private fun QuickToolItem(
             .clickable(onClick = onClick)
             .padding(vertical = 8.dp, horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         Box(
             modifier = Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(scheme.surfaceVariant),
+                .size(46.dp)
+                .clip(RoundedCornerShape(13.dp))
+                .background(accentColor.copy(alpha = 0.12f))
+                .border(
+                    width = 0.8.dp,
+                    color = accentColor.copy(alpha = 0.28f),
+                    shape = RoundedCornerShape(13.dp),
+                ),
             contentAlignment = Alignment.Center,
         ) {
-            Text(text = emoji, fontSize = 20.sp)
+            Text(text = emoji, fontSize = 21.sp)
         }
         Text(
             text = title,
@@ -1384,6 +1447,11 @@ private fun SourceSegmentChip(
         animationSpec = tween(200),
         label = "chipBg",
     )
+    val animatedBorderColor by animateColorAsState(
+        targetValue = if (selected) Booth.Accent.copy(alpha = 0.45f) else Color.Transparent,
+        animationSpec = tween(200),
+        label = "chipBorder",
+    )
     val animatedText by animateColorAsState(
         targetValue = if (selected) Booth.Accent else scheme.onSurface,
         animationSpec = tween(200),
@@ -1393,6 +1461,7 @@ private fun SourceSegmentChip(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
             .background(animatedBg)
+            .border(0.8.dp, animatedBorderColor, RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
             .padding(vertical = 10.dp, horizontal = 4.dp),
         contentAlignment = Alignment.Center,

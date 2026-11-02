@@ -8,12 +8,14 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ComponentCallbacks
 import android.content.Context
+import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -30,6 +32,7 @@ import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.DecelerateInterpolator
+import android.view.animation.OvershootInterpolator
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -758,37 +761,46 @@ class SubtitleOverlayController(
             gravity = Gravity.CENTER
             visibility = View.GONE
             val padH = (6 * density).roundToInt()
-            val padV = (3 * density).roundToInt()
+            val padV = (4 * density).roundToInt()
             setPadding(padH, padV, padH, padV)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
+                LinearLayout.LayoutParams.WRAP_CONTENT,
             ).apply {
                 bottomMargin = (4 * density).roundToInt()
             }
             background = GradientDrawable().apply {
-                cornerRadius = 8 * density
-                setColor(Color.argb(190, 25, 27, 33))
+                cornerRadius = 12 * density
+                setColor(0xE61C1D24.toInt())
+                setStroke((0.8f * density).roundToInt(), 0x26FFFFFF)
             }
 
-            fun createActionBtn(label: String, tag: String? = null, onClick: () -> Unit): TextView {
+            fun createActionBtn(
+                label: String,
+                tag: String? = null,
+                btnBgColor: Int = 0x263482FF,
+                btnTextColor: Int = Color.WHITE,
+                onClick: () -> Unit,
+            ): TextView {
                 return TextView(context).apply {
                     this.text = label
                     if (tag != null) this.tag = tag
-                    setTextColor(Color.WHITE)
+                    setTextColor(btnTextColor)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                    typeface = Typeface.DEFAULT_BOLD
                     gravity = Gravity.CENTER
                     val btnPadH = (8 * density).roundToInt()
-                    val btnPadV = (4 * density).roundToInt()
+                    val btnPadV = (5 * density).roundToInt()
                     setPadding(btnPadH, btnPadV, btnPadH, btnPadV)
-                    background = GradientDrawable().apply {
-                        cornerRadius = 6 * density
-                        setColor(Color.argb(80, 255, 255, 255))
+                    val shape = GradientDrawable().apply {
+                        cornerRadius = 9 * density
+                        setColor(btnBgColor)
                     }
+                    background = RippleDrawable(ColorStateList.valueOf(0x33FFFFFF), shape, shape)
                     layoutParams = LinearLayout.LayoutParams(
                         0,
                         LinearLayout.LayoutParams.WRAP_CONTENT,
-                        1f
+                        1f,
                     ).apply {
                         marginEnd = (4 * density).roundToInt()
                     }
@@ -796,15 +808,21 @@ class SubtitleOverlayController(
                 }
             }
 
-            addView(createActionBtn("📋 复制") { copyTranslationToClipboard() })
+            addView(createActionBtn("📋 复制", btnBgColor = 0x263482FF, btnTextColor = 0xFF60A5FA.toInt()) {
+                copyTranslationToClipboard()
+            })
             val modeLabel = when (settings.displayMode) {
-                SubtitleDisplayMode.BOTH -> "双语"
-                SubtitleDisplayMode.TRANSLATION -> "仅译文"
-                SubtitleDisplayMode.SOURCE -> "仅原文"
+                SubtitleDisplayMode.BOTH -> "🔄 双语"
+                SubtitleDisplayMode.TRANSLATION -> "🔄 译文"
+                SubtitleDisplayMode.SOURCE -> "🔄 原文"
             }
-            addView(createActionBtn(modeLabel, tag = "btn_mode") { cycleDisplayMode() })
-            addView(createActionBtn("🔒 穿透") { setTouchThroughLock(true) })
-            val exitBtn = createActionBtn("✕ 关闭") {
+            addView(createActionBtn(modeLabel, tag = "btn_mode", btnBgColor = 0x268B5CF6, btnTextColor = 0xFFA78BFA.toInt()) {
+                cycleDisplayMode()
+            })
+            addView(createActionBtn("🔒 穿透", btnBgColor = 0x26F59E0B, btnTextColor = 0xFFFBBF24.toInt()) {
+                setTouchThroughLock(true)
+            })
+            val exitBtn = createActionBtn("✕ 关闭", btnBgColor = 0x26EF4444, btnTextColor = 0xFFF87171.toInt()) {
                 triggerHaptic()
                 SessionBus.tryStop()
                 hide()
@@ -817,18 +835,31 @@ class SubtitleOverlayController(
 
     private fun showActionBar() {
         val bar = actionBar ?: return
+        val density = context.resources.displayMetrics.density
         bar.visibility = View.VISIBLE
         bar.alpha = 0f
-        bar.animate().alpha(1f).setDuration(180).start()
+        bar.translationY = -8f * density
+        bar.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(180L)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
         resetAutoHideActionBar()
     }
 
     private fun hideActionBar() {
         val bar = actionBar ?: return
+        val density = context.resources.displayMetrics.density
         mainHandler.removeCallbacks(autoHideActionBarRunnable)
-        bar.animate().alpha(0f).setDuration(180).withEndAction {
-            bar.visibility = View.GONE
-        }.start()
+        bar.animate()
+            .alpha(0f)
+            .translationY(-6f * density)
+            .setDuration(150L)
+            .withEndAction {
+                bar.visibility = View.GONE
+            }
+            .start()
     }
 
     private fun toggleActionBar() {
@@ -874,9 +905,9 @@ class SubtitleOverlayController(
     private fun updateActionBarModeText() {
         val modeBtn = actionBar?.findViewWithTag<TextView>("btn_mode") ?: return
         modeBtn.text = when (settings.displayMode) {
-            SubtitleDisplayMode.BOTH -> "双语"
-            SubtitleDisplayMode.TRANSLATION -> "仅译文"
-            SubtitleDisplayMode.SOURCE -> "仅原文"
+            SubtitleDisplayMode.BOTH -> "🔄 双语"
+            SubtitleDisplayMode.TRANSLATION -> "🔄 译文"
+            SubtitleDisplayMode.SOURCE -> "🔄 原文"
         }
     }
 
@@ -902,19 +933,22 @@ class SubtitleOverlayController(
     private fun showUnlockPill() {
         if (unlockPillView != null) return
         val density = context.resources.displayMetrics.density
-        val pillSize = (40 * density).roundToInt()
+        val pillSize = (42 * density).roundToInt()
         val pill = FrameLayout(context).apply {
-            background = GradientDrawable().apply {
+            val shape = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(Color.argb(220, 46, 124, 246))
+                setColor(Color.argb(235, 36, 114, 246))
+                setStroke((1.2f * density).roundToInt(), 0x4DFFFFFF)
             }
+            background = RippleDrawable(ColorStateList.valueOf(0x33FFFFFF), shape, shape)
+            isClickable = true
             val iconText = TextView(context).apply {
                 text = "🔓"
                 textSize = 18f
                 gravity = Gravity.CENTER
                 layoutParams = FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.MATCH_PARENT
+                    FrameLayout.LayoutParams.MATCH_PARENT,
                 )
             }
             addView(iconText)
@@ -923,6 +957,7 @@ class SubtitleOverlayController(
                 true
             }
             setOnClickListener {
+                triggerHaptic()
                 Toast.makeText(context, "长按解锁字幕悬浮窗", Toast.LENGTH_SHORT).show()
             }
         }
@@ -936,7 +971,7 @@ class SubtitleOverlayController(
                 WindowManager.LayoutParams.TYPE_PHONE
             },
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-            PixelFormat.TRANSLUCENT
+            PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.END
             x = (12 * density).roundToInt()
@@ -945,13 +980,31 @@ class SubtitleOverlayController(
         runCatching {
             windowManager.addView(pill, pillParams)
             unlockPillView = pill
+            pill.alpha = 0f
+            pill.scaleX = 0.6f
+            pill.scaleY = 0.6f
+            pill.animate()
+                .alpha(1f)
+                .scaleX(1f)
+                .scaleY(1f)
+                .setDuration(220L)
+                .setInterpolator(OvershootInterpolator(1.4f))
+                .start()
         }
     }
 
     private fun hideUnlockPill() {
         val pill = unlockPillView ?: return
-        runCatching { windowManager.removeView(pill) }
         unlockPillView = null
+        pill.animate()
+            .alpha(0f)
+            .scaleX(0.7f)
+            .scaleY(0.7f)
+            .setDuration(150L)
+            .withEndAction {
+                runCatching { windowManager.removeView(pill) }
+            }
+            .start()
     }
 
     fun hideWindowForHub() {

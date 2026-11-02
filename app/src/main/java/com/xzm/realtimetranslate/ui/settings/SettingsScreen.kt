@@ -7,6 +7,8 @@ import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -3200,14 +3202,28 @@ private fun RewardDialog(onDismiss: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     tiers.forEachIndexed { index, tier ->
+                        val isSel = selected == index
+                        val animatedBg by animateColorAsState(
+                            targetValue = if (isSel) Booth.Accent.copy(alpha = 0.15f) else MiuixTheme.colorScheme.surfaceVariant,
+                            animationSpec = tween(200),
+                            label = "rewardTierBg",
+                        )
+                        val animatedBorder by animateColorAsState(
+                            targetValue = if (isSel) Booth.Accent.copy(alpha = 0.45f) else Color.Transparent,
+                            animationSpec = tween(200),
+                            label = "rewardTierBorder",
+                        )
+                        val animatedTextColor by animateColorAsState(
+                            targetValue = if (isSel) Booth.Accent else MiuixTheme.colorScheme.onSurface,
+                            animationSpec = tween(200),
+                            label = "rewardTierText",
+                        )
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(
-                                    if (selected == index) Booth.Accent.copy(alpha = 0.15f)
-                                    else MiuixTheme.colorScheme.surfaceVariant,
-                                )
+                                .background(animatedBg)
+                                .border(0.8.dp, animatedBorder, RoundedCornerShape(10.dp))
                                 .clickable { selected = index }
                                 .padding(vertical = 9.dp),
                             contentAlignment = Alignment.Center,
@@ -3215,8 +3231,8 @@ private fun RewardDialog(onDismiss: () -> Unit) {
                             Text(
                                 text = tier.label,
                                 fontSize = 13.sp,
-                                fontWeight = if (selected == index) FontWeight.Bold else FontWeight.Normal,
-                                color = if (selected == index) Booth.Accent else MiuixTheme.colorScheme.onSurface,
+                                fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
+                                color = animatedTextColor,
                             )
                         }
                     }
@@ -3230,13 +3246,19 @@ private fun RewardDialog(onDismiss: () -> Unit) {
                         .padding(10.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Image(
-                        painter = painterResource(tiers[selected].res),
-                        contentDescription = "WeChat Reward QR Code ${tiers[selected].label}",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(3f / 4.2f),
-                    )
+                    Crossfade(
+                        targetState = tiers[selected].res,
+                        animationSpec = tween(200),
+                        label = "RewardQrcodeCrossfade",
+                    ) { resId ->
+                        Image(
+                            painter = painterResource(resId),
+                            contentDescription = "WeChat Reward QR Code ${tiers[selected].label}",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(3f / 4.2f),
+                        )
+                    }
                 }
 
                 Text(

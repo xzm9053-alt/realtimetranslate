@@ -8,6 +8,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ComponentCallbacks
 import android.content.Context
+import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Color
@@ -17,6 +18,7 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -370,48 +372,172 @@ class OcrBallOverlay(
         val card = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             isClickable = true // taps on the card itself must not dismiss the menu
+            val cardW = (210 * density).roundToInt()
             background = GradientDrawable().apply {
-                cornerRadius = 16 * density
-                setColor(Color.argb(243, 22, 22, 30))
+                cornerRadius = 20 * density
+                setColor(0xE61C1D24.toInt())
+                setStroke((0.8f * density).roundToInt(), 0x26FFFFFF)
             }
             setPadding(
-                (6 * density).roundToInt(),
-                (6 * density).roundToInt(),
-                (6 * density).roundToInt(),
-                (6 * density).roundToInt(),
+                (8 * density).roundToInt(),
+                (8 * density).roundToInt(),
+                (8 * density).roundToInt(),
+                (8 * density).roundToInt(),
             )
-        }
-        val itemW = (168 * density).roundToInt()
-        val itemH = (42 * density).roundToInt()
-        fun addItem(label: String, action: () -> Unit) {
-            card.addView(
-                TextView(context).apply {
-                    text = label
-                    setTextColor(Color.WHITE)
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-                    gravity = Gravity.CENTER_VERTICAL
-                    setPadding((14 * density).roundToInt(), 0, (14 * density).roundToInt(), 0)
-                    layoutParams = LinearLayout.LayoutParams(itemW, itemH)
-                    setOnClickListener {
-                        hideMenu()
-                        runCatching { action() }
-                    }
-                },
-            )
+            layoutParams = LinearLayout.LayoutParams(cardW, LinearLayout.LayoutParams.WRAP_CONTENT)
         }
 
+        fun addHeader(text: String) {
+            val tv = TextView(context).apply {
+                this.text = text
+                setTextColor(0x80FFFFFF.toInt())
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+                typeface = Typeface.DEFAULT_BOLD
+                setPadding(
+                    (8 * density).roundToInt(),
+                    (4 * density).roundToInt(),
+                    (8 * density).roundToInt(),
+                    (4 * density).roundToInt(),
+                )
+            }
+            card.addView(tv)
+        }
+
+        fun addDivider() {
+            val div = View(context).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    max(1, (0.5f * density).roundToInt()),
+                ).apply {
+                    val m = (4 * density).roundToInt()
+                    setMargins((4 * density).roundToInt(), m, (4 * density).roundToInt(), m)
+                }
+                setBackgroundColor(0x1AFFFFFF)
+            }
+            card.addView(div)
+        }
+
+        fun addItem(
+            icon: String,
+            title: String,
+            subtitle: String? = null,
+            badgeBgColor: Int = 0x263482FF,
+            badgeTextColor: Int = 0xFF3482FF.toInt(),
+            titleColor: Int = Color.WHITE,
+            onClick: () -> Unit,
+        ) {
+            val row = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                val rowPadV = (7 * density).roundToInt()
+                val rowPadH = (8 * density).roundToInt()
+                setPadding(rowPadH, rowPadV, rowPadH, rowPadV)
+                val shape = GradientDrawable().apply {
+                    cornerRadius = 12 * density
+                }
+                background = RippleDrawable(ColorStateList.valueOf(0x26FFFFFF), null, shape)
+                isClickable = true
+                setOnClickListener {
+                    hideMenu()
+                    onClick()
+                }
+            }
+
+            // Badge Icon Container
+            val badge = FrameLayout(context).apply {
+                val bSize = (32 * density).roundToInt()
+                layoutParams = LinearLayout.LayoutParams(bSize, bSize).apply {
+                    marginEnd = (10 * density).roundToInt()
+                }
+                background = GradientDrawable().apply {
+                    setColor(badgeBgColor)
+                    cornerRadius = 9 * density
+                }
+            }
+            val badgeText = TextView(context).apply {
+                this.text = icon
+                setTextColor(badgeTextColor)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                typeface = Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                )
+            }
+            badge.addView(badgeText)
+            row.addView(badge)
+
+            // Text column
+            val textCol = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            val titleView = TextView(context).apply {
+                this.text = title
+                setTextColor(titleColor)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f)
+                typeface = Typeface.DEFAULT_BOLD
+            }
+            textCol.addView(titleView)
+
+            if (!subtitle.isNullOrBlank()) {
+                val subView = TextView(context).apply {
+                    this.text = subtitle
+                    setTextColor(0x80FFFFFF.toInt())
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 10.5f)
+                }
+                textCol.addView(subView)
+            }
+            row.addView(textCol)
+
+            card.addView(row)
+        }
+
+        addHeader("屏幕取词控制")
+
         val paused = ballView?.paused == true
+        val pauseText = context.getString(if (paused) R.string.ocr_menu_resume else R.string.ocr_menu_pause)
+        val pauseIcon = if (paused) "▶" else "⏸"
         addItem(
-            context.getString(if (paused) R.string.ocr_menu_resume else R.string.ocr_menu_pause),
+            pauseIcon,
+            pauseText,
+            "暂停或恢复取词识别",
+            badgeBgColor = 0x26F59E0B,
+            badgeTextColor = 0xFFFBBF24.toInt(),
         ) { onTogglePause() }
-        addItem(context.getString(R.string.ocr_menu_reselect)) { onReselectRegion() }
+
         addItem(
-            context.getString(
-                if (outlineWindowView != null) R.string.ocr_menu_hide_outline
-                else R.string.ocr_menu_show_outline,
-            ),
+            "⛶",
+            context.getString(R.string.ocr_menu_reselect),
+            "画框选取新翻译区域",
+            badgeBgColor = 0x263482FF,
+            badgeTextColor = 0xFF3482FF.toInt(),
+        ) { onReselectRegion() }
+
+        val outlineVisible = outlineWindowView != null
+        val outlineText = context.getString(
+            if (outlineVisible) R.string.ocr_menu_hide_outline else R.string.ocr_menu_show_outline,
+        )
+        val outlineIcon = if (outlineVisible) "🙈" else "👁"
+        addItem(
+            outlineIcon,
+            outlineText,
+            "切换选区红色外框",
+            badgeBgColor = 0x268B5CF6,
+            badgeTextColor = 0xFFA78BFA.toInt(),
         ) { toggleRegionOutline() }
-        addItem(context.getString(R.string.ocr_menu_stop)) { onStop() }
+
+        addDivider()
+
+        addItem(
+            "⏹",
+            context.getString(R.string.ocr_menu_stop),
+            "结束取词并保存记录",
+            badgeBgColor = 0x26EF4444,
+            badgeTextColor = 0xFFF87171.toInt(),
+            titleColor = 0xFFF87171.toInt(),
+        ) { onStop() }
 
         val unspecified = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
         card.measure(unspecified, unspecified)
@@ -439,11 +565,36 @@ class OcrBallOverlay(
         }
         menuWindowView = root
         runCatching { windowManager.addView(root, overlayParams(screenW, screenH)) }
+
+        card.alpha = 0f
+        card.scaleX = 0.88f
+        card.scaleY = 0.88f
+        card.animate()
+            .alpha(1f)
+            .scaleX(1f)
+            .scaleY(1f)
+            .setDuration(180L)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
     }
 
     private fun hideMenu() {
-        menuWindowView?.let { runCatching { windowManager.removeView(it) } }
+        val root = menuWindowView ?: return
         menuWindowView = null
+        val card = root.getChildAt(0)
+        if (card != null) {
+            card.animate()
+                .alpha(0f)
+                .scaleX(0.92f)
+                .scaleY(0.92f)
+                .setDuration(130L)
+                .withEndAction {
+                    runCatching { windowManager.removeView(root) }
+                }
+                .start()
+        } else {
+            runCatching { windowManager.removeView(root) }
+        }
     }
 
     private fun toggleRegionOutline() {
@@ -628,12 +779,21 @@ class OcrBallOverlay(
         }
         popupText = tv
 
+        val btnSize = (28 * density).roundToInt()
+
         val copy = TextView(context).apply {
             text = "📋"
             textSize = 12f
             gravity = Gravity.CENTER
             contentDescription = "复制译文"
+            val copyShape = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(0x263482FF)
+            }
+            background = RippleDrawable(ColorStateList.valueOf(0x33FFFFFF), copyShape, copyShape)
+            isClickable = true
             setOnClickListener {
+                triggerSnapHaptic()
                 val textToCopy = shownOutput.ifBlank { shownInput }
                 if (textToCopy.isNotBlank()) {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -642,24 +802,31 @@ class OcrBallOverlay(
                 }
             }
             layoutParams = FrameLayout.LayoutParams(
-                (26 * density).roundToInt(),
-                (26 * density).roundToInt(),
+                btnSize,
+                btnSize,
                 Gravity.TOP or Gravity.END,
             ).apply {
-                marginEnd = (28 * density).roundToInt()
+                marginEnd = (32 * density).roundToInt()
             }
         }
 
         val close = TextView(context).apply {
             text = "✕"
-            setTextColor(Color.argb(170, 255, 255, 255))
+            setTextColor(0xFFF87171.toInt())
             textSize = 12f
+            typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
             contentDescription = context.getString(R.string.ocr_popup_close)
+            val closeShape = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(0x26EF4444)
+            }
+            background = RippleDrawable(ColorStateList.valueOf(0x33FFFFFF), closeShape, closeShape)
+            isClickable = true
             setOnClickListener { closePopup() }
             layoutParams = FrameLayout.LayoutParams(
-                (26 * density).roundToInt(),
-                (26 * density).roundToInt(),
+                btnSize,
+                btnSize,
                 Gravity.TOP or Gravity.END,
             )
         }
@@ -671,7 +838,8 @@ class OcrBallOverlay(
         val dragHandle = View(context).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(Color.argb(120, 255, 255, 255))
+                setColor(Color.argb(140, 255, 255, 255))
+                setStroke((0.5f * density).roundToInt(), 0x40FFFFFF)
             }
             contentDescription = context.getString(R.string.ocr_popup_drag)
             layoutParams = FrameLayout.LayoutParams(
@@ -689,8 +857,9 @@ class OcrBallOverlay(
         val padV = (8 * density).roundToInt()
         val card = DragFrame(context).apply {
             background = GradientDrawable().apply {
-                cornerRadius = 14 * density
-                setColor(Color.argb(236, 20, 20, 28))
+                cornerRadius = 16 * density
+                setColor(Color.argb(242, 18, 18, 26))
+                setStroke((0.8f * density).roundToInt(), 0x26FFFFFF)
             }
             setPadding(padH, padV, padH, padV)
             addView(
@@ -817,7 +986,15 @@ class OcrBallOverlay(
         movePopup()
         view.animate().cancel()
         view.alpha = 0f
-        view.animate().alpha(1f).setDuration(160).start()
+        view.scaleX = 0.92f
+        view.scaleY = 0.92f
+        view.animate()
+            .alpha(1f)
+            .scaleX(1f)
+            .scaleY(1f)
+            .setDuration(180L)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
         popupVisible = true
         popupUserClosed = false
     }
@@ -826,10 +1003,19 @@ class OcrBallOverlay(
         popupUserClosed = true
         popupVisible = false
         val view = popupWindowView ?: return
-        runCatching { windowManager.removeView(view) }
-        popupWindowView = null
-        popupParams = null
-        popupText = null
+        view.animate().cancel()
+        view.animate()
+            .alpha(0f)
+            .scaleX(0.92f)
+            .scaleY(0.92f)
+            .setDuration(140L)
+            .withEndAction {
+                runCatching { windowManager.removeView(view) }
+                popupWindowView = null
+                popupParams = null
+                popupText = null
+            }
+            .start()
     }
 
     /** Anchors the bubble beside the ball, choosing the side with more room.
