@@ -6,12 +6,14 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.Animator
 import android.content.ComponentCallbacks
 import android.content.Context
+import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -183,7 +185,11 @@ class HubBallOverlay(
     fun reclamp() {
         val (screenW, screenH, _) = screenMetrics()
         val size = sizePx()
-        centerX = if (side == BallView.SIDE_LEFT) 0 else screenW
+        centerX = when (side) {
+            BallView.SIDE_LEFT -> 0
+            BallView.SIDE_RIGHT -> screenW
+            else -> centerX.coerceIn(size / 2, max(size / 2, screenW - size / 2))
+        }
         centerY = centerY.coerceIn(size / 2, max(size / 2, screenH - size / 2))
         applyGeometry()
     }
@@ -197,11 +203,18 @@ class HubBallOverlay(
         val size = sizePx()
         val topRoom = avoid.top
         val bottomRoom = screenH - avoid.bottom
-        centerY = when {
-            topRoom >= size -> avoid.top / 2
-            bottomRoom >= size -> (avoid.bottom + screenH) / 2
-            else -> if (topRoom >= bottomRoom) size / 2 else screenH - size / 2
-        }.coerceIn(size / 2, max(size / 2, screenH - size / 2))
+        val ballLeft = centerX - size / 2
+        val ballRight = centerX + size / 2
+        val ballTop = centerY - size / 2
+        val ballBottom = centerY + size / 2
+        val overlaps = Rect.intersects(avoid, Rect(ballLeft, ballTop, ballRight, ballBottom))
+        if (overlaps || side != BallView.SIDE_FLOAT) {
+            centerY = when {
+                topRoom >= size -> avoid.top / 2
+                bottomRoom >= size -> (avoid.bottom + screenH) / 2
+                else -> if (topRoom >= bottomRoom) size / 2 else screenH - size / 2
+            }.coerceIn(size / 2, max(size / 2, screenH - size / 2))
+        }
         if (side != BallView.SIDE_FLOAT) {
             centerX = if (side == BallView.SIDE_LEFT) 0 else screenW
         }
@@ -216,58 +229,117 @@ class HubBallOverlay(
 
         val card = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            val padH = (16 * density).roundToInt()
+            val padH = (12 * density).roundToInt()
             val padV = (12 * density).roundToInt()
             setPadding(padH, padV, padH, padV)
+            minimumWidth = (212 * density).roundToInt()
             background = GradientDrawable().apply {
-                setColor(0xF0202228.toInt()) // 深色半透明卡片
-                cornerRadius = 16 * density
-                setStroke((1 * density).roundToInt(), 0x33FFFFFF)
+                setColor(0xE61C1D24.toInt()) // 深色磨砂玻璃晶体底色
+                cornerRadius = 20 * density
+                setStroke((1 * density).roundToInt(), 0x2EFFFFFF)
             }
-            elevation = 12 * density
+            elevation = 16 * density
         }
 
         fun addHeader(title: String) {
             val tv = TextView(context).apply {
                 text = title
-                setTextColor(0x99FFFFFF.toInt())
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTextColor(0x80FFFFFF.toInt())
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
                 typeface = Typeface.DEFAULT_BOLD
-                val padBottom = (8 * density).roundToInt()
-                setPadding(0, (4 * density).roundToInt(), 0, padBottom)
+                setPadding((6 * density).roundToInt(), (4 * density).roundToInt(), (6 * density).roundToInt(), (4 * density).roundToInt())
             }
             card.addView(tv)
         }
 
-        fun addItem(icon: String, text: String, color: Int = Color.WHITE, onClick: () -> Unit) {
+        fun addDivider() {
+            val div = View(context).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    max(1, (0.5f * density).roundToInt())
+                ).apply {
+                    val m = (4 * density).roundToInt()
+                    setMargins((4 * density).roundToInt(), m, (4 * density).roundToInt(), m)
+                }
+                setBackgroundColor(0x1AFFFFFF)
+            }
+            card.addView(div)
+        }
+
+        fun addItem(
+            icon: String,
+            title: String,
+            subtitle: String? = null,
+            badgeBgColor: Int = 0x263482FF,
+            badgeTextColor: Int = 0xFF3482FF.toInt(),
+            titleColor: Int = Color.WHITE,
+            onClick: () -> Unit
+        ) {
             val row = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                val rowPadV = (10 * density).roundToInt()
+                val rowPadV = (7 * density).roundToInt()
                 val rowPadH = (8 * density).roundToInt()
                 setPadding(rowPadH, rowPadV, rowPadH, rowPadV)
-                background = GradientDrawable().apply {
-                    cornerRadius = 8 * density
+                val shape = GradientDrawable().apply {
+                    cornerRadius = 12 * density
                 }
+                background = RippleDrawable(ColorStateList.valueOf(0x26FFFFFF), null, shape)
                 isClickable = true
                 setOnClickListener {
                     hideMenu()
                     onClick()
                 }
             }
-            val iconView = TextView(context).apply {
+
+            // Badge Icon Container
+            val badge = FrameLayout(context).apply {
+                val bSize = (32 * density).roundToInt()
+                layoutParams = LinearLayout.LayoutParams(bSize, bSize).apply {
+                    marginEnd = (10 * density).roundToInt()
+                }
+                background = GradientDrawable().apply {
+                    setColor(badgeBgColor)
+                    cornerRadius = 9 * density
+                }
+            }
+            val badgeText = TextView(context).apply {
                 this.text = icon
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-                setPadding(0, 0, (10 * density).roundToInt(), 0)
-            }
-            val textView = TextView(context).apply {
-                this.text = text
-                setTextColor(color)
+                setTextColor(badgeTextColor)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-                typeface = Typeface.DEFAULT
+                typeface = Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
             }
-            row.addView(iconView)
-            row.addView(textView)
+            badge.addView(badgeText)
+            row.addView(badge)
+
+            // Text column
+            val textCol = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            val titleView = TextView(context).apply {
+                this.text = title
+                setTextColor(titleColor)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f)
+                typeface = Typeface.DEFAULT_BOLD
+            }
+            textCol.addView(titleView)
+
+            if (!subtitle.isNullOrBlank()) {
+                val subView = TextView(context).apply {
+                    this.text = subtitle
+                    setTextColor(0x80FFFFFF.toInt())
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 10.5f)
+                }
+                textCol.addView(subView)
+            }
+            row.addView(textCol)
+
             card.addView(row)
         }
 
@@ -275,25 +347,27 @@ class HubBallOverlay(
         when (currentState.mode) {
             HubMode.IDLE -> {
                 addHeader("实时翻译模式")
-                addItem("🔍", context.getString(R.string.hub_menu_region)) {
+                addItem("⛶", context.getString(R.string.hub_menu_region), "选区与全屏即时翻译", badgeBgColor = 0x263482FF, badgeTextColor = 0xFF3482FF.toInt()) {
                     HubBus.postCommand(HubCommand.SwitchMode(HubMode.SCREEN_REGION))
                 }
-                addItem("🎙️", context.getString(R.string.hub_menu_voice)) {
+                addItem("🎙", context.getString(R.string.hub_menu_voice), "内录与麦克风同传", badgeBgColor = 0x268B5CF6, badgeTextColor = 0xFFA78BFA.toInt()) {
                     HubBus.postCommand(HubCommand.SwitchMode(HubMode.VOICE))
                 }
 
-                addHeader("其他翻译工具")
-                addItem("📷", context.getString(R.string.hub_menu_camera)) {
+                addDivider()
+                addHeader("独立翻译工具")
+                addItem("📷", context.getString(R.string.hub_menu_camera), "即时拍照翻译", badgeBgColor = 0x26F59E0B, badgeTextColor = 0xFFFBBF24.toInt()) {
                     HubBus.postCommand(HubCommand.LaunchStaticMode(StaticModeTarget.CAMERA))
                 }
-                addItem("🖼️", context.getString(R.string.hub_menu_image)) {
+                addItem("🖼", context.getString(R.string.hub_menu_image), "相册划词涂抹翻译", badgeBgColor = 0x2610B981, badgeTextColor = 0xFF34D399.toInt()) {
                     HubBus.postCommand(HubCommand.LaunchStaticMode(StaticModeTarget.IMAGE))
                 }
-                addItem("📄", context.getString(R.string.hub_menu_document)) {
+                addItem("📄", context.getString(R.string.hub_menu_document), "Docx / PDF 全篇翻译", badgeBgColor = 0x2606B6D4, badgeTextColor = 0xFF22D3EE.toInt()) {
                     HubBus.postCommand(HubCommand.LaunchStaticMode(StaticModeTarget.DOCUMENT))
                 }
 
-                addItem("❌", context.getString(R.string.hub_menu_close_hub), 0xFFFF5C5C.toInt()) {
+                addDivider()
+                addItem("✕", context.getString(R.string.hub_menu_close_hub), "关闭常驻悬浮球", badgeBgColor = 0x26EF4444, badgeTextColor = 0xFFF87171.toInt(), titleColor = 0xFFF87171.toInt()) {
                     HubBus.postCommand(HubCommand.CloseHub)
                 }
             }
@@ -304,8 +378,8 @@ class HubBallOverlay(
                 } else {
                     context.getString(R.string.hub_menu_show_window)
                 }
-                val winIcon = if (currentState.isSubtitleWindowVisible) "🙈" else "👁️"
-                addItem(winIcon, winText) {
+                val winIcon = if (currentState.isSubtitleWindowVisible) "🙈" else "👁"
+                addItem(winIcon, winText, "切换字幕悬浮窗显隐", badgeBgColor = 0x2664748B, badgeTextColor = 0xFF94A3B8.toInt()) {
                     HubBus.postCommand(HubCommand.SetSubtitleWindowVisible(!currentState.isSubtitleWindowVisible))
                 }
 
@@ -314,12 +388,13 @@ class HubBallOverlay(
                 } else {
                     context.getString(R.string.hub_menu_pause)
                 }
-                val pauseIcon = if (currentState.isPaused) "▶️" else "⏸️"
-                addItem(pauseIcon, pauseText) {
+                val pauseIcon = if (currentState.isPaused) "▶" else "⏸"
+                addItem(pauseIcon, pauseText, "暂停或继续实时同传", badgeBgColor = 0x26F59E0B, badgeTextColor = 0xFFFBBF24.toInt()) {
                     HubBus.postCommand(HubCommand.TogglePause)
                 }
 
-                addItem("⏹️", context.getString(R.string.hub_menu_stop_current), 0xFFFF5C5C.toInt()) {
+                addDivider()
+                addItem("⏹", context.getString(R.string.hub_menu_stop_current), "结束同传并保存历史", badgeBgColor = 0x26EF4444, badgeTextColor = 0xFFF87171.toInt(), titleColor = 0xFFF87171.toInt()) {
                     HubBus.postCommand(HubCommand.StopCurrentMode)
                 }
             }
@@ -330,18 +405,20 @@ class HubBallOverlay(
                 } else {
                     context.getString(R.string.hub_menu_pause)
                 }
-                val pauseIcon = if (currentState.isPaused) "▶️" else "⏸️"
-                addItem(pauseIcon, pauseText) {
+                val pauseIcon = if (currentState.isPaused) "▶" else "⏸"
+                addItem(pauseIcon, pauseText, "暂停或恢复取词识别", badgeBgColor = 0x26F59E0B, badgeTextColor = 0xFFFBBF24.toInt()) {
                     HubBus.postCommand(HubCommand.TogglePause)
                 }
 
-                addItem("🎯", context.getString(R.string.ocr_menu_reselect)) {
+                addItem("⌖", context.getString(R.string.ocr_menu_reselect), "重新框选屏幕区域", badgeBgColor = 0x263482FF, badgeTextColor = 0xFF3482FF.toInt()) {
                     HubBus.postCommand(HubCommand.ReselectRegion)
                 }
-                addItem("🔲", "切换取词框显隐") {
+                addItem("▢", "切换取词框显隐", "隐藏或显示绿色选框", badgeBgColor = 0x2664748B, badgeTextColor = 0xFF94A3B8.toInt()) {
                     HubBus.postCommand(HubCommand.ToggleOutline)
                 }
-                addItem("⏹️", context.getString(R.string.hub_menu_stop_current), 0xFFFF5C5C.toInt()) {
+
+                addDivider()
+                addItem("⏹", context.getString(R.string.hub_menu_stop_current), "结束屏幕取词会话", badgeBgColor = 0x26EF4444, badgeTextColor = 0xFFF87171.toInt(), titleColor = 0xFFF87171.toInt()) {
                     HubBus.postCommand(HubCommand.StopCurrentMode)
                 }
             }
@@ -365,6 +442,18 @@ class HubBallOverlay(
             leftMargin = x
             topMargin = y
         }
+
+        // Fluid enter animation
+        card.scaleX = 0.88f
+        card.scaleY = 0.88f
+        card.alpha = 0f
+        card.animate()
+            .scaleX(1f)
+            .scaleY(1f)
+            .alpha(1f)
+            .setDuration(160)
+            .setInterpolator(DecelerateInterpolator(2f))
+            .start()
 
         val root = FrameLayout(context).apply {
             setBackgroundColor(Color.TRANSPARENT)
@@ -577,11 +666,27 @@ class HubBallOverlay(
                             expandAnimator?.cancel()
                             v.removeCallbacks(flushDrag)
                             flushScheduled = false
-                            centerX = pendingX
-                            centerY = pendingY
-                            side = if (centerX < gestureW / 2) BallView.SIDE_LEFT else BallView.SIDE_RIGHT
-                            centerX = if (side == BallView.SIDE_LEFT) 0 else gestureW
-                            triggerSnapHaptic()
+                            val density = context.resources.displayMetrics.density
+                            val snapThresholdPx = (SNAP_THRESHOLD_DP * density).roundToInt()
+                            val nearLeft = pendingX <= snapThresholdPx
+                            val nearRight = pendingX >= gestureW - snapThresholdPx
+
+                            side = when {
+                                nearLeft -> BallView.SIDE_LEFT
+                                nearRight -> BallView.SIDE_RIGHT
+                                else -> BallView.SIDE_FLOAT
+                            }
+
+                            if (side == BallView.SIDE_LEFT) {
+                                centerX = 0
+                                triggerSnapHaptic()
+                            } else if (side == BallView.SIDE_RIGHT) {
+                                centerX = gestureW
+                                triggerSnapHaptic()
+                            } else {
+                                centerX = pendingX.coerceIn(gestureSize / 2, gestureW - gestureSize / 2)
+                            }
+                            centerY = pendingY.coerceIn(gestureSize / 2, max(gestureSize / 2, gestureH - gestureSize / 2))
                             applyGeometry()
                         }
                         dragging = false
@@ -591,10 +696,25 @@ class HubBallOverlay(
                         expandAnimator?.cancel()
                         v.removeCallbacks(flushDrag)
                         flushScheduled = false
-                        centerX = pendingX
-                        centerY = pendingY
-                        side = if (centerX < gestureW / 2) BallView.SIDE_LEFT else BallView.SIDE_RIGHT
-                        centerX = if (side == BallView.SIDE_LEFT) 0 else gestureW
+                        val density = context.resources.displayMetrics.density
+                        val snapThresholdPx = (SNAP_THRESHOLD_DP * density).roundToInt()
+                        val nearLeft = pendingX <= snapThresholdPx
+                        val nearRight = pendingX >= gestureW - snapThresholdPx
+
+                        side = when {
+                            nearLeft -> BallView.SIDE_LEFT
+                            nearRight -> BallView.SIDE_RIGHT
+                            else -> BallView.SIDE_FLOAT
+                        }
+
+                        if (side == BallView.SIDE_LEFT) {
+                            centerX = 0
+                        } else if (side == BallView.SIDE_RIGHT) {
+                            centerX = gestureW
+                        } else {
+                            centerX = pendingX.coerceIn(gestureSize / 2, gestureW - gestureSize / 2)
+                        }
+                        centerY = pendingY.coerceIn(gestureSize / 2, max(gestureSize / 2, gestureH - gestureSize / 2))
                         dragging = false
                         applyGeometry()
                         true
@@ -609,5 +729,6 @@ class HubBallOverlay(
 
     companion object {
         private const val BALL_DIAMETER_DP = 48
+        private const val SNAP_THRESHOLD_DP = 44
     }
 }
