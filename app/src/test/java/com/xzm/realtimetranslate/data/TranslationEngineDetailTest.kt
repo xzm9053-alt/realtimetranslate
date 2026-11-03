@@ -44,11 +44,10 @@ class TranslationEngineDetailTest {
     fun testCategoriesPartition() {
         val openTrans = TranslationEngineCatalog.getTranslationEnginesByCategory(EngineCategory.OPEN_SOURCE)
         val paidTrans = TranslationEngineCatalog.getTranslationEnginesByCategory(EngineCategory.API_PAID)
-        assertEquals(4, openTrans.size)
-        assertEquals(3, paidTrans.size)
+        assertEquals(3, openTrans.size)
+        assertEquals(4, paidTrans.size)
         assertEquals(7, openTrans.size + paidTrans.size)
 
-        assertTrue(openTrans.contains(TranslationEngineType.OPENAI_COMPAT))
         assertTrue(openTrans.contains(TranslationEngineType.MICROSOFT))
         assertTrue(openTrans.contains(TranslationEngineType.GOOGLE_FREE))
         assertTrue(openTrans.contains(TranslationEngineType.NONE))
@@ -56,21 +55,35 @@ class TranslationEngineDetailTest {
         assertTrue(paidTrans.contains(TranslationEngineType.DEEPSEEK))
         assertTrue(paidTrans.contains(TranslationEngineType.ZHIPU))
         assertTrue(paidTrans.contains(TranslationEngineType.GEMINI))
+        assertTrue(paidTrans.contains(TranslationEngineType.OPENAI_COMPAT))
 
         val openAsr = TranslationEngineCatalog.getAsrEnginesByCategory(EngineCategory.OPEN_SOURCE)
         val paidAsr = TranslationEngineCatalog.getAsrEnginesByCategory(EngineCategory.API_PAID)
-        assertEquals(2, openAsr.size)
-        assertEquals(1, paidAsr.size)
+        assertEquals(1, openAsr.size)
+        assertEquals(2, paidAsr.size)
         assertTrue(openAsr.contains(AsrEngineType.LOCAL_SENSEVOICE))
-        assertTrue(openAsr.contains(AsrEngineType.GENERIC_OPENAI))
         assertTrue(paidAsr.contains(AsrEngineType.ALIYUN_FUN_ASR))
+        assertTrue(paidAsr.contains(AsrEngineType.GENERIC_OPENAI))
+    }
+
+    @Test
+    fun testOpenSourceTranslationPresets() {
+        val presets = TranslationEngineCatalog.OPEN_SOURCE_TRANSLATION_PRESETS
+        assertEquals(7, presets.size)
+        for (p in presets) {
+            assertTrue(p.id.isNotBlank())
+            assertTrue(p.name.isNotBlank())
+            assertTrue(p.iconEmoji.isNotBlank())
+            assertTrue(p.highlight.isNotBlank())
+            assertTrue(p.detailText.isNotBlank())
+        }
     }
 
     @Test
     fun testOpenAiCompatHasRecommendedModels() {
         val detail = TranslationEngineCatalog.getDetail(TranslationEngineType.OPENAI_COMPAT)
-        assertTrue("OpenAI Compat should recommend top open-source models", detail.recommendedModels.isNotEmpty())
-        assertTrue("Should include SakuraLLM", detail.recommendedModels.any { it.contains("Sakura") })
-        assertTrue("Should include Seed-X", detail.recommendedModels.any { it.contains("Seed-X") })
+        assertTrue("OpenAI Compat should recommend top models", detail.recommendedModels.isNotEmpty())
+        assertTrue("Should include gpt-4o-mini", detail.recommendedModels.any { it.contains("gpt-4o-mini") })
+        assertTrue("Should include deepseek-chat", detail.recommendedModels.any { it.contains("deepseek-chat") })
     }
 }

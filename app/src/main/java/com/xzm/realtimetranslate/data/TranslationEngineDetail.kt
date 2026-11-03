@@ -40,7 +40,142 @@ data class AsrEngineDetail(
     val detailText: String,
 )
 
+/**
+ * 开源翻译模型预设（直接列在开源模型一栏中的模型项）
+ */
+data class OpenSourceTranslationPreset(
+    val id: String,
+    val name: String,
+    val iconEmoji: String,
+    val brandColorLong: Long,
+    val categoryBadge: String,
+    val developer: String,
+    val highlight: String,
+    val costDesc: String,
+    val suitableScenarios: String,
+    val modelScopeUrl: String,
+    val hfMirrorUrl: String,
+    val engineType: TranslationEngineType,
+    val defaultModelName: String = "",
+    val detailText: String,
+)
+
 object TranslationEngineCatalog {
+
+    /**
+     * 开源翻译模型矩阵（用户点开「开源模型」一栏直接完整列出）
+     */
+    val OPEN_SOURCE_TRANSLATION_PRESETS: List<OpenSourceTranslationPreset> = listOf(
+        OpenSourceTranslationPreset(
+            id = "sakura-14b",
+            name = "🌸 SakuraLLM (日漫汉化霸主)",
+            iconEmoji = "🌸",
+            brandColorLong = 0xFFEC4899, // 粉色
+            categoryBadge = "开源专精 · 日漫生肉",
+            developer = "Sakura 社区 (基于 Qwen2 深度微调)",
+            highlight = "ACG生肉轻小说/动漫/游戏首选 · 精准还原人称代词",
+            costDesc = "开源免费 · 本地自建 / 局域网 Ollama 零花费",
+            suitableScenarios = "日漫追番、生肉 Galgame、轻小说汉化、日语字幕精翻",
+            modelScopeUrl = "https://www.modelscope.cn/models/sakura-editor/Sakura-14B-Qwen2beta-v0.9.2-GGUF",
+            hfMirrorUrl = "https://hf-mirror.com/sakura-editor/Sakura-14B-Qwen2beta-v0.9.2-GGUF",
+            engineType = TranslationEngineType.OPENAI_COMPAT,
+            defaultModelName = "sakura:14b",
+            detailText = "日译中 ACGN（动画、轻小说、视觉小说、日语字幕）领域的绝对霸主。能精准还原日语省略主语、人称代词与使役态，支持挂载术语表并完美保留换行与控制符，6GB~8GB 显存即可本地流畅运行。",
+        ),
+        OpenSourceTranslationPreset(
+            id = "seed-x-7b",
+            name = "🔥 Seed-X-7B (字节跳动精翻)",
+            iconEmoji = "🔥",
+            brandColorLong = 0xFFF59E0B, // 琥珀金
+            categoryBadge = "开源专精 · 地道成语",
+            developer = "字节跳动 (ByteDance)",
+            highlight = "成语诗歌网络热词神级对齐 · 7B超越百亿大模型",
+            costDesc = "开源免费 · 本地自建 / 局域网 Ollama 零花费",
+            suitableScenarios = "视频字幕打轴、中英地道口语、网络热词与短视频文案",
+            modelScopeUrl = "https://www.modelscope.cn/models/ByteDance/Seed-X-7B",
+            hfMirrorUrl = "https://hf-mirror.com/ByteDance/Seed-X-7B",
+            engineType = TranslationEngineType.OPENAI_COMPAT,
+            defaultModelName = "seed-x:7b",
+            detailText = "字节跳动专为高水准翻译训练的开源专精模型。专门针对中英互译中的成语、谚语、诗歌与网络热词深度优化，仅凭 7B 参数量就在成语地道互译上超越许多百亿级通用大模型。",
+        ),
+        OpenSourceTranslationPreset(
+            id = "qwen2.5-7b",
+            name = "⭐ Qwen2.5-7B (通义千问开源旗舰)",
+            iconEmoji = "⭐",
+            brandColorLong = 0xFF3B82F6, // 科技蓝
+            categoryBadge = "开源通用旗舰",
+            developer = "阿里通义千问",
+            highlight = "综合翻译最强开源基座 · 8G显存推荐",
+            costDesc = "开源免费 · 本地自建 / 局域网 Ollama 零花费",
+            suitableScenarios = "长篇上下文理解、技术文档、论文润色、亚洲多语言对齐",
+            modelScopeUrl = "https://www.modelscope.cn/models/qwen/Qwen2.5-7B-Instruct/summary",
+            hfMirrorUrl = "https://hf-mirror.com/Qwen/Qwen2.5-7B-Instruct-GGUF",
+            engineType = TranslationEngineType.OPENAI_COMPAT,
+            defaultModelName = "qwen2.5:7b",
+            detailText = "中英互译与亚洲语言对齐最扎实的开源通用基座大模型。无论语法结构分析、长难句拆解还是定制风格翻译，综合本地化能力稳居开源第一梯队。",
+        ),
+        OpenSourceTranslationPreset(
+            id = "nllb-200",
+            name = "🌐 Meta NLLB-200 (200语种零幻觉)",
+            iconEmoji = "🌐",
+            brandColorLong = 0xFF10B981, // 绿色
+            categoryBadge = "传统神经机翻 (NMT)",
+            developer = "Meta (Facebook AI Research)",
+            highlight = "200种全球语言全能互译 · 纯CPU毫秒推理",
+            costDesc = "开源免费 · 纯CPU运行 · 确定性零幻觉",
+            suitableScenarios = "全球生僻语言、排版标签严格保留、低延迟批量转写",
+            modelScopeUrl = "https://www.modelscope.cn/models/AI-ModelScope/nllb-200-distilled-600M",
+            hfMirrorUrl = "https://hf-mirror.com/facebook/nllb-200-distilled-600M",
+            engineType = TranslationEngineType.OPENAI_COMPAT,
+            defaultModelName = "nllb-200",
+            detailText = "Meta 开源多语种神经机器翻译大一统模型。支持 200 种语言互译，在纯 CPU 上也能极速推理，输出确定性极高，绝不产生大模型幻觉，小语种支持面极广。",
+        ),
+        OpenSourceTranslationPreset(
+            id = "microsoft",
+            name = "🌐 微软翻译 (免密通道)",
+            iconEmoji = "🌐",
+            brandColorLong = 0xFF06B6D4, // 青蓝
+            categoryBadge = "免密直连 · 0门槛",
+            developer = "微软 (Microsoft Edge API)",
+            highlight = "免密钥 · 零门槛即开即用 · 毫秒响应",
+            costDesc = "完全免费 · 免 Key · 国内直连",
+            suitableScenarios = "开箱即用、追求超低网络延迟、对长篇润色无特殊要求的快翻",
+            modelScopeUrl = "",
+            hfMirrorUrl = "",
+            engineType = TranslationEngineType.MICROSOFT,
+            detailText = "经典工业级神经机器翻译（NMT）通道，免注册 API Key，国内极速直连。响应时间通常仅需 200~400ms，绝不产生大模型幻觉，非常适合刚装机想要立即体验翻译的用户。",
+        ),
+        OpenSourceTranslationPreset(
+            id = "google_free",
+            name = "🌈 谷歌翻译 (免密通道)",
+            iconEmoji = "🌈",
+            brandColorLong = 0xFFF59E0B, // 琥珀金
+            categoryBadge = "免密通道 · 多语种",
+            developer = "Google 网页翻译接口",
+            highlight = "免密钥 · 广谱语种覆盖 · 确定性高",
+            costDesc = "完全免费 · 免 Key",
+            suitableScenarios = "全球生僻小语种互译、词条短句快速对照",
+            modelScopeUrl = "",
+            hfMirrorUrl = "",
+            engineType = TranslationEngineType.GOOGLE_FREE,
+            detailText = "Google 传统神经机器翻译免密钥通道，覆盖全球上百种主流与小语种。采用确定性 NMT 架构，输出稳定，不消耗 Token 额度，支持作为备用翻译引擎随时切换。",
+        ),
+        OpenSourceTranslationPreset(
+            id = "none",
+            name = "🔇 仅识别 (不翻译 · 纯离线)",
+            iconEmoji = "🔇",
+            brandColorLong = 0xFF64748B, // 板岩灰
+            categoryBadge = "纯端侧 · 离线听写",
+            developer = "本地 SenseVoice / ASR 直通",
+            highlight = "只识别不翻译 · 零网络 · 零延迟 · 零费用",
+            costDesc = "完全离线 · 免 API Key · 0 流量消耗",
+            suitableScenarios = "纯外语听写学习、会议原声记录、原生字幕实时提取、断网环境",
+            modelScopeUrl = "",
+            hfMirrorUrl = "",
+            engineType = TranslationEngineType.NONE,
+            detailText = "原汁原味的原声听写模式。语音识别结果不经过大模型翻译直接原样展现为字幕，不耗费任何网络流量和 Token 费用，非常适合在无网络环境下记录原声或进行外语听力训练。",
+        ),
+    )
 
     val DETAILS: Map<TranslationEngineType, TranslationEngineDetail> = mapOf(
         TranslationEngineType.DEEPSEEK to TranslationEngineDetail(
@@ -84,21 +219,21 @@ object TranslationEngineCatalog {
         ),
         TranslationEngineType.OPENAI_COMPAT to TranslationEngineDetail(
             type = TranslationEngineType.OPENAI_COMPAT,
-            category = EngineCategory.OPEN_SOURCE,
+            category = EngineCategory.API_PAID,
             iconEmoji = "⚡",
             brandColorLong = 0xFFEC4899, // 洋红粉
-            categoryBadge = "开源生态 · 本地自建",
+            categoryBadge = "自定义 API · 兼容协议",
             developer = "通用 OpenAI 兼容协议",
-            highlight = "支持本地 Ollama / 硅基流动 / 任意兼容端点",
-            costDesc = "本地自建完全免费 · 免 Key 零花费",
-            suitableScenarios = "私有化部署、高阶极客、日漫专精 SakuraLLM、字节 Seed-X、混元翻译",
+            highlight = "支持自定义 API 地址、Key 与任意中转站 / 商业大模型",
+            costDesc = "视所接服务商规则而定（需配置 API Key）",
+            suitableScenarios = "使用第三方中转站、OpenRouter、SiliconFlow、Groq 或本地自建端点",
             recommendedModels = listOf(
-                "🌸 SakuraLLM (日漫汉化霸主)",
-                "🔥 Seed-X-7B (字节精翻/成语诗歌)",
-                "⭐ Qwen2.5-7B (开源综合第一)",
-                "🌐 NLLB-200 (Meta 200语种零幻觉)",
+                "gpt-4o-mini",
+                "deepseek-chat",
+                "Qwen/Qwen2.5-7B-Instruct",
+                "claude-3-5-haiku",
             ),
-            detailText = "全能开放协议插槽。支持接入任何标准 OpenAI 格式端点（如硅基流动、OpenRouter、Groq 或本地局域网电脑运行的 Ollama / LM Studio）。结合当前开源主流，可挂载日漫专精的 SakuraLLM、字节 Seed-X 专精模型或 Meta NLLB-200。",
+            detailText = "全能自定义 API 插槽。允许你配置任意提供标准 OpenAI /v1/chat/completions 接口的商业中转站、海外聚合平台（如 OpenRouter、Groq）或云端服务商，自由输入自定义模型名称与 API Key 进行翻译。",
         ),
         TranslationEngineType.MICROSOFT to TranslationEngineDetail(
             type = TranslationEngineType.MICROSOFT,
@@ -155,14 +290,14 @@ object TranslationEngineCatalog {
         ),
         AsrEngineType.GENERIC_OPENAI to AsrEngineDetail(
             type = AsrEngineType.GENERIC_OPENAI,
-            category = EngineCategory.OPEN_SOURCE,
+            category = EngineCategory.API_PAID,
             iconEmoji = "🌐",
             brandColorLong = 0xFF8B5CF6, // 紫色
-            categoryBadge = "开源转写 · 自建端点",
-            highlight = "POST /v1/audio/transcriptions 标准接口",
-            costDesc = "本地自建免费（或接硅基免费 SenseVoice）",
-            suitableScenarios = "硅基流动免费云端识别、自建 Faster-Whisper 服务器、Groq",
-            detailText = "标准 OpenAI 音频转录接口协议，每次切句时将音频打包为标准 WAV 格式并发起转录，支持灵活配置自建或第三方语音转录服务。",
+            categoryBadge = "自定义 API · 音频转录",
+            highlight = "POST /v1/audio/transcriptions 标准云端转写接口",
+            costDesc = "视服务商计费规则而定（需配置 API Key）",
+            suitableScenarios = "接入 OpenAI 官方 Whisper API、Groq 极速转录或第三方转录服务",
+            detailText = "标准 OpenAI 音频转录接口协议，每次切句时将音频打包为标准 WAV 格式并调用云端 API 发起转录，支持灵活配置任意商业或第三方转录服务商。",
         ),
         AsrEngineType.ALIYUN_FUN_ASR to AsrEngineDetail(
             type = AsrEngineType.ALIYUN_FUN_ASR,
