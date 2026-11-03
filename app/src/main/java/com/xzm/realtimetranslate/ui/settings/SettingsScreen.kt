@@ -8,6 +8,9 @@ import android.net.Uri
 import com.xzm.realtimetranslate.data.LocalAsrModelCatalog
 import com.xzm.realtimetranslate.data.LocalAsrModelPreset
 import com.xzm.realtimetranslate.data.LocalAsrProbeResult
+import com.xzm.realtimetranslate.data.TranslationEngineCatalog
+import com.xzm.realtimetranslate.data.TranslationEngineDetail
+import com.xzm.realtimetranslate.data.AsrEngineDetail
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
@@ -1142,6 +1145,9 @@ fun SettingsScreen(
                     currentEngine = engineType,
                     onSelectEngine = { selected ->
                         viewModel.setEngine(selected)
+                    },
+                    onConfigureEngine = { selected ->
+                        viewModel.setEngine(selected)
                         showEnginePicker = false
                         activeConfigEngine = selected
                     },
@@ -1193,6 +1199,9 @@ fun SettingsScreen(
                 AsrEnginePickerSubScreen(
                     currentEngine = asrEngine,
                     onSelectEngine = { selected ->
+                        viewModel.setAsrEngine(selected)
+                    },
+                    onConfigureEngine = { selected ->
                         viewModel.setAsrEngine(selected)
                         showAsrEnginePicker = false
                         activeConfigAsrEngine = selected
@@ -2329,11 +2338,13 @@ private fun EngineConfigSubScreen(
 private fun EnginePickerSubScreen(
     currentEngine: TranslationEngineType,
     onSelectEngine: (TranslationEngineType) -> Unit,
+    onConfigureEngine: (TranslationEngineType) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     BackHandler(enabled = true) { onBack() }
     var showApiKeyGuide by rememberSaveable { mutableStateOf(false) }
+    var inspectedEngine by remember(currentEngine) { mutableStateOf(currentEngine) }
     val context = LocalContext.current
 
     Column(
@@ -2341,23 +2352,235 @@ private fun EnginePickerSubScreen(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         SubScreenHeader(
             title = stringResource(R.string.settings_engine_select_prompt),
-            subtitle = stringResource(R.string.settings_engine_desc),
+            subtitle = "涵盖四大主流路线：开源专精、通用大模型、传统NMT与商业API",
             onBack = onBack,
         )
 
+        SmallTitle(
+            text = "翻译引擎矩阵（点击方格查看详情）",
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
+
+        // 2 列网格方格卡片布局
+        val rows = remember { TranslationEngineType.entries.chunked(2) }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            rows.forEach { rowEngines ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    rowEngines.forEach { engine ->
+                        val isSelected = engine == currentEngine
+                        val isInspected = engine == inspectedEngine
+                        val detail = TranslationEngineCatalog.getDetail(engine)
+                        val brandColor = Color(detail.brandColorLong)
+
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(
+                                    if (isInspected) brandColor.copy(alpha = 0.15f)
+                                    else MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.40f)
+                                )
+                                .border(
+                                    width = if (isInspected) 1.8.dp else 0.8.dp,
+                                    color = if (isInspected) brandColor else Color.White.copy(alpha = 0.08f),
+                                    shape = RoundedCornerShape(16.dp),
+                                )
+                                .clickable {
+                                    inspectedEngine = engine
+                                }
+                                .padding(12.dp)
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(34.dp)
+                                            .clip(CircleShape)
+                                            .background(brandColor.copy(alpha = 0.20f)),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text(text = detail.iconEmoji, fontSize = 18.sp)
+                                    }
+                                    if (isSelected) {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(Color(0xFF10B981).copy(alpha = 0.18f))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                                        ) {
+                                            Text(
+                                                text = "✓ 在用",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF10B981),
+                                            )
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = stringResource(engine.titleRes),
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MiuixTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = detail.categoryBadge,
+                                    fontSize = 11.sp,
+                                    color = brandColor,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                )
+                            }
+                        }
+                    }
+                    if (rowEngines.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+
+        // 详细介绍卡片
+        SmallTitle(
+            text = "引擎详细介绍与选型分析",
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
+        val currentDetail = TranslationEngineCatalog.getDetail(inspectedEngine)
+        val currentBrandColor = Color(currentDetail.brandColorLong)
+        val isCurrentInUse = inspectedEngine == currentEngine
+
         SectionCard {
-            Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                TranslationEngineType.entries.forEach { engine ->
-                    OptionRow(
-                        label = stringResource(engine.titleRes),
-                        summary = stringResource(engine.summaryRes),
-                        selected = engine == currentEngine,
-                        onClick = { onSelectEngine(engine) },
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(currentBrandColor.copy(alpha = 0.20f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(text = currentDetail.iconEmoji, fontSize = 24.sp)
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(
+                                text = stringResource(inspectedEngine.titleRes),
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MiuixTheme.colorScheme.onSurface,
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(currentBrandColor.copy(alpha = 0.15f))
+                                    .padding(horizontal = 6.dp, vertical = 1.5.dp),
+                            ) {
+                                Text(
+                                    text = currentDetail.categoryBadge,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = currentBrandColor,
+                                )
+                            }
+                        }
+                        Text(
+                            text = "研发机构/协议：" + currentDetail.developer,
+                            fontSize = 11.5.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                    }
+                }
+
+                Text(
+                    text = currentDetail.highlight,
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MiuixTheme.colorScheme.onSurface,
+                )
+
+                Text(
+                    text = currentDetail.detailText,
+                    fontSize = 12.5.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    lineHeight = 18.sp,
+                )
+
+                SettingDivider()
+
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "🎯 适用场景：${currentDetail.suitableScenarios}",
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurface,
+                        lineHeight = 16.sp,
                     )
+                    Text(
+                        text = "💰 资费成本：${currentDetail.costDesc}",
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurface,
+                        lineHeight = 16.sp,
+                    )
+                    if (currentDetail.recommendedModels.isNotEmpty()) {
+                        Text(
+                            text = "⭐ 推荐模型：${currentDetail.recommendedModels.joinToString("、")}",
+                            fontSize = 12.sp,
+                            color = Booth.Accent,
+                            lineHeight = 16.sp,
+                        )
+                    }
+                }
+
+                SettingDivider()
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    if (!isCurrentInUse) {
+                        Button(
+                            onClick = { onSelectEngine(inspectedEngine) },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColorsPrimary(),
+                        ) {
+                            Text("✓ 设为在用引擎", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Button(
+                        onClick = { onConfigureEngine(inspectedEngine) },
+                        modifier = Modifier.weight(1f),
+                        colors = if (isCurrentInUse) ButtonDefaults.buttonColorsPrimary() else ButtonDefaults.buttonColors(),
+                    ) {
+                        Text("⚙️ 进入参数配置", fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
         }
@@ -3239,19 +3462,21 @@ private fun AsrEngineConfigSubScreen(
 private fun AsrEnginePickerSubScreen(
     currentEngine: AsrEngineType,
     onSelectEngine: (AsrEngineType) -> Unit,
+    onConfigureEngine: (AsrEngineType) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     BackHandler(enabled = true) { onBack() }
     val context = LocalContext.current
     var showGuide by rememberSaveable { mutableStateOf(false) }
+    var inspectedEngine by remember(currentEngine) { mutableStateOf(currentEngine) }
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         SubScreenHeader(
             title = stringResource(R.string.settings_asr_engine),
@@ -3260,18 +3485,291 @@ private fun AsrEnginePickerSubScreen(
         )
 
         SmallTitle(
-            text = "可用语音识别引擎",
+            text = "语音识别引擎矩阵（点击方格查看详情）",
             modifier = Modifier.padding(horizontal = 24.dp),
         )
+
+        // 3 款引擎网格方格卡片布局
+        val asrEntries = AsrEngineType.entries
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            // 第一排两个
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                listOf(asrEntries[0], asrEntries[1]).forEach { engine ->
+                    val isSelected = engine == currentEngine
+                    val isInspected = engine == inspectedEngine
+                    val detail = TranslationEngineCatalog.getAsrDetail(engine)
+                    val brandColor = Color(detail.brandColorLong)
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(
+                                if (isInspected) brandColor.copy(alpha = 0.15f)
+                                else MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.40f)
+                            )
+                            .border(
+                                width = if (isInspected) 1.8.dp else 0.8.dp,
+                                color = if (isInspected) brandColor else Color.White.copy(alpha = 0.08f),
+                                shape = RoundedCornerShape(16.dp),
+                            )
+                            .clickable { inspectedEngine = engine }
+                            .padding(12.dp)
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(CircleShape)
+                                        .background(brandColor.copy(alpha = 0.20f)),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(text = detail.iconEmoji, fontSize = 18.sp)
+                                }
+                                if (isSelected) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(Color(0xFF10B981).copy(alpha = 0.18f))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                                    ) {
+                                        Text(
+                                            text = "✓ 在用",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF10B981),
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = stringResource(engine.titleRes),
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MiuixTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = detail.categoryBadge,
+                                fontSize = 11.sp,
+                                color = brandColor,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 第二排一个 + 占位
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                val engine = asrEntries[2]
+                val isSelected = engine == currentEngine
+                val isInspected = engine == inspectedEngine
+                val detail = TranslationEngineCatalog.getAsrDetail(engine)
+                val brandColor = Color(detail.brandColorLong)
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(
+                            if (isInspected) brandColor.copy(alpha = 0.15f)
+                            else MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.40f)
+                        )
+                        .border(
+                            width = if (isInspected) 1.8.dp else 0.8.dp,
+                            color = if (isInspected) brandColor else Color.White.copy(alpha = 0.08f),
+                            shape = RoundedCornerShape(16.dp),
+                        )
+                        .clickable { inspectedEngine = engine }
+                        .padding(12.dp)
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(brandColor.copy(alpha = 0.20f)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(text = detail.iconEmoji, fontSize = 18.sp)
+                            }
+                            if (isSelected) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(Color(0xFF10B981).copy(alpha = 0.18f))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                                ) {
+                                    Text(
+                                        text = "✓ 在用",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF10B981),
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(engine.titleRes),
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MiuixTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = detail.categoryBadge,
+                            fontSize = 11.sp,
+                            color = brandColor,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.weight(1f))
+            }
+        }
+
+        // 详细介绍卡片
+        SmallTitle(
+            text = "识别引擎详细介绍",
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
+        val currentDetail = TranslationEngineCatalog.getAsrDetail(inspectedEngine)
+        val currentBrandColor = Color(currentDetail.brandColorLong)
+        val isCurrentInUse = inspectedEngine == currentEngine
+
         SectionCard {
-            Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                AsrEngineType.entries.forEach { engine ->
-                    OptionRow(
-                        label = stringResource(engine.titleRes),
-                        summary = stringResource(engine.summaryRes),
-                        selected = engine == currentEngine,
-                        onClick = { onSelectEngine(engine) },
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(currentBrandColor.copy(alpha = 0.20f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(text = currentDetail.iconEmoji, fontSize = 24.sp)
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(
+                                text = stringResource(inspectedEngine.titleRes),
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MiuixTheme.colorScheme.onSurface,
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(currentBrandColor.copy(alpha = 0.15f))
+                                    .padding(horizontal = 6.dp, vertical = 1.5.dp),
+                            ) {
+                                Text(
+                                    text = currentDetail.categoryBadge,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = currentBrandColor,
+                                )
+                            }
+                        }
+                        Text(
+                            text = stringResource(inspectedEngine.summaryRes),
+                            fontSize = 11.5.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                    }
+                }
+
+                Text(
+                    text = currentDetail.highlight,
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MiuixTheme.colorScheme.onSurface,
+                )
+
+                Text(
+                    text = currentDetail.detailText,
+                    fontSize = 12.5.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    lineHeight = 18.sp,
+                )
+
+                SettingDivider()
+
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "🎯 适用场景：${currentDetail.suitableScenarios}",
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurface,
+                        lineHeight = 16.sp,
                     )
+                    Text(
+                        text = "💰 资费流量：${currentDetail.costDesc}",
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurface,
+                        lineHeight = 16.sp,
+                    )
+                }
+
+                SettingDivider()
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    if (!isCurrentInUse) {
+                        Button(
+                            onClick = { onSelectEngine(inspectedEngine) },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColorsPrimary(),
+                        ) {
+                            Text("✓ 设为在用引擎", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Button(
+                        onClick = { onConfigureEngine(inspectedEngine) },
+                        modifier = Modifier.weight(1f),
+                        colors = if (isCurrentInUse) ButtonDefaults.buttonColorsPrimary() else ButtonDefaults.buttonColors(),
+                    ) {
+                        Text("⚙️ 进入参数配置", fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
         }
@@ -3751,13 +4249,13 @@ private fun OpenSourceModelHubCard(
                     onOpenUrl = { url -> openUrl(context, url) },
                 )
 
-                // Model 2: Qwen2.5-1.5B
+                // Model 2: SakuraLLM (樱花日中)
                 OpenSourceModelRow(
-                    name = "Qwen2.5-1.5B-Instruct (极速轻量)",
-                    desc = "低资源设备首选，低延迟、低显存占用",
-                    ollamaCmd = "ollama run qwen2.5:1.5b",
-                    modelScopeUrl = "https://www.modelscope.cn/models/qwen/Qwen2.5-1.5B-Instruct/summary",
-                    hfMirrorUrl = "https://hf-mirror.com/Qwen/Qwen2.5-1.5B-Instruct-GGUF",
+                    name = "🌸 SakuraLLM 14B/7B (日漫汉化霸主)",
+                    desc = "ACG轻小说/动漫/游戏生肉绝对首选，精准还原人称代词与口吻",
+                    ollamaCmd = "ollama run sakura:14b",
+                    modelScopeUrl = "https://www.modelscope.cn/models/sakura-editor/Sakura-14B-Qwen2beta-v0.9.2-GGUF",
+                    hfMirrorUrl = "https://hf-mirror.com/sakura-editor/Sakura-14B-Qwen2beta-v0.9.2-GGUF",
                     onCopy = { cmd ->
                         clipboard.setText(AnnotatedString(cmd))
                         Toast.makeText(context, "已复制拉取命令: $cmd", Toast.LENGTH_SHORT).show()
@@ -3765,7 +4263,21 @@ private fun OpenSourceModelHubCard(
                     onOpenUrl = { url -> openUrl(context, url) },
                 )
 
-                // Model 3: DeepSeek-R1-Distill-Qwen-7B
+                // Model 3: Seed-X-7B (字节跳动)
+                OpenSourceModelRow(
+                    name = "🔥 Seed-X-7B (字节跳动精翻)",
+                    desc = "成语/诗歌/俚语网络热词神级对齐，7B参数超越百亿通用大模型",
+                    ollamaCmd = "ollama run seed-x:7b",
+                    modelScopeUrl = "https://www.modelscope.cn/models/ByteDance/Seed-X-7B",
+                    hfMirrorUrl = "https://hf-mirror.com/ByteDance/Seed-X-7B",
+                    onCopy = { cmd ->
+                        clipboard.setText(AnnotatedString(cmd))
+                        Toast.makeText(context, "已复制拉取命令: $cmd", Toast.LENGTH_SHORT).show()
+                    },
+                    onOpenUrl = { url -> openUrl(context, url) },
+                )
+
+                // Model 4: DeepSeek-R1-Distill-Qwen-7B
                 OpenSourceModelRow(
                     name = "DeepSeek-R1-Distill-Qwen-7B",
                     desc = "深度求索蒸馏版，推理与句式理解极佳",
