@@ -2,6 +2,7 @@ package com.xzm.realtimetranslate.translate
 
 import com.xzm.realtimetranslate.data.ApiKeyStore
 import com.xzm.realtimetranslate.data.AsrEngineType
+import com.xzm.realtimetranslate.data.LocalAsrModelCatalog
 import com.xzm.realtimetranslate.data.UserSettings
 import com.xzm.realtimetranslate.util.ModelDownloader
 import com.xzm.realtimetranslate.util.WavEncoder
@@ -36,6 +37,8 @@ object SpeechRecognizerFactory {
     ): SpeechRecognizer {
         return when (settings.asrEngine) {
             AsrEngineType.LOCAL_SENSEVOICE -> {
+                val preset = LocalAsrModelCatalog.getPresetById(settings.localAsrModel)
+                val probeResult = LocalAsrModelCatalog.probe(models.context, settings.localAsrModel)
                 AsrEngine(
                     modelDir = models.paths.senseVoiceModel.parentFile!!,
                     sileroVadPath = models.paths.sileroVad.absolutePath,
@@ -44,6 +47,8 @@ object SpeechRecognizerFactory {
                     vadMaxSpeechDuration = settings.vadMaxSpeechSec,
                     onSegment = onSegment,
                     onPartial = onPartial,
+                    modelPreset = preset,
+                    probeResult = probeResult,
                 )
             }
             AsrEngineType.ALIYUN_FUN_ASR -> {
@@ -94,11 +99,24 @@ object SpeechRecognizerFactory {
     ): Result<String> = withContext(Dispatchers.IO) {
         when (engineType) {
             AsrEngineType.LOCAL_SENSEVOICE -> {
+                val preset = LocalAsrModelCatalog.getPresetById(settings.localAsrModel)
+                val probeResult = LocalAsrModelCatalog.probe(models.context, settings.localAsrModel)
                 val paths = models.paths
-                if (paths.senseVoiceModel.exists() && paths.sileroVad.exists() && paths.tokens.exists()) {
-                    Result.success("✅ 本地模型已就绪：SenseVoice (239MB) 与 Silero VAD 完整，离线识别可正常运行")
+                val vadReady = paths.sileroVad.exists()
+                if (preset.id == LocalAsrModelCatalog.DEFAULT_MODEL_ID) {
+                    if (paths.senseVoiceModel.exists() && vadReady && paths.tokens.exists()) {
+                        Result.success("✅ 本地内置模型已就绪：SenseVoice (239MB) 与 Silero VAD 完整，离线识别可正常运行")
+                    } else {
+                        Result.failure(Exception("本地内置模型文件缺失，请在下方点击「下载/修复模型」"))
+                    }
                 } else {
-                    Result.failure(Exception("本地模型文件缺失，请在下方点击「下载/修复模型」"))
+                    if (probeResult.isReady && vadReady) {
+                        Result.success("✅ 本地开源模型已就绪：[${preset.name}] 文件完整，离线识别可正常运行")
+                    } else if (paths.senseVoiceModel.exists() && vadReady) {
+                        Result.success("ℹ️ [${preset.name}] 尚未下载或权重不完整，已自动平滑降级使用内置 SenseVoice；您可以点击下方 ModelScope 链接高速下载")
+                    } else {
+                        Result.failure(Exception("本地模型文件缺失，请在下方点击「下载/修复模型」"))
+                    }
                 }
             }
             AsrEngineType.ALIYUN_FUN_ASR -> {

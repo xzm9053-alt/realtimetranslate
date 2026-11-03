@@ -1,8 +1,13 @@
 package com.xzm.realtimetranslate.ui.settings
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import com.xzm.realtimetranslate.data.LocalAsrModelCatalog
+import com.xzm.realtimetranslate.data.LocalAsrModelPreset
+import com.xzm.realtimetranslate.data.LocalAsrProbeResult
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
@@ -165,6 +170,7 @@ fun SettingsScreen(
     val mirrorUrl by viewModel.mirrorUrl.collectAsStateWithLifecycle()
     val hfToken by viewModel.hfToken.collectAsStateWithLifecycle()
     val modelStatus by viewModel.modelStatus.collectAsStateWithLifecycle()
+    val localAsrProbeResult by viewModel.localAsrProbeResult.collectAsStateWithLifecycle()
     val downloading by viewModel.downloading.collectAsStateWithLifecycle()
     val downloadProgress by viewModel.downloadProgress.collectAsStateWithLifecycle()
     val testResult by viewModel.testResult.collectAsStateWithLifecycle()
@@ -1176,6 +1182,9 @@ fun SettingsScreen(
                     onSaveOnly = { viewModel.saveAsrConfig(navTarget.engine) },
                     settings = settings,
                     onUpdateSettings = { transform -> viewModel.update(transform) },
+                    localAsrProbeResult = localAsrProbeResult,
+                    onSelectLocalAsrModel = viewModel::setLocalAsrModel,
+                    onRefreshLocalAsrProbe = viewModel::refreshLocalAsrProbe,
                     onBack = { activeConfigAsrEngine = null },
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -2593,6 +2602,9 @@ private fun AsrEngineConfigSubScreen(
     onSaveOnly: () -> Unit,
     settings: UserSettings,
     onUpdateSettings: ((UserSettings) -> UserSettings) -> Unit,
+    localAsrProbeResult: LocalAsrProbeResult?,
+    onSelectLocalAsrModel: (String) -> Unit,
+    onRefreshLocalAsrProbe: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -2647,71 +2659,281 @@ private fun AsrEngineConfigSubScreen(
 
         when (engineType) {
             AsrEngineType.LOCAL_SENSEVOICE -> {
+                val currentPreset = LocalAsrModelCatalog.getPresetById(settings.localAsrModel)
+                var showImportGuide by rememberSaveable { mutableStateOf(false) }
+
                 SmallTitle(
-                    text = "本地离线模型管理",
+                    text = "开源语音识别 (ASR) 模型生态",
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                )
+                SectionCard {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = "选择要使用的本地离线模型（纯端侧 · 0 流量）：",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MiuixTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        )
+                        LocalAsrModelCatalog.PRESETS.forEach { preset ->
+                            val isSelected = preset.id == settings.localAsrModel
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        if (isSelected) Booth.Accent.copy(alpha = 0.10f) else Color.Transparent
+                                    )
+                                    .clickable { onSelectLocalAsrModel(preset.id) }
+                                    .padding(horizontal = 10.dp, vertical = 9.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = preset.name,
+                                        fontSize = 13.5.sp,
+                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                        color = if (isSelected) Booth.Accent else MiuixTheme.colorScheme.onSurface,
+                                    )
+                                    Text(
+                                        text = "架构：${preset.architecture.name.lowercase()} · 约 ${preset.sizeMb} MB · 语种：${preset.supportedLangs.joinToString("/")}",
+                                        fontSize = 11.sp,
+                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                        modifier = Modifier.padding(top = 2.dp),
+                                    )
+                                }
+                                if (isSelected) {
+                                    Text(
+                                        text = "✓",
+                                        color = Booth.Accent,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp,
+                                        modifier = Modifier.padding(start = 8.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                SmallTitle(
+                    text = "当前模型状态与下载直链",
                     modifier = Modifier.padding(horizontal = 24.dp),
                 )
                 SectionCard {
                     Column(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         Text(
-                            text = "识别内核：sherpa-onnx 1.13.4 · SenseVoice int8 · Silero VAD（全部离线）",
-                            fontSize = 12.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            text = currentPreset.description,
+                            fontSize = 12.5.sp,
+                            color = MiuixTheme.colorScheme.onSurface,
                             lineHeight = 18.sp,
                         )
-                        Text(
-                            text = stringResource(R.string.asr_local_language_limit),
-                            fontSize = 12.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                            lineHeight = 18.sp,
-                        )
-                        Text(
-                            text = modelStatus.ifBlank { stringResource(R.string.settings_model_unknown) },
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                        )
-                        if (downloading) {
-                            LinearProgressIndicator(
-                                progress = { downloadProgress.coerceIn(0f, 1f) },
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        }
-                        Button(
-                            onClick = {
-                                if (downloading) onRefreshModelStatus()
-                                else onDownloadModels()
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = if (downloading) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColorsPrimary(),
+
+                        // 状态指示徽章
+                        val isReady = localAsrProbeResult?.isReady == true ||
+                            (currentPreset.id == LocalAsrModelCatalog.DEFAULT_MODEL_ID && modelStatus.startsWith("✅"))
+
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    if (isReady) Color(0xFF10B981).copy(alpha = 0.12f)
+                                    else Color(0xFFF59E0B).copy(alpha = 0.12f)
+                                )
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
                         ) {
                             Text(
-                                text = stringResource(if (downloading) R.string.settings_model_downloading else R.string.settings_model_download),
-                                fontWeight = FontWeight.SemiBold,
+                                text = if (isReady) {
+                                    "🟢 模型已就绪（本地离线完整可用 · 0 流量）"
+                                } else if (currentPreset.id == LocalAsrModelCatalog.DEFAULT_MODEL_ID) {
+                                    modelStatus.ifBlank { "⚪ 未就绪，可在下方下载" }
+                                } else {
+                                    "⚪ 未检测到权重文件（同传时自动平滑回退至内置 SenseVoice）"
+                                },
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = if (isReady) Color(0xFF10B981) else Color(0xFFF59E0B),
                             )
                         }
-                        OutlinedTextField(
-                            value = mirrorUrl,
-                            onValueChange = onUpdateMirrorUrl,
+
+                        // 快捷操作栏
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            label = { androidx.compose.material3.Text(stringResource(R.string.settings_model_mirror)) },
-                            singleLine = true,
-                            shape = RoundedCornerShape(16.dp),
-                            colors = fieldColors,
-                        )
-                        OutlinedTextField(
-                            value = hfToken,
-                            onValueChange = onUpdateHfToken,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "🔗 魔搭社区极速下载 ↗",
+                                fontSize = 12.sp,
+                                color = Booth.Accent,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier
+                                    .clickable {
+                                        runCatching {
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(currentPreset.domesticDownloadUrl)))
+                                        }
+                                    }
+                                    .padding(vertical = 4.dp),
+                            )
+                            Text(
+                                text = "🔗 HF-Mirror 镜像 ↗",
+                                fontSize = 12.sp,
+                                color = Booth.Accent,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier
+                                    .clickable {
+                                        runCatching {
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(currentPreset.mirrorUrl)))
+                                        }
+                                    }
+                                    .padding(vertical = 4.dp),
+                            )
+                        }
+
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            label = { androidx.compose.material3.Text(stringResource(R.string.settings_model_hf_token)) },
-                            singleLine = true,
-                            visualTransformation = if (revealKey) VisualTransformation.None else PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = fieldColors,
-                        )
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "📋 复制下载链接",
+                                fontSize = 12.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                modifier = Modifier
+                                    .clickable {
+                                        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                        cm?.setPrimaryClip(ClipData.newPlainText("download_url", currentPreset.domesticDownloadUrl))
+                                        Toast.makeText(context, "已复制下载链接", Toast.LENGTH_SHORT).show()
+                                    }
+                                    .padding(vertical = 4.dp),
+                            )
+                            Text(
+                                text = "🔄 刷新检测状态",
+                                fontSize = 12.sp,
+                                color = Color(0xFF10B981),
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier
+                                    .clickable {
+                                        onRefreshLocalAsrProbe()
+                                        onRefreshModelStatus()
+                                        Toast.makeText(context, "已刷新模型状态", Toast.LENGTH_SHORT).show()
+                                    }
+                                    .padding(vertical = 4.dp),
+                            )
+                        }
+
+                        // 折叠使用说明卡片
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MiuixTheme.colorScheme.surface)
+                                .clickable { showImportGuide = !showImportGuide }
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "📂 手机导入外部模型说明",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MiuixTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(
+                                    text = if (showImportGuide) "收起 ▲" else "展开 ▼",
+                                    fontSize = 11.sp,
+                                    color = Booth.Accent,
+                                )
+                            }
+                        }
+
+                        AnimatedVisibility(visible = showImportGuide) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                    .padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Text(
+                                    text = "1. 从 ModelScope 或 HF-Mirror 下载对应模型的压缩包并解压；",
+                                    fontSize = 11.5.sp,
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    lineHeight = 16.sp,
+                                )
+                                Text(
+                                    text = "2. 手机通过 USB 连接电脑或使用手机文件管理器，将解压后的文件夹放入手机内部存储：\nAndroid/data/com.xzm.realtimetranslate/files/models/asr/${currentPreset.id}/",
+                                    fontSize = 11.5.sp,
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    lineHeight = 16.sp,
+                                )
+                                Text(
+                                    text = "3. 放入后点击上方的「🔄 刷新检测状态」，状态变为 🟢 已就绪 即可直接生效！",
+                                    fontSize = 11.5.sp,
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    lineHeight = 16.sp,
+                                )
+                                Text(
+                                    text = "💡 自动防崩溃保护：若模型未下载，启动同传时将自动平滑回退至内置 SenseVoice，绝不报错或闪退。",
+                                    fontSize = 11.5.sp,
+                                    color = Color(0xFF10B981),
+                                    lineHeight = 16.sp,
+                                )
+                            }
+                        }
+
+                        if (currentPreset.id == LocalAsrModelCatalog.DEFAULT_MODEL_ID) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            if (downloading) {
+                                LinearProgressIndicator(
+                                    progress = { downloadProgress.coerceIn(0f, 1f) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                            Button(
+                                onClick = {
+                                    if (downloading) onRefreshModelStatus()
+                                    else onDownloadModels()
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = if (downloading) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColorsPrimary(),
+                            ) {
+                                Text(
+                                    text = stringResource(if (downloading) R.string.settings_model_downloading else R.string.settings_model_download),
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            }
+                            OutlinedTextField(
+                                value = mirrorUrl,
+                                onValueChange = onUpdateMirrorUrl,
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { androidx.compose.material3.Text(stringResource(R.string.settings_model_mirror)) },
+                                singleLine = true,
+                                shape = RoundedCornerShape(16.dp),
+                                colors = fieldColors,
+                            )
+                            OutlinedTextField(
+                                value = hfToken,
+                                onValueChange = onUpdateHfToken,
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { androidx.compose.material3.Text(stringResource(R.string.settings_model_hf_token)) },
+                                singleLine = true,
+                                visualTransformation = if (revealKey) VisualTransformation.None else PasswordVisualTransformation(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = fieldColors,
+                            )
+                        }
                     }
                 }
             }

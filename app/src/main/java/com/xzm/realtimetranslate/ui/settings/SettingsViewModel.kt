@@ -9,6 +9,8 @@ import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.ApiKeyStore
 import com.xzm.realtimetranslate.data.AsrEngineType
 import com.xzm.realtimetranslate.data.HistoryMode
+import com.xzm.realtimetranslate.data.LocalAsrModelCatalog
+import com.xzm.realtimetranslate.data.LocalAsrProbeResult
 import com.xzm.realtimetranslate.data.ThinkingOffStyle
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
@@ -150,6 +152,9 @@ class SettingsViewModel(
     private val _asrTesting = MutableStateFlow(false)
     val asrTesting: StateFlow<Boolean> = _asrTesting.asStateFlow()
 
+    private val _localAsrProbeResult = MutableStateFlow<LocalAsrProbeResult?>(null)
+    val localAsrProbeResult: StateFlow<LocalAsrProbeResult?> = _localAsrProbeResult.asStateFlow()
+
     // ---- 模型可用性检测（联网，结果缓存到 DataStore 供下次启动复用）----
     // ModelProbe 而非 ModelAvailability：可用性是要缓存的，detail（服务端原话）只在
     // 本次会话里给用户看为什么不通，重启后只剩状态、没有原因——可以接受，也是刻意的。
@@ -203,6 +208,7 @@ class SettingsViewModel(
             )
             _hfToken.value = TextFieldValue(s.huggingfaceToken)
             _modelStatus.value = describeModelStatus()
+            _localAsrProbeResult.value = LocalAsrModelCatalog.probe(app, s.localAsrModel)
             _discoveredModels.value = s.discoveredModels
             _modelsCheckedAt.value = s.modelsCheckedAt
             // 缓存里只有状态名，恢复出来的 probe 没有 detail。
@@ -534,7 +540,25 @@ class SettingsViewModel(
     }
 
     fun refreshModelStatus() {
-        viewModelScope.launch { _modelStatus.value = describeModelStatus() }
+        viewModelScope.launch {
+            _modelStatus.value = describeModelStatus()
+            val current = settingsRepository.settings.first().localAsrModel
+            _localAsrProbeResult.value = LocalAsrModelCatalog.probe(app, current)
+        }
+    }
+
+    fun setLocalAsrModel(modelId: String) {
+        viewModelScope.launch {
+            settingsRepository.update { it.copy(localAsrModel = modelId) }
+            _localAsrProbeResult.value = LocalAsrModelCatalog.probe(app, modelId)
+        }
+    }
+
+    fun refreshLocalAsrProbe(modelId: String? = null) {
+        viewModelScope.launch {
+            val id = modelId ?: settingsRepository.settings.first().localAsrModel
+            _localAsrProbeResult.value = LocalAsrModelCatalog.probe(app, id)
+        }
     }
 
     fun downloadModels() {

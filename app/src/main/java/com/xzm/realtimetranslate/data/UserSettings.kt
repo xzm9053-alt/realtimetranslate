@@ -82,6 +82,8 @@ data class UserSettings(
     val diagnosticLogContent: Boolean = Defaults.DIAGNOSTIC_LOG_CONTENT,
     // ASR Engine selection and settings
     val asrEngine: AsrEngineType = Defaults.ASR_ENGINE,
+    // 本地开源 ASR 模型（sensevoice-small / paraformer-zh / whisper-* / moonshine-tiny 等）
+    val localAsrModel: String = Defaults.LOCAL_ASR_MODEL,
     val aliyunAsrModel: String = Defaults.ALIYUN_ASR_MODEL,
     // 阿里百炼业务空间 ID。官方已将百炼迁到业务空间专属域名
     // ({WorkspaceId}.cn-beijing.maas.aliyuncs.com)，新模型必须走新域名。
@@ -176,6 +178,7 @@ data class UserSettings(
         const val COVER_BLOCK_STYLE = "AUTO"
         const val DIAGNOSTIC_LOG_CONTENT = false
         val ASR_ENGINE: AsrEngineType = AsrEngineType.LOCAL_SENSEVOICE
+        const val LOCAL_ASR_MODEL = "sensevoice-small"
         const val ALIYUN_ASR_MODEL = "fun-asr-realtime"
         const val ALIYUN_WORKSPACE_ID = ""
         // 0 = 不分段（连续输出）；取值范围 0..SENTENCES_PER_PARAGRAPH_MAX。

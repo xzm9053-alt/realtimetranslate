@@ -2,14 +2,23 @@ package com.xzm.realtimetranslate.translate
 
 import com.xzm.realtimetranslate.util.AppLog as Log
 import android.os.SystemClock
+import com.k2fsa.sherpa.onnx.OfflineFireRedAsrModelConfig
 import com.k2fsa.sherpa.onnx.OfflineModelConfig
+import com.k2fsa.sherpa.onnx.OfflineMoonshineModelConfig
+import com.k2fsa.sherpa.onnx.OfflineParaformerModelConfig
+import com.k2fsa.sherpa.onnx.OfflineQwen3AsrModelConfig
 import com.k2fsa.sherpa.onnx.OfflineRecognizer
 import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
 import com.k2fsa.sherpa.onnx.OfflineSenseVoiceModelConfig
+import com.k2fsa.sherpa.onnx.OfflineWhisperModelConfig
 import com.k2fsa.sherpa.onnx.SileroVadModelConfig
 import com.k2fsa.sherpa.onnx.Vad
 import com.k2fsa.sherpa.onnx.VadModelConfig
 import com.k2fsa.sherpa.onnx.getFeatureConfig
+import com.xzm.realtimetranslate.data.LocalAsrArch
+import com.xzm.realtimetranslate.data.LocalAsrModelCatalog
+import com.xzm.realtimetranslate.data.LocalAsrModelPreset
+import com.xzm.realtimetranslate.data.LocalAsrProbeResult
 import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -45,7 +54,18 @@ class AsrEngine(
     private val onPartial: ((String) -> Unit)? = null,
     /** 两次草稿识别之间的最小间隔；缓冲越长实际间隔越大，见 [maybeRunPartial]。 */
     private val partialIntervalMillis: Long = 400,
+    val modelPreset: LocalAsrModelPreset = LocalAsrModelCatalog.getPresetById(LocalAsrModelCatalog.DEFAULT_MODEL_ID),
+    val probeResult: LocalAsrProbeResult? = null,
 ) : SpeechRecognizer {
+
+    val isFallback: Boolean = probeResult == null || !probeResult.isReady
+    val activePreset: LocalAsrModelPreset = if (isFallback && modelPreset.id != LocalAsrModelCatalog.DEFAULT_MODEL_ID) {
+        Log.w(TAG, "本地 ASR 模型 ${modelPreset.id} 未就绪，自动平滑降级回退内置 SenseVoice")
+        LocalAsrModelCatalog.getPresetById(LocalAsrModelCatalog.DEFAULT_MODEL_ID)
+    } else {
+        modelPreset
+    }
+    val effectiveSupportsDraft: Boolean = activePreset.supportsDraft && onPartial != null
 
     // VAD runs synchronously on the caller thread (cheap); recognition is queued.
     private val vad = Vad(
@@ -65,21 +85,98 @@ class AsrEngine(
         ),
     )
 
-    private val recognizer = OfflineRecognizer(
-        assetManager = null,
-        config = OfflineRecognizerConfig(
-            featConfig = getFeatureConfig(sampleRate = 16000, featureDim = 80),
-            modelConfig = OfflineModelConfig(
-                senseVoice = OfflineSenseVoiceModelConfig(
-                    model = File(modelDir, "model.int8.onnx").absolutePath,
-                    // "auto" = auto-detect among zh/en/ja/ko/yue; explicit tag pins the language
-                    language = language,
-                ),
-                tokens = File(modelDir, "tokens.txt").absolutePath,
-                numThreads = numThreads,
+    private val recognizer: OfflineRecognizer = run {
+        val modelConfig = when (activePreset.architecture) {
+            LocalAsrArch.SENSE_VOICE -> {
+                val modelFile = if (!isFallback && probeResult != null && probeResult.files.containsKey("model_file")) {
+                    probeResult.files["model_file"]!!.absolutePath
+                } else {
+                    File(modelDir, "model.int8.onnx").absolutePath
+                }
+                val tokensFile = if (!isFallback && probeResult != null && probeResult.files.containsKey("tokens_file")) {
+                    probeResult.files["tokens_file"]!!.absolutePath
+                } else {
+                    File(modelDir, "tokens.txt").absolutePath
+                }
+                OfflineModelConfig(
+                    senseVoice = OfflineSenseVoiceModelConfig(
+                        model = modelFile,
+                        language = language,
+                    ),
+                    tokens = tokensFile,
+                    numThreads = numThreads,
+                )
+            }
+            LocalAsrArch.PARAFORMER -> {
+                val files = probeResult!!.files
+                OfflineModelConfig(
+                    paraformer = OfflineParaformerModelConfig(
+                        model = files["model_file"]!!.absolutePath,
+                    ),
+                    tokens = files["tokens_file"]!!.absolutePath,
+                    numThreads = numThreads,
+                )
+            }
+            LocalAsrArch.WHISPER -> {
+                val files = probeResult!!.files
+                val whisperLang = if (language == "auto") "" else language
+                OfflineModelConfig(
+                    whisper = OfflineWhisperModelConfig(
+                        encoder = files["encoder_file"]!!.absolutePath,
+                        decoder = files["decoder_file"]!!.absolutePath,
+                        language = whisperLang,
+                        task = "transcribe",
+                    ),
+                    tokens = files["tokens_file"]!!.absolutePath,
+                    numThreads = numThreads,
+                )
+            }
+            LocalAsrArch.MOONSHINE -> {
+                val files = probeResult!!.files
+                OfflineModelConfig(
+                    moonshine = OfflineMoonshineModelConfig(
+                        preprocessor = files["prep_file"]!!.absolutePath,
+                        encoder = files["enc_file"]!!.absolutePath,
+                        uncachedDecoder = files["uncached_file"]!!.absolutePath,
+                        cachedDecoder = files["cached_file"]!!.absolutePath,
+                    ),
+                    tokens = files["tokens_file"]!!.absolutePath,
+                    numThreads = numThreads,
+                )
+            }
+            LocalAsrArch.QWEN3_ASR -> {
+                val files = probeResult!!.files
+                OfflineModelConfig(
+                    qwen3Asr = OfflineQwen3AsrModelConfig(
+                        convFrontend = files["conv_frontend"]!!.absolutePath,
+                        encoder = files["encoder"]!!.absolutePath,
+                        decoder = files["decoder"]!!.absolutePath,
+                        tokenizer = files["tokenizer"]!!.absolutePath,
+                    ),
+                    tokens = files["tokens_file"]?.absolutePath ?: "",
+                    numThreads = numThreads,
+                )
+            }
+            LocalAsrArch.FIRE_RED_ASR -> {
+                val files = probeResult!!.files
+                OfflineModelConfig(
+                    fireRedAsr = OfflineFireRedAsrModelConfig(
+                        encoder = files["encoder_file"]!!.absolutePath,
+                        decoder = files["decoder_file"]!!.absolutePath,
+                    ),
+                    tokens = files["tokens_file"]!!.absolutePath,
+                    numThreads = numThreads,
+                )
+            }
+        }
+        OfflineRecognizer(
+            assetManager = null,
+            config = OfflineRecognizerConfig(
+                featConfig = getFeatureConfig(sampleRate = 16000, featureDim = 80),
+                modelConfig = modelConfig,
             ),
-        ),
-    )
+        )
+    }
 
     private val recognitionExecutor: ExecutorService = Executors.newSingleThreadExecutor { r ->
         Thread(r, "asr-recognition").apply { isDaemon = true }
@@ -148,11 +245,12 @@ class AsrEngine(
             }
             // 这一段是 VAD 认定的语音，先攒着——但只在下一次切段之前有用。
             // 切段那一块音频已经由定稿识别覆盖了，不必再进草稿缓冲。
-            if (!popped && onPartial != null && vad.isSpeechDetected()) {
+            // 若模型不支持草稿（如自回归的 Whisper/Qwen3），则不攒草稿，防止手机 CPU 积压发热
+            if (!popped && effectiveSupportsDraft && vad.isSpeechDetected()) {
                 appendPending(floats)
             }
         }
-        if (!popped) maybeRunPartial()
+        if (!popped && effectiveSupportsDraft) maybeRunPartial()
     }
 
     fun reset() {
@@ -197,6 +295,7 @@ class AsrEngine(
      * 上的草稿识别连轴转，把紧随其后的定稿识别一直挤在队列里。
      */
     private fun maybeRunPartial() {
+        if (!effectiveSupportsDraft) return
         if (pendingSize < MIN_PARTIAL_SAMPLES) return
         val pendingMs = pendingSize * 1000L / SAMPLE_RATE
         val interval = maxOf(partialIntervalMillis, pendingMs * PARTIAL_DUTY_PERCENT / 100)

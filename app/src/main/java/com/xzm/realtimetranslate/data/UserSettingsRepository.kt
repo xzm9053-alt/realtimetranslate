@@ -82,6 +82,7 @@ class UserSettingsRepository(private val context: Context) {
         val silenceDetectionEnabled = booleanPreferencesKey("silence_detection_enabled")
         val hubEnabled = booleanPreferencesKey("hub_enabled")
         val voiceRecognizeOnly = booleanPreferencesKey("voice_recognize_only")
+        val localAsrModel = stringPreferencesKey("local_asr_model")
     }
 
     val settings: Flow<UserSettings> = context.dataStore.data.map { prefs ->
@@ -156,6 +157,7 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.silenceDetectionEnabled] = next.silenceDetectionEnabled
             prefs[Keys.hubEnabled] = next.hubEnabled
             prefs[Keys.voiceRecognizeOnly] = next.voiceRecognizeOnly
+            prefs[Keys.localAsrModel] = next.localAsrModel
         }
     }
 
@@ -240,6 +242,7 @@ class UserSettingsRepository(private val context: Context) {
         diagnosticLogContent = this[Keys.diagnosticLogContent]
             ?: UserSettings.Defaults.DIAGNOSTIC_LOG_CONTENT,
         asrEngine = AsrEngineType.fromStorage(this[Keys.asrEngine]),
+        localAsrModel = this[Keys.localAsrModel] ?: UserSettings.Defaults.LOCAL_ASR_MODEL,
         aliyunAsrModel = this[Keys.aliyunAsrModel] ?: UserSettings.Defaults.ALIYUN_ASR_MODEL,
         aliyunWorkspaceId = this[Keys.aliyunWorkspaceId] ?: UserSettings.Defaults.ALIYUN_WORKSPACE_ID,
         sentencesPerParagraph = this[Keys.sentencesPerParagraph]

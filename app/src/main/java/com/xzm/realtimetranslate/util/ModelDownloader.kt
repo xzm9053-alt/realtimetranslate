@@ -30,7 +30,7 @@ data class DownloadProgress(
     val label: String,
 )
 
-class ModelDownloader(private val context: Context) {
+class ModelDownloader(val context: Context) {
     private val client = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
