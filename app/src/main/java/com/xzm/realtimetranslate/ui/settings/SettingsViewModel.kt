@@ -1,5 +1,6 @@
 package com.xzm.realtimetranslate.ui.settings
 
+import android.net.Uri
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -9,8 +10,10 @@ import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.ApiKeyStore
 import com.xzm.realtimetranslate.data.AsrEngineType
 import com.xzm.realtimetranslate.data.HistoryMode
+import com.xzm.realtimetranslate.data.LocalAsrArchiveImporter
 import com.xzm.realtimetranslate.data.LocalAsrModelCatalog
 import com.xzm.realtimetranslate.data.LocalAsrProbeResult
+import com.xzm.realtimetranslate.data.ModelImportResult
 import com.xzm.realtimetranslate.data.ThinkingOffStyle
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
@@ -169,6 +172,9 @@ class SettingsViewModel(
 
     private val _checkingModels = MutableStateFlow(false)
     val checkingModels: StateFlow<Boolean> = _checkingModels.asStateFlow()
+
+    private val _modelImportUiState = MutableStateFlow<ModelImportUiState>(ModelImportUiState.Idle)
+    val modelImportUiState: StateFlow<ModelImportUiState> = _modelImportUiState.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -561,6 +567,39 @@ class SettingsViewModel(
         }
     }
 
+    fun importModelArchive(uri: Uri, preferredModelId: String? = null) {
+        viewModelScope.launch {
+            _modelImportUiState.value = ModelImportUiState.Importing("准备读取模型压缩包...")
+            val result = LocalAsrArchiveImporter.importArchive(
+                context = app,
+                uri = uri,
+                preferredModelId = preferredModelId,
+                onProgress = { msg ->
+                    _modelImportUiState.value = ModelImportUiState.Importing(msg)
+                }
+            )
+            when (result) {
+                is ModelImportResult.Success -> {
+                    refreshModelStatus()
+                    setLocalAsrModel(result.modelId)
+                    _modelImportUiState.value = ModelImportUiState.Success(
+                        modelId = result.modelId,
+                        modelName = result.modelName,
+                        fileCount = result.fileCount,
+                        totalBytes = result.totalBytes,
+                    )
+                }
+                is ModelImportResult.Failure -> {
+                    _modelImportUiState.value = ModelImportUiState.Error(result.reason)
+                }
+            }
+        }
+    }
+
+    fun clearModelImportState() {
+        _modelImportUiState.value = ModelImportUiState.Idle
+    }
+
     fun downloadModels() {
         if (_downloading.value) return
         viewModelScope.launch {
@@ -688,6 +727,13 @@ class SettingsViewModel(
             refreshDiagnostics()
         }
     }
+}
+
+sealed interface ModelImportUiState {
+    data object Idle : ModelImportUiState
+    data class Importing(val progressMessage: String) : ModelImportUiState
+    data class Success(val modelId: String, val modelName: String, val fileCount: Int, val totalBytes: Long) : ModelImportUiState
+    data class Error(val errorMessage: String) : ModelImportUiState
 }
 
 /** Each probe is one request, so one tap must not fan out over a whole catalogue. */
