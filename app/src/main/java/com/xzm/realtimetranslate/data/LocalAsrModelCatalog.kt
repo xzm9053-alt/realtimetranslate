@@ -29,6 +29,7 @@ data class LocalAsrModelPreset(
     val architecture: LocalAsrArch,
     /** 是否支持 350~400ms 高频局部草稿；自回归大模型（Whisper、Qwen3-ASR 等）为 false 以防 CPU 积压与发热 */
     val supportsDraft: Boolean = true,
+    val badge: String = "📱 手机端侧离线 · 零流量",
 )
 
 /**

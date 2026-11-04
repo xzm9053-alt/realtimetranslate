@@ -14,6 +14,8 @@ import com.xzm.realtimetranslate.data.TranslationEngineDetail
 import com.xzm.realtimetranslate.data.AsrEngineDetail
 import com.xzm.realtimetranslate.data.OpenSourceTranslationPreset
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -192,6 +194,7 @@ fun SettingsScreen(
     val genericAsrModel by viewModel.genericAsrModel.collectAsStateWithLifecycle()
     val asrTestResult by viewModel.asrTestResult.collectAsStateWithLifecycle()
     val asrTesting by viewModel.asrTesting.collectAsStateWithLifecycle()
+    val modelImportUiState by viewModel.modelImportUiState.collectAsStateWithLifecycle()
 
     var revealKey by remember { mutableStateOf(false) }
     val engineType = settings.translationEngine
@@ -1178,6 +1181,9 @@ fun SettingsScreen(
                     onSaveOnly = { viewModel.saveAsrConfig(asrEngine) },
                     settings = settings,
                     onUpdateSettings = { transform -> viewModel.update(transform) },
+                    modelImportUiState = modelImportUiState,
+                    onImportModelArchive = viewModel::importModelArchive,
+                    onClearModelImportState = viewModel::clearModelImportState,
                     onBack = { showAsrEnginePicker = false },
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -2316,6 +2322,33 @@ private fun EnginePickerSubScreen(
                             fontWeight = FontWeight.SemiBold,
                             color = MiuixTheme.colorScheme.onSurface,
                         )
+
+                        // 电脑运行与手机局域网连接说明横幅
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Booth.Accent.copy(alpha = 0.10f))
+                                .padding(10.dp),
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    text = "💡 电脑私有化运行 · 手机局域网调用指南",
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Booth.Accent,
+                                )
+                                Text(
+                                    text = "1. 开源翻译大模型需在电脑上运行（推荐安装 Ollama 并设置 OLLAMA_HOST=0.0.0.0:11434 允许局域网连接）；\n" +
+                                        "2. 确保手机与电脑连入同一路由器 Wi-Fi 局域网；\n" +
+                                        "3. 电脑终端输入 ipconfig 查看 IPv4 地址，在下方 Base URL 填入如 http://192.168.1.xxx:11434/v1 即可免 Key 调用电脑算力！",
+                                    fontSize = 11.5.sp,
+                                    color = MiuixTheme.colorScheme.onSurface,
+                                    lineHeight = 16.sp,
+                                )
+                            }
+                        }
+
                         OutlinedTextField(
                             value = genericBaseUrl,
                             onValueChange = onUpdateGenericBaseUrl,
@@ -3696,6 +3729,9 @@ private fun AsrEnginePickerSubScreen(
     onSaveOnly: () -> Unit,
     settings: UserSettings,
     onUpdateSettings: ((UserSettings) -> UserSettings) -> Unit,
+    modelImportUiState: ModelImportUiState = ModelImportUiState.Idle,
+    onImportModelArchive: (Uri, String?) -> Unit = { _, _ -> },
+    onClearModelImportState: () -> Unit = {},
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -3706,6 +3742,14 @@ private fun AsrEnginePickerSubScreen(
     var revealKey by remember { mutableStateOf(false) }
     var showGuide by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
+
+    val archivePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        if (uri != null) {
+            onImportModelArchive(uri, selectedLocalModelId)
+        }
+    }
 
     Column(
         modifier = modifier
@@ -3824,7 +3868,7 @@ private fun AsrEnginePickerSubScreen(
                                                 .background(brandColor.copy(alpha = 0.20f)),
                                             contentAlignment = Alignment.Center,
                                         ) {
-                                            Text(text = "💻", fontSize = 18.sp)
+                                            Text(text = "📱", fontSize = 18.sp)
                                         }
                                         if (isCurrentlyInUse) {
                                             Box(
@@ -3852,7 +3896,7 @@ private fun AsrEnginePickerSubScreen(
                                     )
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = "${preset.architecture.name.lowercase()} · 约 ${preset.sizeMb}MB",
+                                        text = "${preset.badge} · 约 ${preset.sizeMb}MB",
                                         fontSize = 11.sp,
                                         color = brandColor,
                                         fontWeight = FontWeight.Medium,
@@ -3894,7 +3938,7 @@ private fun AsrEnginePickerSubScreen(
                                 .background(Color(0xFF10B981).copy(alpha = 0.20f)),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Text(text = "💻", fontSize = 24.sp)
+                            Text(text = "📱", fontSize = 24.sp)
                         }
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
@@ -3904,7 +3948,7 @@ private fun AsrEnginePickerSubScreen(
                                 color = MiuixTheme.colorScheme.onSurface,
                             )
                             Text(
-                                text = "开源架构：${activePreset.architecture.name} · 磁盘大小：约 ${activePreset.sizeMb}MB",
+                                text = "${activePreset.badge} · 架构：${activePreset.architecture.name} · 约 ${activePreset.sizeMb}MB",
                                 fontSize = 11.5.sp,
                                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                             )
@@ -3993,6 +4037,174 @@ private fun AsrEnginePickerSubScreen(
                                 .clickable { onRefreshLocalAsrProbe() }
                                 .padding(vertical = 4.dp),
                         )
+                    }
+
+                    // 一键选择已下载压缩包并自动解压配置
+                    val isImporting = modelImportUiState is ModelImportUiState.Importing
+                    Button(
+                        onClick = {
+                            archivePickerLauncher.launch(arrayOf("*/*"))
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isImporting,
+                        colors = ButtonDefaults.buttonColorsPrimary(),
+                    ) {
+                        Text(
+                            text = if (isImporting) "正在解包并校验模型..." else "📦 一键导入模型压缩包 (.zip / .tar.bz2 / .tar.gz)",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp,
+                        )
+                    }
+
+                    // 导入状态反馈
+                    when (val state = modelImportUiState) {
+                        is ModelImportUiState.Importing -> {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Booth.Accent.copy(alpha = 0.10f))
+                                    .padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                                Text(
+                                    text = state.progressMessage,
+                                    fontSize = 12.sp,
+                                    color = Booth.Accent,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                            }
+                        }
+                        is ModelImportUiState.Success -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF10B981).copy(alpha = 0.15f))
+                                    .padding(10.dp),
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "🎉 模型导入成功！",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF10B981),
+                                        )
+                                        Text(
+                                            text = "已自动部署 ${state.modelName} (${state.fileCount} 个文件，共 %.1f MB)，已直接设为在用！".format(state.totalBytes / (1024f * 1024f)),
+                                            fontSize = 11.5.sp,
+                                            color = MiuixTheme.colorScheme.onSurface,
+                                        )
+                                    }
+                                    Text(
+                                        text = "✕",
+                                        fontSize = 14.sp,
+                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                        modifier = Modifier
+                                            .clickable { onClearModelImportState() }
+                                            .padding(4.dp),
+                                    )
+                                }
+                            }
+                        }
+                        is ModelImportUiState.Error -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFFEF4444).copy(alpha = 0.15f))
+                                    .padding(10.dp),
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = "❌ 导入失败：${state.errorMessage}",
+                                        fontSize = 12.sp,
+                                        color = Color(0xFFEF4444),
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    Text(
+                                        text = "✕",
+                                        fontSize = 14.sp,
+                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                        modifier = Modifier
+                                            .clickable { onClearModelImportState() }
+                                            .padding(4.dp),
+                                    )
+                                }
+                            }
+                        }
+                        ModelImportUiState.Idle -> { /* do nothing */ }
+                    }
+
+                    // 导入说明卡片（可折叠）
+                    var showAsrGuide by rememberSaveable { mutableStateOf(false) }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+                            .clickable { showAsrGuide = !showAsrGuide }
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "💡 外部模型导入使用说明（一键导入 vs 手动拷贝）",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MiuixTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                text = if (showAsrGuide) "收起 ▲" else "展开 ▼",
+                                fontSize = 11.sp,
+                                color = Booth.Accent,
+                            )
+                        }
+                    }
+
+                    AnimatedVisibility(visible = showAsrGuide) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                .padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(
+                                text = "方式 1（推荐 · 极简免电脑）：\n" +
+                                    "在手机浏览器、魔搭或微信中下载好模型压缩包（.zip 或 .tar.bz2），回到这里直接点击上方的「📦 一键导入模型压缩包」，选中该压缩包即可。App 会在后台全自动解包、校验架构权重并存入应用安全私有目录，完全不受安卓系统权限限制！",
+                                fontSize = 11.5.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                lineHeight = 16.sp,
+                            )
+                            Text(
+                                text = "方式 2（传统 USB 电脑拷入）：\n" +
+                                    "在电脑上下载并解压模型，通过 USB 数据线连接手机，将解压后的文件夹复制到手机内部存储：\nAndroid/data/com.xzm.realtimetranslate/files/models/asr/${activePreset.id}/\n放好后点击「🔄 刷新检测」即可激活。",
+                                fontSize = 11.5.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                lineHeight = 16.sp,
+                            )
+                            Text(
+                                text = "🛡️ 自动防崩溃保护：若所选模型未就绪，启动同传时将自动平滑回退至内置 SenseVoice，绝不报错或闪退。",
+                                fontSize = 11.5.sp,
+                                color = Color(0xFF10B981),
+                                lineHeight = 16.sp,
+                            )
+                        }
                     }
 
                     // 内置 SenseVoice 专属修复/下载通道
