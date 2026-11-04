@@ -114,6 +114,7 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
+    implementation("org.apache.commons:commons-compress:1.26.1")
 
     // Local ASR: sherpa-onnx (SenseVoice + Silero VAD). Verify latest at https://jitpack.io/#k2-fsa/sherpa-onnx
     implementation("com.github.k2-fsa:sherpa-onnx:1.13.4")
