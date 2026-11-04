@@ -213,13 +213,19 @@ object LocalAsrArchiveImporter {
         // 拷贝所有匹配的文件与字典
         for (file in verified.values) {
             val target = File(destinationDir, file.name)
-            file.copyTo(target, overwrite = true)
+            if (file.isDirectory) {
+                file.copyRecursively(target, overwrite = true)
+            } else {
+                file.copyTo(target, overwrite = true)
+            }
         }
 
         // 额外拷贝目录下的所有 .txt / .json / .yaml 等元数据配置（如有）
         sourceDir.listFiles()?.forEach { extra ->
-            if (extra.isFile && (extra.extension in listOf("txt", "json", "yaml", "onnx"))) {
-                val target = File(destinationDir, extra.name)
+            val target = File(destinationDir, extra.name)
+            if (extra.isDirectory && !target.exists()) {
+                extra.copyRecursively(target, overwrite = true)
+            } else if (extra.isFile && (extra.extension in listOf("txt", "json", "yaml", "onnx", "model"))) {
                 if (!target.exists()) {
                     extra.copyTo(target, overwrite = true)
                 }

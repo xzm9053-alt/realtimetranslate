@@ -260,6 +260,7 @@ object LocalAsrModelCatalog {
                 val tok = allFiles.firstOrNull { it.name.contains("tokenizer", ignoreCase = true) && it.name.endsWith(".json") }
                     ?: allFiles.firstOrNull { it.name.contains("tokens", ignoreCase = true) && it.name.endsWith(".txt") }
                     ?: allFiles.firstOrNull { it.name.contains("bpe", ignoreCase = true) && it.name.endsWith(".model") }
+                    ?: File(dir, "tokenizer").takeIf { it.exists() && it.isDirectory }
 
                 if (conv != null && encFiles.isNotEmpty() && decFiles.isNotEmpty() && tok != null) {
                     val enc = encFiles.firstOrNull { it.name.contains("int8", ignoreCase = true) } ?: encFiles.first()

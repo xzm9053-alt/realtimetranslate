@@ -160,6 +160,32 @@ class LocalAsrArchiveImporterTest {
     }
 
     @Test
+    fun testDetectMatchingPresetQwen3WithTokenizerSubdir() {
+        val root = tempFolder.newFolder("qwen3_wrapper_test")
+        val qwenDir = File(root, "sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25").apply { mkdirs() }
+        File(qwenDir, "conv_frontend.onnx").writeText("conv")
+        File(qwenDir, "encoder.int8.onnx").writeText("enc")
+        File(qwenDir, "decoder.int8.onnx").writeText("dec")
+        val tokDir = File(qwenDir, "tokenizer").apply { mkdirs() }
+        File(tokDir, "vocab.json").writeText("{}")
+        File(tokDir, "tokenizer_config.json").writeText("{}")
+
+        val match = LocalAsrArchiveImporter.detectMatchingPreset(root, preferredModelId = "qwen3-asr-0.6b")
+        assertNotNull(match)
+        assertEquals("qwen3-asr-0.6b", match?.preset?.id)
+        assertEquals(qwenDir.canonicalPath, match?.modelDir?.canonicalPath)
+
+        val destinationDir = File(tempFolder.newFolder("dest_qwen3"), "models/asr/qwen3-asr-0.6b")
+        val success = LocalAsrArchiveImporter.deployModelFiles(match!!.modelDir, destinationDir, match.preset)
+        assertTrue(success)
+        assertTrue(File(destinationDir, "conv_frontend.onnx").exists())
+        assertTrue(File(destinationDir, "encoder.int8.onnx").exists())
+        assertTrue(File(destinationDir, "decoder.int8.onnx").exists())
+        assertTrue(File(destinationDir, "tokenizer").isDirectory)
+        assertTrue(File(destinationDir, "tokenizer/vocab.json").exists())
+    }
+
+    @Test
     fun testDeployRejectsInvalidEmptyDir() {
         val emptyDir = tempFolder.newFolder("empty_dir")
         val destinationDir = tempFolder.newFolder("dest_dir")
