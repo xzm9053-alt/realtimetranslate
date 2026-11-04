@@ -69,3 +69,7 @@ start-commandcode.bat
 # Promo video tooling / outputs (local only, not part of the project)
 # Whole directory: it holds the promo pipeline, its renders, and .env (credentials).
 promo/
+
+# Cloud drive packaging
+网盘分享_ASR语音识别模型包/
+model_download_cache/
