@@ -424,14 +424,18 @@ class VideoTranslateViewModel(
                 throw e
             } catch (e: Throwable) {
                 Log.e(TAG, "video translation failed", e)
+                val rawMsg = e.message ?: e.javaClass.simpleName
+                val userFriendlyMsg = if (rawMsg.contains("Failed to instantiate extractor", ignoreCase = true)) {
+                    "无法解析视频音频流（格式可能不被支持或权限受限）"
+                } else {
+                    rawMsg
+                }
+                val prefix = if (snapshot.recognizeOnly) "字幕提取失败" else "翻译失败"
                 _state.update {
                     it.copy(
                         isRunning = false,
                         stage = null,
-                        error = getApplication<Application>().getString(
-                            R.string.text_translate_failed,
-                            e.message ?: e.javaClass.simpleName,
-                        ),
+                        error = "$prefix：$userFriendlyMsg",
                     )
                 }
             }

@@ -1,10 +1,13 @@
 package com.xzm.realtimetranslate.video
 
 import android.content.Context
+import android.content.res.AssetFileDescriptor
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
+import android.os.ParcelFileDescriptor
+import com.xzm.realtimetranslate.util.AppLog as Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
@@ -34,8 +37,42 @@ class AudioPcmExtractor(private val context: Context) {
     ): AudioInfo = withContext(Dispatchers.Default) {
         val extractor = MediaExtractor()
         var codec: MediaCodec? = null
+        var afd: AssetFileDescriptor? = null
+        var pfd: ParcelFileDescriptor? = null
         try {
-            extractor.setDataSource(context, uri, null)
+            var dataSourceSet = false
+            try {
+                val openedAfd = context.contentResolver.openAssetFileDescriptor(uri, "r")
+                if (openedAfd != null) {
+                    afd = openedAfd
+                    if (openedAfd.declaredLength < 0) {
+                        extractor.setDataSource(openedAfd.fileDescriptor)
+                    } else {
+                        extractor.setDataSource(openedAfd.fileDescriptor, openedAfd.startOffset, openedAfd.declaredLength)
+                    }
+                    dataSourceSet = true
+                }
+            } catch (t: Throwable) {
+                Log.w(TAG, "openAssetFileDescriptor failed, will try ParcelFileDescriptor", t)
+            }
+
+            if (!dataSourceSet) {
+                try {
+                    val openedPfd = context.contentResolver.openFileDescriptor(uri, "r")
+                    if (openedPfd != null) {
+                        pfd = openedPfd
+                        extractor.setDataSource(openedPfd.fileDescriptor)
+                        dataSourceSet = true
+                    }
+                } catch (t: Throwable) {
+                    Log.w(TAG, "openFileDescriptor failed, will fallback to uri directly", t)
+                }
+            }
+
+            if (!dataSourceSet) {
+                extractor.setDataSource(context, uri, null)
+            }
+
             val trackIndex = (0 until extractor.trackCount).firstOrNull { index ->
                 extractor.getTrackFormat(index)
                     .getString(MediaFormat.KEY_MIME)
@@ -129,6 +166,8 @@ class AudioPcmExtractor(private val context: Context) {
             runCatching { codec?.stop() }
             runCatching { codec?.release() }
             runCatching { extractor.release() }
+            runCatching { afd?.close() }
+            runCatching { pfd?.close() }
         }
     }
 
@@ -162,6 +201,7 @@ class AudioPcmExtractor(private val context: Context) {
     }
 
     private companion object {
+        const val TAG = "AudioPcmExtractor"
         const val DEQUEUE_TIMEOUT_US = 10_000L
     }
 }
