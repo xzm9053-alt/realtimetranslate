@@ -10,6 +10,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -73,7 +75,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.LanguageOption
+import com.xzm.realtimetranslate.data.LocalAsrModelCatalog
 import com.xzm.realtimetranslate.data.SupportedLanguages
+import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.VideoAsrEngine
 import com.xzm.realtimetranslate.data.VideoSubtitleMode
 import com.xzm.realtimetranslate.data.VideoSubtitleStyle
@@ -121,19 +125,10 @@ fun VideoTranslateScreen(
         if (uri != null) viewModel.setVideo(uri, queryDisplayName(context, uri))
     }
 
-    val sourceOptions = remember(state.asrEngine) {
-        val known = SupportedLanguages.sourceOptions.associateBy { it.code }
-        // 本地 SenseVoice 只认五种，云端 Whisper 支持 99 种，所以下拉长度跟引擎走。
-        val codes = if (state.asrEngine == VideoAsrEngine.LOCAL) {
-            LOCAL_SOURCE_CODES
-        } else {
-            SupportedLanguages.sourceOptions.map { it.code }
-        }
-        codes.mapNotNull { known[it] }
-    }
+    val sourceOptions = state.availableSourceOptions
     val targetOptions: List<LanguageOption> = SupportedLanguages.targetOptions
     val sourceLabel = sourceOptions.firstOrNull { it.code == state.sourceCode }
-        ?: sourceOptions.first()
+        ?: sourceOptions.firstOrNull() ?: SupportedLanguages.sourceOptions.first()
     val targetLabel = targetOptions.firstOrNull { it.code == state.targetCode }
         ?: targetOptions.first()
 
@@ -226,6 +221,11 @@ fun VideoTranslateScreen(
                         color = Booth.Accent,
                     )
                 }
+                val asrBadgeText = if (state.asrEngine == VideoAsrEngine.CLOUD) {
+                    "☁️ 云端 Whisper · 导出 SRT"
+                } else {
+                    "⚡ 端侧 ${state.effectiveAsrPreset.name.substringBefore(' ')} · 导出 SRT"
+                }
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
@@ -233,7 +233,7 @@ fun VideoTranslateScreen(
                         .padding(horizontal = 10.dp, vertical = 5.dp),
                 ) {
                     Text(
-                        text = "⚡ 端侧 SenseVoice · 导出 SRT",
+                        text = asrBadgeText,
                         fontSize = 11.5.sp,
                         color = scheme.onSurfaceVariantSummary,
                     )
@@ -371,14 +371,137 @@ fun VideoTranslateScreen(
                         enabled = !state.isRunning,
                     )
                     SettingDivider()
-                    Text(
-                        text = "语音识别引擎",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
+
+                    // ================= 翻译大模型 (LLM) 区块 =================
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(
+                                text = "翻译大模型 (LLM)",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = scheme.onSurface,
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(
+                                        if (state.overrideTranslationEngine != null) Color(0xFFF59E0B).copy(alpha = 0.12f)
+                                        else Booth.Accent.copy(alpha = 0.12f)
+                                    )
+                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                            ) {
+                                Text(
+                                    text = if (state.overrideTranslationEngine != null) "任务自定" else "跟随全局",
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = if (state.overrideTranslationEngine != null) Color(0xFFF59E0B) else Booth.Accent,
+                                )
+                            }
+                        }
+                        if (state.overrideTranslationEngine != null && !state.isRunning) {
+                            Text(
+                                text = "↺ 恢复全局",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Booth.Accent,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .clickable { viewModel.setOverrideTranslationEngine(null) }
+                                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                            )
+                        }
+                    }
+
+                    // 翻译引擎横向滑动选择胶囊
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        ModeChip(
+                            label = "🌐 跟随全局 (${stringResource(state.globalTranslationEngine.titleRes)})",
+                            selected = state.overrideTranslationEngine == null,
+                            onClick = { if (!state.isRunning) viewModel.setOverrideTranslationEngine(null) },
+                        )
+                        TranslationEngineType.entries.forEach { engine ->
+                            ModeChip(
+                                label = stringResource(engine.titleRes),
+                                selected = state.overrideTranslationEngine == engine,
+                                onClick = { if (!state.isRunning) viewModel.setOverrideTranslationEngine(engine) },
+                            )
+                        }
+                    }
+
+                    SettingDivider()
+
+                    // ================= 语音识别 (ASR) 区块 =================
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(
+                                text = "语音识别 (ASR)",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = scheme.onSurface,
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(
+                                        if (state.asrEngine == VideoAsrEngine.CLOUD) Color(0xFF3B82F6).copy(alpha = 0.12f)
+                                        else if (state.overrideLocalAsrModelId != null) Color(0xFFF59E0B).copy(alpha = 0.12f)
+                                        else Color(0xFF8B5CF6).copy(alpha = 0.12f)
+                                    )
+                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                            ) {
+                                Text(
+                                    text = if (state.asrEngine == VideoAsrEngine.CLOUD) {
+                                        "云端通道"
+                                    } else if (state.overrideLocalAsrModelId != null) {
+                                        "任务自定"
+                                    } else {
+                                        "跟随全局"
+                                    },
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = if (state.asrEngine == VideoAsrEngine.CLOUD) Color(0xFF3B82F6)
+                                    else if (state.overrideLocalAsrModelId != null) Color(0xFFF59E0B)
+                                    else Color(0xFF8B5CF6),
+                                )
+                            }
+                        }
+                        if (state.overrideLocalAsrModelId != null && !state.isRunning) {
+                            Text(
+                                text = "↺ 恢复全局",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Booth.Accent,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .clickable { viewModel.setOverrideLocalAsrModel(null) }
+                                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                            )
+                        }
+                    }
+
+                    // 本地离线 vs 云端 通道大类切换
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         ModeChip(
-                            label = "📱 本地 SenseVoice",
+                            label = "📱 本地端侧离线",
                             selected = state.asrEngine == VideoAsrEngine.LOCAL,
                             onClick = { if (!state.isRunning) viewModel.setAsrEngine(VideoAsrEngine.LOCAL) },
                         )
@@ -388,9 +511,34 @@ fun VideoTranslateScreen(
                             onClick = { if (!state.isRunning) viewModel.setAsrEngine(VideoAsrEngine.CLOUD) },
                         )
                     }
+
+                    // 本地端侧 8 大模型独立自定切换
+                    if (state.asrEngine == VideoAsrEngine.LOCAL) {
+                        val globalPreset = LocalAsrModelCatalog.getPresetById(state.globalLocalAsrModelId)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            ModeChip(
+                                label = "跟随全局 (${globalPreset.name.substringBefore(' ')})",
+                                selected = state.overrideLocalAsrModelId == null,
+                                onClick = { if (!state.isRunning) viewModel.setOverrideLocalAsrModel(null) },
+                            )
+                            LocalAsrModelCatalog.PRESETS.forEach { preset ->
+                                ModeChip(
+                                    label = preset.name.substringBefore(' '),
+                                    selected = state.overrideLocalAsrModelId == preset.id,
+                                    onClick = { if (!state.isRunning) viewModel.setOverrideLocalAsrModel(preset.id) },
+                                )
+                            }
+                        }
+                    }
+
                     Text(
                         text = if (state.asrEngine == VideoAsrEngine.LOCAL) {
-                            stringResource(R.string.video_local_asr_hint)
+                            "当前使用：${state.effectiveAsrPreset.name}"
                         } else {
                             stringResource(R.string.video_cloud_asr_hint)
                         },
