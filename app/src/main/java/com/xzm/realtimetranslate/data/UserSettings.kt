@@ -233,4 +233,54 @@ object SupportedLanguages {
     fun labelResOf(code: String): Int =
         (sourceOptions + targetOptions).firstOrNull { it.code == code }?.labelRes
             ?: R.string.lang_en
+
+    /**
+     * 根据本地 ASR 模型能力动态过滤可用源语言选项。
+     */
+    fun filterSourceOptionsForModel(preset: LocalAsrModelPreset?): List<LanguageOption> {
+        if (preset == null) return sourceOptions
+        val langs = preset.supportedLangs
+        if (langs.contains("all")) return sourceOptions
+
+        return sourceOptions.filter { option ->
+            when (option.code) {
+                "auto" -> langs.contains("auto")
+                "zh-Hans", "zh-Hant" -> langs.contains("zh")
+                "en" -> langs.contains("en")
+                "ja" -> langs.contains("ja")
+                "ko" -> langs.contains("ko")
+                "yue" -> langs.contains("yue")
+                else -> false
+            }
+        }.ifEmpty {
+            listOf(LanguageOption("zh-Hans", R.string.lang_zh_hans))
+        }
+    }
+
+    /**
+     * 根据当前 ASR 引擎大类与本地模型能力，综合过滤源语言选项。
+     */
+    fun filterSourceOptions(asrEngineType: AsrEngineType, localPreset: LocalAsrModelPreset?): List<LanguageOption> {
+        return when (asrEngineType) {
+            AsrEngineType.LOCAL_SENSEVOICE -> filterSourceOptionsForModel(localPreset)
+            AsrEngineType.ALIYUN_FUN_ASR -> {
+                sourceOptions.filter { it.code in listOf("auto", "zh-Hans", "zh-Hant", "en") }
+            }
+            AsrEngineType.GENERIC_OPENAI -> {
+                sourceOptions
+            }
+        }
+    }
+
+    /**
+     * 校验当前源语言是否在可用选项中；若不在则自动纠偏回滚：
+     * 1. 若候选列表中含 "auto"，优先回退 "auto"；
+     * 2. 否则回退至候选列表首项；
+     * 3. 候选为空则保底 "zh-Hans"。
+     */
+    fun sanitizeSourceLanguage(currentCode: String, availableOptions: List<LanguageOption>): String {
+        if (availableOptions.any { it.code == currentCode }) return currentCode
+        if (availableOptions.any { it.code == "auto" }) return "auto"
+        return availableOptions.firstOrNull()?.code ?: "zh-Hans"
+    }
 }
