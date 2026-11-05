@@ -10,6 +10,9 @@ import androidx.lifecycle.viewModelScope
 import com.xzm.realtimetranslate.LiveTranslateApp
 import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.data.ApiKeyStore
+import com.xzm.realtimetranslate.data.LanguageOption
+import com.xzm.realtimetranslate.data.LocalAsrModelCatalog
+import com.xzm.realtimetranslate.data.LocalAsrModelPreset
 import com.xzm.realtimetranslate.data.SupportedLanguages
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
@@ -26,7 +29,7 @@ import com.xzm.realtimetranslate.util.ExportTranslator
 import com.xzm.realtimetranslate.util.ModelDownloader
 import com.xzm.realtimetranslate.util.SrtFormatter
 import com.xzm.realtimetranslate.video.CloudBatchRecognizer
-import com.xzm.realtimetranslate.video.SenseVoiceBatchRecognizer
+import com.xzm.realtimetranslate.video.LocalBatchRecognizer
 import com.xzm.realtimetranslate.video.SubtitleBurnIn
 import com.xzm.realtimetranslate.video.VideoCue
 import com.xzm.realtimetranslate.video.VideoTranslationPipeline
@@ -70,7 +73,37 @@ data class VideoTranslateUiState(
     val subtitleMode: VideoSubtitleMode = VideoSubtitleMode.TRANSLATION,
     /** 字幕外观：同样三处共用，改完立即可见。 */
     val subtitleStyle: VideoSubtitleStyle = VideoSubtitleStyle(),
+
+    // ===== 双引擎随全局与独立覆写 =====
+    /** 全局设置中的翻译引擎 */
+    val globalTranslationEngine: TranslationEngineType = TranslationEngineType.MICROSOFT,
+    /** 当前视频任务的覆写翻译引擎；为 null 时表示跟随全局设置 */
+    val overrideTranslationEngine: TranslationEngineType? = null,
+
+    /** 全局设置中的本地 ASR 模型 ID */
+    val globalLocalAsrModelId: String = LocalAsrModelCatalog.DEFAULT_MODEL_ID,
+    /** 当前视频任务的覆写本地 ASR 模型 ID；为 null 时表示跟随全局设置 */
+    val overrideLocalAsrModelId: String? = null,
+
+    /** 当前根据有效识别引擎动态计算出的可用源语言列表 */
+    val availableSourceOptions: List<LanguageOption> = SupportedLanguages.sourceOptions,
 ) {
+    /** 实际生效的翻译引擎 */
+    val effectiveTranslationEngine: TranslationEngineType
+        get() = overrideTranslationEngine ?: globalTranslationEngine
+
+    /** 实际生效的本地 ASR 模型 ID */
+    val effectiveLocalAsrModelId: String
+        get() = overrideLocalAsrModelId ?: globalLocalAsrModelId
+
+    /** 实际生效的本地 ASR 预设信息 */
+    val effectiveAsrPreset: LocalAsrModelPreset
+        get() = LocalAsrModelCatalog.getPresetById(effectiveLocalAsrModelId)
+
+    /** 是否处于独立覆写状态（任一引擎不随全局） */
+    val isOverridden: Boolean
+        get() = overrideTranslationEngine != null || overrideLocalAsrModelId != null
+
     val hasVideo: Boolean get() = uri != null
     val canStart: Boolean get() = hasVideo && !isRunning
     val canExport: Boolean get() = cues.isNotEmpty() && !isRunning && !isBurning
@@ -91,17 +124,32 @@ class VideoTranslateViewModel(
 
     init {
         viewModelScope.launch {
-            val settings = settingsRepository.settings.first()
-            val target = settings.targetLanguageCode.takeIf { code ->
-                SupportedLanguages.targetOptions.any { it.code == code }
-            } ?: "zh-Hans"
-            _state.update {
-                it.copy(
-                    targetCode = target,
-                    subtitleMode = settings.videoSubtitleMode,
-                    asrEngine = settings.videoAsrEngine,
-                    subtitleStyle = settings.videoSubtitleStyle,
-                )
+            settingsRepository.settings.collect { settings ->
+                val target = settings.targetLanguageCode.takeIf { code ->
+                    SupportedLanguages.targetOptions.any { it.code == code }
+                } ?: "zh-Hans"
+                _state.update { current ->
+                    val globalEngine = settings.translationEngine
+                    val globalAsrId = settings.localAsrModel
+                    val effectiveAsrId = current.overrideLocalAsrModelId ?: globalAsrId
+                    val effectivePreset = LocalAsrModelCatalog.getPresetById(effectiveAsrId)
+                    val sourceOpts = if (current.asrEngine == VideoAsrEngine.CLOUD) {
+                        SupportedLanguages.sourceOptions
+                    } else {
+                        SupportedLanguages.filterSourceOptionsForModel(effectivePreset)
+                    }
+                    val sanitizedSource = SupportedLanguages.sanitizeSourceLanguage(current.sourceCode, sourceOpts)
+                    current.copy(
+                        targetCode = target,
+                        subtitleMode = settings.videoSubtitleMode,
+                        asrEngine = settings.videoAsrEngine,
+                        subtitleStyle = settings.videoSubtitleStyle,
+                        globalTranslationEngine = globalEngine,
+                        globalLocalAsrModelId = globalAsrId,
+                        availableSourceOptions = sourceOpts,
+                        sourceCode = sanitizedSource,
+                    )
+                }
             }
         }
     }
@@ -159,21 +207,65 @@ class VideoTranslateViewModel(
 
     fun resetSubtitleStyle() = setSubtitleStyle(VideoSubtitleStyle())
 
-    /** 切换视频字幕的语音识别引擎（本地 / 云端）。下次开始提取时生效。 */
+    /** 切换视频字幕的语音识别大类（本地离线 / 云端通用）。下次开始提取时生效。 */
     fun setAsrEngine(engine: VideoAsrEngine) {
         _state.update { current ->
-            // 从云端切回本地时，已选的西语等本地不支持的源语言必须退回 auto，
-            // 否则下拉显示「自动」而实际仍按西语识别。
-            val source = if (engine == VideoAsrEngine.LOCAL &&
-                current.sourceCode !in VideoAsrEngine.LOCAL_SOURCE_CODES
-            ) {
-                "auto"
+            val sourceOpts = if (engine == VideoAsrEngine.CLOUD) {
+                SupportedLanguages.sourceOptions
             } else {
-                current.sourceCode
+                SupportedLanguages.filterSourceOptionsForModel(current.effectiveAsrPreset)
             }
-            current.copy(asrEngine = engine, sourceCode = source)
+            val source = SupportedLanguages.sanitizeSourceLanguage(current.sourceCode, sourceOpts)
+            current.copy(
+                asrEngine = engine,
+                sourceCode = source,
+                availableSourceOptions = sourceOpts,
+            )
         }
         viewModelScope.launch { settingsRepository.update { it.copy(videoAsrEngine = engine) } }
+    }
+
+    /** 覆写当前视频翻译任务的翻译大模型引擎（null 表示恢复跟随全局） */
+    fun setOverrideTranslationEngine(engine: TranslationEngineType?) {
+        _state.update { it.copy(overrideTranslationEngine = engine) }
+    }
+
+    /** 覆写当前视频翻译任务的本地 ASR 识别模型（null 表示恢复跟随全局） */
+    fun setOverrideLocalAsrModel(modelId: String?) {
+        _state.update { current ->
+            val effectiveAsrId = modelId ?: current.globalLocalAsrModelId
+            val effectivePreset = LocalAsrModelCatalog.getPresetById(effectiveAsrId)
+            val sourceOpts = if (current.asrEngine == VideoAsrEngine.CLOUD) {
+                SupportedLanguages.sourceOptions
+            } else {
+                SupportedLanguages.filterSourceOptionsForModel(effectivePreset)
+            }
+            val sanitizedSource = SupportedLanguages.sanitizeSourceLanguage(current.sourceCode, sourceOpts)
+            current.copy(
+                overrideLocalAsrModelId = modelId,
+                availableSourceOptions = sourceOpts,
+                sourceCode = sanitizedSource,
+            )
+        }
+    }
+
+    /** 一键重置为跟随全局设置 */
+    fun resetOverrides() {
+        _state.update { current ->
+            val effectivePreset = LocalAsrModelCatalog.getPresetById(current.globalLocalAsrModelId)
+            val sourceOpts = if (current.asrEngine == VideoAsrEngine.CLOUD) {
+                SupportedLanguages.sourceOptions
+            } else {
+                SupportedLanguages.filterSourceOptionsForModel(effectivePreset)
+            }
+            val sanitizedSource = SupportedLanguages.sanitizeSourceLanguage(current.sourceCode, sourceOpts)
+            current.copy(
+                overrideTranslationEngine = null,
+                overrideLocalAsrModelId = null,
+                availableSourceOptions = sourceOpts,
+                sourceCode = sanitizedSource,
+            )
+        }
     }
 
     fun start() {
@@ -204,8 +296,9 @@ class VideoTranslateViewModel(
             }
             try {
                 val settings = settingsRepository.settings.first()
-                val isRecognizeOnly = snapshot.recognizeOnly || settings.translationEngine == TranslationEngineType.NONE
-                if (!isRecognizeOnly && !apiKeyStore.hasKeyFor(settings.translationEngine)) {
+                val targetEngine = snapshot.effectiveTranslationEngine
+                val isRecognizeOnly = snapshot.recognizeOnly || targetEngine == TranslationEngineType.NONE
+                if (!isRecognizeOnly && !apiKeyStore.hasKeyFor(targetEngine)) {
                     _state.update {
                         it.copy(
                             isRunning = false,
@@ -247,15 +340,20 @@ class VideoTranslateViewModel(
                     PassthroughTranslationEngine
                 } else {
                     TranslationEngineFactory.create(
-                        settings,
-                        apiKeyStore,
-                        liveSettings = { settingsRepository.settings.first() },
+                        settings = settings.copy(translationEngine = targetEngine),
+                        keys = apiKeyStore,
+                        liveSettings = { settingsRepository.settings.first().copy(translationEngine = targetEngine) },
                         liveGlossaryPrompt = { (getApplication<Application>() as LiveTranslateApp).glossaryRepository.getEnabledTermsPrompt() },
                     )
                 }
 
                 val sourceCode = snapshot.sourceCode
                 val useCloud = snapshot.asrEngine == VideoAsrEngine.CLOUD
+                val effectivePreset = snapshot.effectiveAsrPreset
+                val probeResult = withContext(Dispatchers.IO) {
+                    LocalAsrModelCatalog.probe(getApplication(), effectivePreset.id)
+                }
+
                 val pipeline = VideoTranslationPipeline(
                     context = getApplication(),
                     vadModelPath = paths.sileroVad.absolutePath,
@@ -268,9 +366,11 @@ class VideoTranslateViewModel(
                                 language = sourceCode,
                             )
                         } else {
-                            SenseVoiceBatchRecognizer(
-                                modelDir = modelDir,
-                                language = AsrEngine.senseVoiceLanguageFor(sourceCode),
+                            LocalBatchRecognizer(
+                                preset = effectivePreset,
+                                probeResult = probeResult,
+                                fallbackModelDir = modelDir,
+                                language = sourceCode,
                             )
                         }
                     },
