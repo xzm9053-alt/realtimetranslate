@@ -413,8 +413,8 @@
     <string name="more_camera_summary">Take a photo and the translation is painted over the original text</string>
     <string name="more_image_title">Image translation</string>
     <string name="more_image_summary">Pick a picture from the gallery, replace the text in place, then save it</string>
-    <string name="more_video_title">Video translation</string>
-    <string name="more_video_summary">Pick a local video, recognize the speech, then watch it with translated subtitles</string>
+    <string name="more_video_title">Audio &amp; Video Translation</string>
+    <string name="more_video_summary">Pick a local audio or video file, transcribe speech and generate translated subtitles</string>
     <string name="more_text_title">Text translation</string>
     <string name="more_text_summary">Paste a long text and translate it paragraph by paragraph</string>
 

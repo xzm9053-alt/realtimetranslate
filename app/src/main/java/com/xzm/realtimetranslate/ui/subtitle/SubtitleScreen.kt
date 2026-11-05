@@ -1388,8 +1388,8 @@ private fun QuickToolsTray(
                 )
                 QuickToolItem(
                     emoji = "🎬",
-                    title = "视频翻译",
-                    subtitle = "离线字幕",
+                    title = "音视频",
+                    subtitle = "字幕提取",
                     accentColor = Color(0xFF8B5CF6),
                     onClick = onOpenVideo,
                     modifier = Modifier.weight(1f),

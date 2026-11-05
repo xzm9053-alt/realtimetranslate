@@ -67,7 +67,9 @@ fun MoreScreen(
             )
             LaunchedEffect(initialVideoUri) {
                 initialVideoUri?.let { uri ->
-                    videoVm.setVideo(uri, queryDisplayName(context, uri))
+                    val name = queryDisplayName(context, uri)
+                    val mime = context.contentResolver.getType(uri)
+                    videoVm.setMedia(uri, name, mime)
                 }
             }
             VideoTranslateScreen(

@@ -412,8 +412,8 @@
     <string name="more_camera_summary">拍一张照片，译文直接盖在原文上</string>
     <string name="more_image_title">图片翻译</string>
     <string name="more_image_summary">从相册选一张图，就地盖住原文并保存</string>
-    <string name="more_video_title">视频翻译</string>
-    <string name="more_video_summary">选择本地视频，自动识别语音并生成译文字幕</string>
+    <string name="more_video_title">音视频翻译</string>
+    <string name="more_video_summary">选择本地视频或音频，自动识别语音并生成译文字幕</string>
     <string name="more_text_title">文本翻译</string>
     <string name="more_text_summary">粘贴长文，按段落逐段翻译</string>
 
