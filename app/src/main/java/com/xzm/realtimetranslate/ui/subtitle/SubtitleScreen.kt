@@ -75,6 +75,7 @@ import com.xzm.realtimetranslate.R
 import com.xzm.realtimetranslate.audio.CaptureState
 import com.xzm.realtimetranslate.data.AudioSourceMode
 import com.xzm.realtimetranslate.data.LanguageOption
+import com.xzm.realtimetranslate.data.LocalAsrModelCatalog
 import com.xzm.realtimetranslate.data.OcrScript
 import com.xzm.realtimetranslate.data.ScreenOcrMode
 import com.xzm.realtimetranslate.data.SubtitleDisplayMode
@@ -156,6 +157,17 @@ fun SubtitleScreen(
     var appearanceExpanded by rememberSaveable { mutableStateOf(false) }
 
     val context = LocalContext.current
+
+    LaunchedEffect(selectedMode, settings.asrEngine, settings.localAsrModel) {
+        if (selectedMode == 0) {
+            val preset = LocalAsrModelCatalog.getPresetById(settings.localAsrModel)
+            val validOpts = SupportedLanguages.filterSourceOptions(settings.asrEngine, preset)
+            val sanitized = SupportedLanguages.sanitizeSourceLanguage(settings.sourceLanguageCode, validOpts)
+            if (sanitized != settings.sourceLanguageCode) {
+                onSourceLanguage(sanitized)
+            }
+        }
+    }
 
     val (statusLabel, tone) = when (session.status) {
         SessionBus.Status.Idle -> stringResource(R.string.status_idle) to StatusTone.Idle
@@ -1260,7 +1272,14 @@ fun SubtitleScreen(
     if (currentPicker != null) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val options: List<LanguageOption> = when (currentPicker) {
-            LangPicker.Source -> SupportedLanguages.sourceOptions
+            LangPicker.Source -> {
+                if (selectedMode == 0) {
+                    val preset = LocalAsrModelCatalog.getPresetById(settings.localAsrModel)
+                    SupportedLanguages.filterSourceOptions(settings.asrEngine, preset)
+                } else {
+                    SupportedLanguages.sourceOptions
+                }
+            }
             LangPicker.Target -> SupportedLanguages.targetOptions
         }
         val selected = when (currentPicker) {

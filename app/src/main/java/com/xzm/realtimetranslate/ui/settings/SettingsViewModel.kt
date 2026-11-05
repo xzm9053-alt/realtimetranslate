@@ -14,6 +14,7 @@ import com.xzm.realtimetranslate.data.LocalAsrArchiveImporter
 import com.xzm.realtimetranslate.data.LocalAsrModelCatalog
 import com.xzm.realtimetranslate.data.LocalAsrProbeResult
 import com.xzm.realtimetranslate.data.ModelImportResult
+import com.xzm.realtimetranslate.data.SupportedLanguages
 import com.xzm.realtimetranslate.data.ThinkingOffStyle
 import com.xzm.realtimetranslate.data.TranslationEngineType
 import com.xzm.realtimetranslate.data.UserSettings
@@ -323,7 +324,16 @@ class SettingsViewModel(
     }
 
     fun setAsrEngine(engine: AsrEngineType) {
-        update { it.copy(asrEngine = engine) }
+        val s = settings.value
+        val preset = LocalAsrModelCatalog.getPresetById(s.localAsrModel)
+        val validOpts = SupportedLanguages.filterSourceOptions(engine, preset)
+        val sanitized = SupportedLanguages.sanitizeSourceLanguage(s.sourceLanguageCode, validOpts)
+        update {
+            it.copy(
+                asrEngine = engine,
+                sourceLanguageCode = sanitized,
+            )
+        }
     }
 
     fun updateAliyunAsrKey(value: TextFieldValue) {
@@ -555,7 +565,16 @@ class SettingsViewModel(
 
     fun setLocalAsrModel(modelId: String) {
         viewModelScope.launch {
-            settingsRepository.update { it.copy(localAsrModel = modelId) }
+            val preset = LocalAsrModelCatalog.getPresetById(modelId)
+            val s = settingsRepository.settings.first()
+            val validOpts = SupportedLanguages.filterSourceOptions(s.asrEngine, preset)
+            val sanitized = SupportedLanguages.sanitizeSourceLanguage(s.sourceLanguageCode, validOpts)
+            settingsRepository.update {
+                it.copy(
+                    localAsrModel = modelId,
+                    sourceLanguageCode = sanitized,
+                )
+            }
             _localAsrProbeResult.value = LocalAsrModelCatalog.probe(app, modelId)
         }
     }
