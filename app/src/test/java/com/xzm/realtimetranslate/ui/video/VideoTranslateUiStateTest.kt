@@ -90,4 +90,47 @@ class VideoTranslateUiStateTest {
         assertEquals(TranslationEngineType.ZHIPU, restored.effectiveTranslationEngine)
         assertEquals("paraformer-zh", restored.effectiveLocalAsrModelId)
     }
+
+    @Test
+    fun `audio file sets isAudio true and disables canBurn while allowing canExport`() {
+        val audioState = VideoTranslateUiState(
+            uri = "content://media/audio1",
+            displayName = "recording.mp3",
+            isAudio = true,
+            cues = listOf(VideoCue(0, 0L, 1000L, "Hello", "你好")),
+        )
+        assertTrue(audioState.isAudio)
+        assertTrue(audioState.canExport)
+        assertFalse(audioState.canBurn) // 音频文件无法压制画面字幕
+    }
+
+    @Test
+    fun `video file sets isAudio false and allows canBurn`() {
+        val videoState = VideoTranslateUiState(
+            uri = "content://media/video1",
+            displayName = "game.mp4",
+            isAudio = false,
+            cues = listOf(VideoCue(0, 0L, 1000L, "Hello", "你好")),
+        )
+        assertFalse(videoState.isAudio)
+        assertTrue(videoState.canExport)
+        assertTrue(videoState.canBurn)
+    }
+
+    @Test
+    fun `isAudioFile recognizes audio extensions and mime types`() {
+        assertTrue(VideoTranslateViewModel.isAudioFile("song.mp3", "audio/mpeg"))
+        assertTrue(VideoTranslateViewModel.isAudioFile("interview.WAV", null))
+        assertTrue(VideoTranslateViewModel.isAudioFile("voice.m4a", null))
+        assertTrue(VideoTranslateViewModel.isAudioFile("music.flac", null))
+        assertTrue(VideoTranslateViewModel.isAudioFile("track.aac", null))
+        assertTrue(VideoTranslateViewModel.isAudioFile("sound.ogg", null))
+        assertTrue(VideoTranslateViewModel.isAudioFile("speech.opus", null))
+        assertTrue(VideoTranslateViewModel.isAudioFile("record.amr", null))
+
+        assertFalse(VideoTranslateViewModel.isAudioFile("movie.mp4", "video/mp4"))
+        assertFalse(VideoTranslateViewModel.isAudioFile("clip.mkv", null))
+        assertFalse(VideoTranslateViewModel.isAudioFile("short.mov", null))
+        assertFalse(VideoTranslateViewModel.isAudioFile("stream.ts", null))
+    }
 }

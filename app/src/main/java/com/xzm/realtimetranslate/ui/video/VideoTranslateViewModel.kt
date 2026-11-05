@@ -66,7 +66,9 @@ data class VideoTranslateUiState(
     val failedTranslations: Int = 0,
     val error: String? = null,
     val message: String? = null,
-    /** 压制字幕：把译文烧进画面，另存一个视频文件。 */
+    /** 是否为纯音频文件（MP3/WAV/M4A/FLAC/AAC 等） */
+    val isAudio: Boolean = false,
+    /** 压制字幕：把译文烧进画面，另存一个视频文件。纯音频文件不适用。 */
     val isBurning: Boolean = false,
     val burnProgress: Float = 0f,
     /** 单语 / 双语：压制、预览、SRT 导出三处共用同一个值。 */
@@ -107,7 +109,7 @@ data class VideoTranslateUiState(
     val hasVideo: Boolean get() = uri != null
     val canStart: Boolean get() = hasVideo && !isRunning
     val canExport: Boolean get() = cues.isNotEmpty() && !isRunning && !isBurning
-    val canBurn: Boolean get() = hasVideo && cues.isNotEmpty() && !isRunning && !isBurning
+    val canBurn: Boolean get() = hasVideo && !isAudio && cues.isNotEmpty() && !isRunning && !isBurning
 }
 
 class VideoTranslateViewModel(
@@ -154,7 +156,7 @@ class VideoTranslateViewModel(
         }
     }
 
-    fun setVideo(uri: Uri, displayName: String) {
+    fun setMedia(uri: Uri, displayName: String, mimeType: String? = null) {
         // The picker grants a read permission for this process; persisting it lets the
         // saved URI keep working after the app is restarted.
         runCatching {
@@ -163,11 +165,13 @@ class VideoTranslateViewModel(
                 Intent.FLAG_GRANT_READ_URI_PERMISSION,
             )
         }
+        val isAudio = isAudioFile(displayName, mimeType)
         cancel()
         _state.update {
             it.copy(
                 uri = uri.toString(),
                 displayName = displayName,
+                isAudio = isAudio,
                 cues = emptyList(),
                 durationMs = 0L,
                 progress = 0f,
@@ -178,6 +182,8 @@ class VideoTranslateViewModel(
             )
         }
     }
+
+    fun setVideo(uri: Uri, displayName: String) = setMedia(uri, displayName, null)
 
     fun setSourceLanguage(code: String) {
         _state.update { it.copy(sourceCode = code) }
@@ -571,11 +577,21 @@ class VideoTranslateViewModel(
         return null
     }
 
-    private companion object {
+    companion object {
         const val TAG = "VideoTranslateViewModel"
 
         /** Decoding is fast; recognition + translation is where the time goes. */
         const val EXTRACT_WEIGHT = 0.25f
+
+        val AUDIO_EXTENSIONS = setOf(
+            "mp3", "wav", "m4a", "flac", "aac", "ogg", "opus", "amr", "wma", "mid", "midi", "aiff",
+        )
+
+        fun isAudioFile(name: String, mime: String?): Boolean {
+            if (mime?.startsWith("audio/") == true) return true
+            val ext = name.substringAfterLast('.', "").lowercase().trim()
+            return ext in AUDIO_EXTENSIONS
+        }
     }
 }
 
