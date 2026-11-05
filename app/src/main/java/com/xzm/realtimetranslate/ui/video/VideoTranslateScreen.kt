@@ -61,6 +61,7 @@ import androidx.annotation.StringRes
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -121,8 +122,12 @@ fun VideoTranslateScreen(
 
     var picker by remember { mutableStateOf<LangField?>(null) }
 
-    val pickVideo = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) viewModel.setVideo(uri, queryDisplayName(context, uri))
+    val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val name = queryDisplayName(context, uri)
+            val mime = context.contentResolver.getType(uri)
+            viewModel.setMedia(uri, name, mime)
+        }
     }
 
     val sourceOptions = state.availableSourceOptions
@@ -215,7 +220,7 @@ fun VideoTranslateScreen(
                         .padding(horizontal = 10.dp, vertical = 5.dp),
                 ) {
                     Text(
-                        text = "🎬 视频字幕提取与翻译",
+                        text = if (state.isAudio) "🎵 音频字幕提取与翻译" else "🎬 音视频字幕提取与翻译",
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Booth.Accent,
@@ -241,7 +246,7 @@ fun VideoTranslateScreen(
             }
         }
 
-        // ================= 视频文件选择与展示 =================
+        // ================= 音视频文件选择与展示 =================
         if (!state.hasVideo) {
             item {
                 Card(
@@ -251,7 +256,7 @@ fun VideoTranslateScreen(
                         .clip(RoundedCornerShape(16.dp))
                         .clickable {
                             if (!state.isRunning && !state.isBurning) {
-                                pickVideo.launch(arrayOf("video/*"))
+                                pickMedia.launch(arrayOf("video/*", "audio/*"))
                             }
                         },
                     colors = CardDefaults.defaultColors(
@@ -274,16 +279,16 @@ fun VideoTranslateScreen(
                                 .background(Booth.Accent.copy(alpha = 0.12f)),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Text(text = "🎬", fontSize = 28.sp)
+                            Text(text = "🎬 🎵", fontSize = 24.sp)
                         }
                         Text(
-                            text = "点击选择本地视频文件",
+                            text = "点击选择本地视频或音频文件",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = scheme.onSurface,
                         )
                         Text(
-                            text = "支持 MP4 / MKV / MOV 等主流视频格式",
+                            text = "支持 MP4 / MKV / MOV / MP3 / WAV / M4A / FLAC 等格式",
                             fontSize = 12.sp,
                             color = scheme.onSurfaceVariantSummary,
                         )
@@ -309,10 +314,13 @@ fun VideoTranslateScreen(
                                 modifier = Modifier
                                     .size(40.dp)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(Booth.Accent.copy(alpha = 0.12f)),
+                                    .background(
+                                        if (state.isAudio) Color(0xFF8B5CF6).copy(alpha = 0.12f)
+                                        else Booth.Accent.copy(alpha = 0.12f)
+                                    ),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Text(text = "🎬", fontSize = 20.sp)
+                                Text(text = if (state.isAudio) "🎵" else "🎬", fontSize = 20.sp)
                             }
                             Column {
                                 Text(
@@ -333,8 +341,8 @@ fun VideoTranslateScreen(
                         }
                         if (!state.isRunning && !state.isBurning) {
                             TextButton(
-                                text = "更换视频",
-                                onClick = { pickVideo.launch(arrayOf("video/*")) },
+                                text = "更换文件",
+                                onClick = { pickMedia.launch(arrayOf("video/*", "audio/*")) },
                             )
                         }
                     }
@@ -552,15 +560,28 @@ fun VideoTranslateScreen(
 
         if (state.hasVideo) {
             item {
-                VideoPlayerBox(
-                    uri = state.uri!!,
-                    cues = state.cues,
-                    mode = state.subtitleMode,
-                    style = state.subtitleStyle,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                )
+                if (state.isAudio) {
+                    AudioPlayerBox(
+                        uri = state.uri!!,
+                        displayName = state.displayName,
+                        cues = state.cues,
+                        mode = state.subtitleMode,
+                        style = state.subtitleStyle,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                    )
+                } else {
+                    VideoPlayerBox(
+                        uri = state.uri!!,
+                        cues = state.cues,
+                        mode = state.subtitleMode,
+                        style = state.subtitleStyle,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                    )
+                }
             }
         }
 
@@ -698,25 +719,34 @@ fun VideoTranslateScreen(
                                 colors = ButtonDefaults.buttonColorsPrimary(),
                             ) {
                                 Text(
-                                    text = "💾 导出 SRT",
+                                    text = if (state.isAudio) "💾 导出 SRT 字幕" else "💾 导出 SRT",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp,
                                 )
                             }
-                            Button(
-                                onClick = viewModel::burnSubtitles,
-                                enabled = state.canBurn,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(46.dp),
-                                colors = ButtonDefaults.buttonColors(),
-                            ) {
-                                Text(
-                                    text = "🎬 压制视频",
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 14.sp,
-                                )
+                            if (!state.isAudio) {
+                                Button(
+                                    onClick = viewModel::burnSubtitles,
+                                    enabled = state.canBurn,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(46.dp),
+                                    colors = ButtonDefaults.buttonColors(),
+                                ) {
+                                    Text(
+                                        text = "🎬 压制视频",
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 14.sp,
+                                    )
+                                }
                             }
+                        }
+                        if (state.isAudio) {
+                            Text(
+                                text = "🎵 纯音频文件可直接导出双语或单语 SRT 文本字幕",
+                                fontSize = 11.5.sp,
+                                color = scheme.onSurfaceVariantSummary,
+                            )
                         }
                     }
                 }
@@ -813,6 +843,166 @@ fun VideoTranslateScreen(
             onDismiss = { picker = null },
         )
         null -> Unit
+    }
+}
+
+@Composable
+private fun AudioPlayerBox(
+    uri: String,
+    displayName: String,
+    cues: List<VideoCue>,
+    mode: VideoSubtitleMode,
+    style: VideoSubtitleStyle,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val scheme = MiuixTheme.colorScheme
+    val player = remember(uri) {
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri(uri))
+            prepare()
+        }
+    }
+    DisposableEffect(player) {
+        onDispose { player.release() }
+    }
+
+    var playing by remember { mutableStateOf(false) }
+    var positionMs by remember { mutableLongStateOf(0L) }
+    var durationMs by remember { mutableLongStateOf(0L) }
+    var seeking by remember { mutableStateOf(false) }
+
+    LaunchedEffect(player) {
+        while (true) {
+            playing = player.isPlaying
+            if (!seeking) {
+                positionMs = runCatching { player.currentPosition }.getOrDefault(0L)
+            }
+            durationMs = runCatching { player.duration }.getOrDefault(0L).coerceAtLeast(0L)
+            delay(100L)
+        }
+    }
+
+    val currentCue = cues.firstOrNull { cue ->
+        positionMs >= cue.startMs && positionMs < cue.endMs
+    }
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp)),
+        colors = CardDefaults.defaultColors(
+            color = scheme.surfaceContainer,
+            contentColor = scheme.onSurfaceContainer,
+        ),
+        cornerRadius = 16.dp,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF8B5CF6).copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(text = "🎵", fontSize = 24.sp)
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = displayName,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = scheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = "${formatClock(positionMs)} / ${formatClock(durationMs)}",
+                        fontSize = 12.sp,
+                        color = scheme.onSurfaceVariantSummary,
+                    )
+                }
+                IconButton(onClick = {
+                    if (player.isPlaying) player.pause() else player.play()
+                }) {
+                    Icon(
+                        imageVector = if (playing) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
+                        contentDescription = null,
+                        tint = Booth.Accent,
+                        modifier = Modifier.size(32.dp),
+                    )
+                }
+            }
+
+            androidx.compose.material3.Slider(
+                value = positionMs.toFloat().coerceIn(0f, durationMs.toFloat()),
+                onValueChange = {
+                    seeking = true
+                    positionMs = it.toLong()
+                },
+                onValueChangeFinished = {
+                    player.seekTo(positionMs)
+                    seeking = false
+                },
+                valueRange = 0f..durationMs.toFloat().coerceAtLeast(1f),
+                enabled = durationMs > 0L,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            // 实时字幕流动展示框
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFF14151B))
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (currentCue != null) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        if (mode == VideoSubtitleMode.BOTH && currentCue.source.isNotBlank() && currentCue.translation.isNotBlank()) {
+                            Text(
+                                text = currentCue.source,
+                                fontSize = (12f * style.fontScale).sp,
+                                color = Color(style.sourceTextColor),
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                        val mainText = when (mode) {
+                            VideoSubtitleMode.TRANSLATION -> currentCue.translation.ifBlank { currentCue.source }
+                            VideoSubtitleMode.SOURCE -> currentCue.source
+                            VideoSubtitleMode.BOTH -> currentCue.translation.ifBlank { currentCue.source }
+                        }
+                        Text(
+                            text = mainText,
+                            fontSize = (16f * style.fontScale).sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(style.textColor),
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                } else {
+                    Text(
+                        text = if (cues.isEmpty()) "音频字幕将在处理完成后实时同步" else "（无台词 / 伴奏段）",
+                        fontSize = 12.sp,
+                        color = Color.White.copy(alpha = 0.4f),
+                    )
+                }
+            }
+        }
     }
 }
 
