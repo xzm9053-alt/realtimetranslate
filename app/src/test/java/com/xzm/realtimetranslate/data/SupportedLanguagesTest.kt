@@ -76,14 +76,16 @@ class SupportedLanguagesTest {
 
     @Test
     fun testFilterByAsrEngineType() {
-        // Aliyun FunASR: 支持 auto, zh(简/繁), en
+        // Aliyun FunASR: 支持全语种
         val aliyunOpts = SupportedLanguages.filterSourceOptions(AsrEngineType.ALIYUN_FUN_ASR, null).map { it.code }
         assertTrue(aliyunOpts.contains("auto"))
         assertTrue(aliyunOpts.contains("zh-Hans"))
         assertTrue(aliyunOpts.contains("zh-Hant"))
         assertTrue(aliyunOpts.contains("en"))
-        assertFalse(aliyunOpts.contains("ja"))
-        assertFalse(aliyunOpts.contains("de"))
+        assertTrue(aliyunOpts.contains("ja"))
+        assertTrue(aliyunOpts.contains("ko"))
+        assertTrue(aliyunOpts.contains("de"))
+        assertEquals(SupportedLanguages.sourceOptions.size, aliyunOpts.size)
 
         // 通用云端 OpenAI 兼容 (Whisper): 全语种
         val cloudOpts = SupportedLanguages.filterSourceOptions(AsrEngineType.GENERIC_OPENAI, null)

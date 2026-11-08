@@ -57,6 +57,7 @@ import com.xzm.realtimetranslate.service.ScreenTextSessionService
 import com.xzm.realtimetranslate.service.SessionBus
 import com.xzm.realtimetranslate.service.StaticModeTarget
 import com.xzm.realtimetranslate.service.SubtitleSessionService
+import com.xzm.realtimetranslate.ui.components.FirstInstallGuideDialog
 import com.xzm.realtimetranslate.ui.components.UpdateDialog
 import com.xzm.realtimetranslate.ui.history.HistoryScreen
 import com.xzm.realtimetranslate.ui.history.HistoryViewModel
@@ -114,15 +115,7 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * 接收别的 App（目前是录制 App）通过 ACTION_SEND 递来的视频，并直接落到视频翻译页。
-     *
-     * 两件事必须同时做：设 `staticLaunch = VIDEO` 把页面切过去，
-     * 再把 URI 存起来等 `MoreScreen` 取走 —— 只做前一件的话，用户看到的是
-     * 一个空的视频页，还得自己去相册里找刚才那个文件。
-     *
-     * **不自动开始识别**：识别要跑好几分钟，且可能因未配 API Key、模型未就绪、
-     * 实时字幕正在跑而失败 —— 自动开始只会让这些失败来得莫名其妙。
-     * 留给用户点那一下，失败就发生在他刚刚主动点过的地方。
+     * 接收别的 App（如录制 App LiveRec）通过 ACTION_SEND 递来的视频或音频，并直接落到音视频翻译页。
      */
     private fun handleSharedVideo(intent: Intent?) {
         if (intent == null) return
@@ -596,15 +589,31 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                updateInfoToPrompt?.let { info ->
-                    UpdateDialog(
-                        info = info,
-                        onDismiss = { updateInfoToPrompt = null },
-                        onGoToVideo = { url ->
-                            updateInfoToPrompt = null
-                            openVideoUrl(url)
+                if (!settings.firstInstallGuideShown) {
+                    FirstInstallGuideDialog(
+                        onDismiss = {
+                            scope.launch {
+                                settingsVm.update { it.copy(firstInstallGuideShown = true) }
+                            }
+                        },
+                        onGoToSettings = {
+                            scope.launch {
+                                settingsVm.update { it.copy(firstInstallGuideShown = true) }
+                                pagerState.animateScrollToPage(1)
+                            }
                         },
                     )
+                } else {
+                    updateInfoToPrompt?.let { info ->
+                        UpdateDialog(
+                            info = info,
+                            onDismiss = { updateInfoToPrompt = null },
+                            onGoToVideo = { url ->
+                                updateInfoToPrompt = null
+                                openVideoUrl(url)
+                            },
+                        )
+                    }
                 }
             }
         }

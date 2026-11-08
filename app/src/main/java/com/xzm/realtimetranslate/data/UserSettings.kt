@@ -116,8 +116,11 @@ data class UserSettings(
     val hubEnabled: Boolean = Defaults.HUB_ENABLED,
     // 声音同传仅识别不翻译：只提取语音生成字幕，不调用大模型翻译，完全离线免 API Key
     val voiceRecognizeOnly: Boolean = Defaults.VOICE_RECOGNIZE_ONLY,
+    // 首次安装配置引导弹窗是否已展示过
+    val firstInstallGuideShown: Boolean = Defaults.FIRST_INSTALL_GUIDE_SHOWN,
 ) {
     object Defaults {
+        const val FIRST_INSTALL_GUIDE_SHOWN = false
         const val VOICE_RECOGNIZE_ONLY = false
         // Kept for schema compatibility; the engine now reads DeepSeek settings directly.
         const val ENDPOINT =
@@ -264,7 +267,7 @@ object SupportedLanguages {
         return when (asrEngineType) {
             AsrEngineType.LOCAL_SENSEVOICE -> filterSourceOptionsForModel(localPreset)
             AsrEngineType.ALIYUN_FUN_ASR -> {
-                sourceOptions.filter { it.code in listOf("auto", "zh-Hans", "zh-Hant", "en") }
+                sourceOptions
             }
             AsrEngineType.GENERIC_OPENAI -> {
                 sourceOptions

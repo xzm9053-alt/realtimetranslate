@@ -83,6 +83,7 @@ class UserSettingsRepository(private val context: Context) {
         val hubEnabled = booleanPreferencesKey("hub_enabled")
         val voiceRecognizeOnly = booleanPreferencesKey("voice_recognize_only")
         val localAsrModel = stringPreferencesKey("local_asr_model")
+        val firstInstallGuideShown = booleanPreferencesKey("first_install_guide_shown")
     }
 
     val settings: Flow<UserSettings> = context.dataStore.data.map { prefs ->
@@ -158,6 +159,7 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.hubEnabled] = next.hubEnabled
             prefs[Keys.voiceRecognizeOnly] = next.voiceRecognizeOnly
             prefs[Keys.localAsrModel] = next.localAsrModel
+            prefs[Keys.firstInstallGuideShown] = next.firstInstallGuideShown
         }
     }
 
@@ -269,6 +271,8 @@ class UserSettingsRepository(private val context: Context) {
             ?: UserSettings.Defaults.HUB_ENABLED,
         voiceRecognizeOnly = this[Keys.voiceRecognizeOnly]
             ?: UserSettings.Defaults.VOICE_RECOGNIZE_ONLY,
+        firstInstallGuideShown = this[Keys.firstInstallGuideShown]
+            ?: UserSettings.Defaults.FIRST_INSTALL_GUIDE_SHOWN,
     )
 
     /** Migrate the pre-3-option boolean: true→BOTH, false/absent→TRANSLATION. */

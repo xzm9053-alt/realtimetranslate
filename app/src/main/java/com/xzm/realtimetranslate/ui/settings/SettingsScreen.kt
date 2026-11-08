@@ -137,8 +137,8 @@ import com.xzm.realtimetranslate.update.UpdateChecker
 import com.xzm.realtimetranslate.update.UpdateCheckResult
 import kotlinx.coroutines.launch
 
-/** Where Bailian hands out DashScope API keys. The old dashscope.console host is dead. */
-private const val ALIYUN_API_KEY_URL = "https://bailian.console.aliyun.com/model/settings/api-key"
+/** 阿里云百炼控制台链接。统一使用使用说明中的推广/专属直达链接。 */
+private const val ALIYUN_API_KEY_URL = "https://www.aliyun.com/?source=5176.29345612&userCode=k11uyzhy"
 
 private sealed interface SettingsNavTarget {
     data object Main : SettingsNavTarget
@@ -2906,7 +2906,6 @@ private fun AliyunModelDropdown(
     onSelect: (String) -> Unit,
 ) {
     val current = AsrModelCatalog.aliyunPreset(selectedId.trim())
-        ?: AsrModelCatalog.aliyunPreset(UserSettings.Defaults.ALIYUN_ASR_MODEL)
     var expanded by remember { mutableStateOf(false) }
     var openGroup by remember { mutableStateOf<String?>(null) }
 
@@ -2923,13 +2922,13 @@ private fun AliyunModelDropdown(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = current?.name ?: selectedId.ifBlank { UserSettings.Defaults.ALIYUN_ASR_MODEL },
+                    text = current?.name ?: if (selectedId.isNotBlank()) "自定义模型: $selectedId" else UserSettings.Defaults.ALIYUN_ASR_MODEL,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MiuixTheme.colorScheme.onSurface,
                 )
                 Text(
-                    text = current?.id ?: selectedId,
+                    text = current?.id ?: selectedId.ifBlank { UserSettings.Defaults.ALIYUN_ASR_MODEL },
                     fontSize = 11.sp,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 )
@@ -4489,13 +4488,24 @@ private fun AsrEnginePickerSubScreen(
                                     onClick = { revealKey = !revealKey },
                                 )
                                 TextButton(
-                                    text = "去阿里云 DashScope 控制台 ↗",
+                                    text = "去阿里云百炼 ↗",
                                     onClick = { openUrl(context, ALIYUN_API_KEY_URL) },
                                 )
                             }
                             AliyunModelDropdown(
                                 selectedId = aliyunAsrModel.text,
                                 onSelect = { onUpdateAliyunAsrModel(TextFieldValue(it)) },
+                            )
+                            OutlinedTextField(
+                                value = aliyunAsrModel,
+                                onValueChange = onUpdateAliyunAsrModel,
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { androidx.compose.material3.Text("当前模型 ID（支持直接修改或填入自定义模型）") },
+                                placeholder = { androidx.compose.material3.Text("fun-asr-realtime") },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = fieldColors,
                             )
                             OutlinedTextField(
                                 value = aliyunWorkspaceId,
@@ -4689,7 +4699,7 @@ private fun AsrEnginePickerSubScreen(
                                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                                 )
                                 TextButton(
-                                    text = "去阿里云 DashScope 控制台 ↗",
+                                    text = "去阿里云百炼 ↗",
                                     onClick = { openUrl(context, ALIYUN_API_KEY_URL) },
                                 )
                             }
@@ -4876,6 +4886,24 @@ private fun UserGuideDialog(onDismiss: () -> Unit) {
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
+                    val context = LocalContext.current
+                    GuideItem(
+                        icon = "⚡",
+                        title = "第一次安装请先看这里（模型配置指南）",
+                        desc = "• 必先配置模型：第一次安装一定要先配置翻译模型和语音识别模型，手机使用都建议用 API，体验会好很多。\n• 免费 API 推荐：建议去网上搜一搜，或问问 AI 有哪些免费好用的语音识别与翻译模型，选「通用 OpenAI」填入即可。免费 API 经常有变化，可先去硅基流动（新用户还会送 16 元）与阿里云百炼领取免费额度。\n• 懒人开箱即用：觉得太麻烦就直接本地的 SenseVoice + DeepSeek 就行，效果也不错。其他开源模型手机不太能带动，可以在视频翻译的时候用。",
+                        links = listOf(
+                            "硅基流动 (送16元) ↗" to "https://cloud.siliconflow.cn/i/6J9f9mjl",
+                            "阿里云百炼 ↗" to "https://www.aliyun.com/?source=5176.29345612&userCode=k11uyzhy",
+                        ),
+                        onLinkClick = { url ->
+                            runCatching {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            }
+                        }
+                    )
                     GuideItem(
                         icon = "🎧",
                         title = "声音同传与离线听写",
@@ -4943,6 +4971,8 @@ private fun GuideItem(
     icon: String,
     title: String,
     desc: String,
+    links: List<Pair<String, String>> = emptyList(),
+    onLinkClick: ((String) -> Unit)? = null,
 ) {
     Column(
         modifier = Modifier
@@ -4970,6 +5000,31 @@ private fun GuideItem(
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             lineHeight = 17.sp,
         )
+        if (links.isNotEmpty() && onLinkClick != null) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                links.forEach { (label, url) ->
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(Booth.Accent.copy(alpha = 0.12f))
+                            .clickable { onLinkClick(url) }
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                    ) {
+                        Text(
+                            text = label,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Booth.Accent,
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -395,6 +395,17 @@
     <string name="settings_user_guide_title">使用说明 · 快速上手</string>
     <string name="settings_user_guide_close">我知道了</string>
 
+    <!-- 首次安装引导 -->
+    <string name="first_install_guide_title">先配模型，再开始翻译</string>
+    <string name="first_install_guide_tag">首次安装提示</string>
+    <string name="first_install_guide_p1">第一次安装一定要先配置翻译模型和语音识别模型。手机使用都建议用 API，体验会好很多。</string>
+    <string name="first_install_guide_p2">建议去网上搜一搜，或问问 AI 有哪些免费好用的语音识别模型和翻译模型，然后在设置里选「通用 OpenAI」填进去就行。因为免费 API 经常变化，所以不好随时更新。可以先去以下两家看看有哪些免费的或每月有免费额度的，硅基流动新用户还会送 16 元：</string>
+    <string name="first_install_guide_p3">觉得太麻烦就直接本地的 SenseVoice + DeepSeek 就行，效果也不错。其他开源模型手机不太能带动，可以在视频翻译的时候用。</string>
+    <string name="first_install_guide_btn_settings">知道了，去设置 →</string>
+    <string name="first_install_guide_btn_later">稍后配置</string>
+    <string name="first_install_guide_siliconflow">硅基流动 (送16元) ↗</string>
+    <string name="first_install_guide_aliyun">阿里云百炼 ↗</string>
+
     <string name="common_back">返回</string>
 
     <!-- 其他翻译 -->

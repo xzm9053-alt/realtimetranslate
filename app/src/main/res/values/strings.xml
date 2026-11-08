@@ -396,6 +396,17 @@
     <string name="settings_user_guide_title">User Guide · Quick Start</string>
     <string name="settings_user_guide_close">Got It</string>
 
+    <!-- First Install Guide -->
+    <string name="first_install_guide_title">Configure Models First Before Translating</string>
+    <string name="first_install_guide_tag">First Install Guide</string>
+    <string name="first_install_guide_p1">On first install, make sure to configure translation and speech recognition models first. Using cloud APIs is strongly recommended on mobile for a much smoother experience.</string>
+    <string name="first_install_guide_p2">You can search online or ask an AI for free, high-quality ASR and translation models, then choose "Generic OpenAI" in Settings to fill them in. Free APIs change frequently so check out these platforms; SiliconFlow offers 16 RMB credit for new users:</string>
+    <string name="first_install_guide_p3">If you prefer zero setup, simply use built-in local SenseVoice + DeepSeek, which works great. Other open-source models may be too heavy for real-time mobile use but can be used in video translation.</string>
+    <string name="first_install_guide_btn_settings">Got It, Go to Settings →</string>
+    <string name="first_install_guide_btn_later">Configure Later</string>
+    <string name="first_install_guide_siliconflow">SiliconFlow (Free 16¥) ↗</string>
+    <string name="first_install_guide_aliyun">Alibaba Cloud Bailian ↗</string>
+
     <string name="common_back">Back</string>
 
     <!-- More translation tools -->
