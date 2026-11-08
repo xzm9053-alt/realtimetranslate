@@ -36,6 +36,7 @@ fun MoreScreen(
     modifier: Modifier = Modifier,
     initialVideoUri: Uri? = null,
     autoStartVideo: Boolean = false,
+    overrideRecognizeOnly: Boolean? = null,
 ) {
     val app = LocalContext.current.applicationContext as LiveTranslateApp
     val context = LocalContext.current
@@ -66,11 +67,11 @@ fun MoreScreen(
                     app.modelManager,
                 ),
             )
-            LaunchedEffect(initialVideoUri, autoStartVideo) {
+            LaunchedEffect(initialVideoUri, autoStartVideo, overrideRecognizeOnly) {
                 initialVideoUri?.let { uri ->
                     val name = queryDisplayName(context, uri)
                     val mime = context.contentResolver.getType(uri)
-                    videoVm.setMedia(uri, name, mime)
+                    videoVm.setMedia(uri, name, mime, overrideRecognizeOnly = overrideRecognizeOnly)
                     if (autoStartVideo) {
                         videoVm.start(autoExportSrt = true)
                     }

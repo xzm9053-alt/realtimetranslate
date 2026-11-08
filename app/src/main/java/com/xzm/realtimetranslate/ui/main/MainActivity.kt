@@ -96,12 +96,15 @@ class MainActivity : ComponentActivity() {
      */
     private val pendingVideoUri = mutableStateOf<Uri?>(null)
     private val pendingVideoAutoStart = mutableStateOf(false)
+    private val pendingVideoRecognizeOnly = mutableStateOf<Boolean?>(null)
+    private val pendingOpenSettings = mutableStateOf(false)
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         handleStaticLaunch(intent)
         handleSharedVideo(intent)
+        handleOpenSettings(intent)
     }
 
     /** Consumes [FloatingHubService.EXTRA_STATIC_MODE] if present; unknown values are ignored. */
@@ -115,6 +118,19 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
+     * 处理跳转设置页面的指令（如 LiveRec 直播录制提供一键跳转至核心引擎设置）。
+     */
+    private fun handleOpenSettings(intent: Intent?) {
+        if (intent == null) return
+        val open = intent.getBooleanExtra("EXTRA_OPEN_SETTINGS", false) ||
+            intent.action == "com.xzm.realtimetranslate.action.OPEN_SETTINGS"
+        if (open) {
+            intent.removeExtra("EXTRA_OPEN_SETTINGS")
+            pendingOpenSettings.value = true
+        }
+    }
+
+    /**
      * 接收别的 App（如录制 App LiveRec）通过 ACTION_SEND 递来的视频或音频，并直接落到音视频翻译页。
      */
     private fun handleSharedVideo(intent: Intent?) {
@@ -123,11 +139,16 @@ class MainActivity : ComponentActivity() {
         val uri: Uri? = intent.parcelableExtra(Intent.EXTRA_STREAM)
         if (uri == null) return
         val autoStart = intent.getBooleanExtra("EXTRA_AUTO_START", false)
+        val recOnly = if (intent.hasExtra("EXTRA_RECOGNIZE_ONLY")) {
+            intent.getBooleanExtra("EXTRA_RECOGNIZE_ONLY", false)
+        } else null
         // 不清掉的话，旋转屏幕触发重建会把同一个文件再导一次
         intent.removeExtra(Intent.EXTRA_STREAM)
         intent.removeExtra("EXTRA_AUTO_START")
+        intent.removeExtra("EXTRA_RECOGNIZE_ONLY")
         pendingVideoUri.value = uri
         pendingVideoAutoStart.value = autoStart
+        pendingVideoRecognizeOnly.value = recOnly
         staticLaunch.value = StaticModeTarget.VIDEO
     }
 
@@ -144,12 +165,23 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         handleStaticLaunch(intent)
         handleSharedVideo(intent)
+        handleOpenSettings(intent)
         val app = application as LiveTranslateApp
 
         setContent {
             AppTheme {
                 val scope = rememberCoroutineScope()
-                val pagerState = rememberPagerState(pageCount = { 3 })
+                val pagerState = rememberPagerState(
+                    initialPage = if (pendingOpenSettings.value) 1 else 0,
+                    pageCount = { 3 },
+                )
+
+                LaunchedEffect(pendingOpenSettings.value) {
+                    if (pendingOpenSettings.value) {
+                        pendingOpenSettings.value = false
+                        pagerState.animateScrollToPage(1)
+                    }
+                }
 
                 val subtitleVm: SubtitleViewModel = viewModel(
                     factory = SubtitleViewModelFactory(
@@ -570,10 +602,12 @@ class MainActivity : ComponentActivity() {
                                 staticLaunch = staticLaunch.value,
                                 pendingVideoUri = pendingVideoUri.value,
                                 pendingVideoAutoStart = pendingVideoAutoStart.value,
+                                pendingVideoRecognizeOnly = pendingVideoRecognizeOnly.value,
                                 onStaticLaunchConsumed = {
                                     staticLaunch.value = null
                                     pendingVideoUri.value = null
                                     pendingVideoAutoStart.value = false
+                                    pendingVideoRecognizeOnly.value = null
                                 },
                             )
                             1 -> SettingsScreen(

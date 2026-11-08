@@ -82,6 +82,9 @@ data class VideoTranslateUiState(
     /** 当前视频任务的覆写翻译引擎；为 null 时表示跟随全局设置 */
     val overrideTranslationEngine: TranslationEngineType? = null,
 
+    /** 全局设置中的音视频仅识别开关 */
+    val globalVideoRecognizeOnly: Boolean = false,
+
     /** 全局设置中的本地 ASR 模型 ID */
     val globalLocalAsrModelId: String = LocalAsrModelCatalog.DEFAULT_MODEL_ID,
     /** 当前视频任务的覆写本地 ASR 模型 ID；为 null 时表示跟随全局设置 */
@@ -133,6 +136,7 @@ class VideoTranslateViewModel(
                 _state.update { current ->
                     val globalEngine = settings.translationEngine
                     val globalAsrId = settings.localAsrModel
+                    val globalVideoRecOnly = settings.videoRecognizeOnly
                     val effectiveAsrId = current.overrideLocalAsrModelId ?: globalAsrId
                     val effectivePreset = LocalAsrModelCatalog.getPresetById(effectiveAsrId)
                     val sourceOpts = if (current.asrEngine == VideoAsrEngine.CLOUD) {
@@ -141,6 +145,7 @@ class VideoTranslateViewModel(
                         SupportedLanguages.filterSourceOptionsForModel(effectivePreset)
                     }
                     val sanitizedSource = SupportedLanguages.sanitizeSourceLanguage(current.sourceCode, sourceOpts)
+                    val defaultRecOnly = globalVideoRecOnly || globalEngine == TranslationEngineType.NONE
                     current.copy(
                         targetCode = target,
                         subtitleMode = settings.videoSubtitleMode,
@@ -148,6 +153,8 @@ class VideoTranslateViewModel(
                         subtitleStyle = settings.videoSubtitleStyle,
                         globalTranslationEngine = globalEngine,
                         globalLocalAsrModelId = globalAsrId,
+                        globalVideoRecognizeOnly = globalVideoRecOnly,
+                        recognizeOnly = if (current.hasVideo) current.recognizeOnly else defaultRecOnly,
                         availableSourceOptions = sourceOpts,
                         sourceCode = sanitizedSource,
                     )
@@ -156,7 +163,12 @@ class VideoTranslateViewModel(
         }
     }
 
-    fun setMedia(uri: Uri, displayName: String, mimeType: String? = null) {
+    fun setMedia(
+        uri: Uri,
+        displayName: String,
+        mimeType: String? = null,
+        overrideRecognizeOnly: Boolean? = null,
+    ) {
         // The picker grants a read permission for this process; persisting it lets the
         // saved URI keep working after the app is restarted.
         runCatching {
@@ -168,10 +180,13 @@ class VideoTranslateViewModel(
         val isAudio = isAudioFile(displayName, mimeType)
         cancel()
         _state.update {
+            val recOnly = overrideRecognizeOnly
+                ?: (it.globalVideoRecognizeOnly || it.globalTranslationEngine == TranslationEngineType.NONE)
             it.copy(
                 uri = uri.toString(),
                 displayName = displayName,
                 isAudio = isAudio,
+                recognizeOnly = recOnly,
                 cues = emptyList(),
                 durationMs = 0L,
                 progress = 0f,

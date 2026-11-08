@@ -84,6 +84,7 @@ class UserSettingsRepository(private val context: Context) {
         val voiceRecognizeOnly = booleanPreferencesKey("voice_recognize_only")
         val localAsrModel = stringPreferencesKey("local_asr_model")
         val firstInstallGuideShown = booleanPreferencesKey("first_install_guide_shown")
+        val videoRecognizeOnly = booleanPreferencesKey("video_recognize_only")
     }
 
     val settings: Flow<UserSettings> = context.dataStore.data.map { prefs ->
@@ -160,6 +161,7 @@ class UserSettingsRepository(private val context: Context) {
             prefs[Keys.voiceRecognizeOnly] = next.voiceRecognizeOnly
             prefs[Keys.localAsrModel] = next.localAsrModel
             prefs[Keys.firstInstallGuideShown] = next.firstInstallGuideShown
+            prefs[Keys.videoRecognizeOnly] = next.videoRecognizeOnly
         }
     }
 
@@ -273,6 +275,8 @@ class UserSettingsRepository(private val context: Context) {
             ?: UserSettings.Defaults.VOICE_RECOGNIZE_ONLY,
         firstInstallGuideShown = this[Keys.firstInstallGuideShown]
             ?: UserSettings.Defaults.FIRST_INSTALL_GUIDE_SHOWN,
+        videoRecognizeOnly = this[Keys.videoRecognizeOnly]
+            ?: UserSettings.Defaults.VIDEO_RECOGNIZE_ONLY,
     )
 
     /** Migrate the pre-3-option boolean: true→BOTH, false/absent→TRANSLATION. */

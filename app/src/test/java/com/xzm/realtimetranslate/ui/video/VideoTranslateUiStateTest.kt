@@ -15,6 +15,13 @@ class VideoTranslateUiStateTest {
     fun `default recognizeOnly is false`() {
         val state = VideoTranslateUiState()
         assertFalse(state.recognizeOnly)
+        assertFalse(state.globalVideoRecognizeOnly)
+    }
+
+    @Test
+    fun `globalVideoRecognizeOnly flag defaults correctly`() {
+        val state = VideoTranslateUiState(globalVideoRecognizeOnly = true)
+        assertTrue(state.globalVideoRecognizeOnly)
     }
 
     @Test

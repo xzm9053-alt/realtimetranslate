@@ -549,6 +549,18 @@ fun SettingsScreen(
                         modifier = Modifier.rotate(-90f),
                     )
                 }
+
+                SettingDivider()
+
+                // 6. 音视频翻译仅识别不翻译
+                SettingSwitchRow(
+                    title = "音视频翻译仅识别不翻译",
+                    summary = "默认仅提取语音生成时间戳字幕，不调用大模型翻译，完全离线免 API",
+                    checked = settings.videoRecognizeOnly,
+                    onCheckedChange = { checked ->
+                        viewModel.update { it.copy(videoRecognizeOnly = checked) }
+                    },
+                )
             }
         }
 

@@ -130,6 +130,7 @@ fun SubtitleScreen(
     staticLaunch: StaticModeTarget? = null,
     pendingVideoUri: Uri? = null,
     pendingVideoAutoStart: Boolean = false,
+    pendingVideoRecognizeOnly: Boolean? = null,
     onStaticLaunchConsumed: () -> Unit = {},
 ) {
     var activeTool by rememberSaveable { mutableStateOf<StaticModeTarget?>(null) }
@@ -208,6 +209,7 @@ fun SubtitleScreen(
                 },
                 initialVideoUri = pendingVideoUri,
                 autoStartVideo = pendingVideoAutoStart,
+                overrideRecognizeOnly = pendingVideoRecognizeOnly,
                 modifier = Modifier.fillMaxSize(),
             )
         } else {

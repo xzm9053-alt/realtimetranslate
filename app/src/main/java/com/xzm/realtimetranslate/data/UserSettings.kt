@@ -118,10 +118,13 @@ data class UserSettings(
     val voiceRecognizeOnly: Boolean = Defaults.VOICE_RECOGNIZE_ONLY,
     // 首次安装配置引导弹窗是否已展示过
     val firstInstallGuideShown: Boolean = Defaults.FIRST_INSTALL_GUIDE_SHOWN,
+    // 音视频翻译仅识别不翻译：只提取语音生成时间戳字幕，不调用大模型翻译，完全离线免 API
+    val videoRecognizeOnly: Boolean = Defaults.VIDEO_RECOGNIZE_ONLY,
 ) {
     object Defaults {
         const val FIRST_INSTALL_GUIDE_SHOWN = false
         const val VOICE_RECOGNIZE_ONLY = false
+        const val VIDEO_RECOGNIZE_ONLY = false
         // Kept for schema compatibility; the engine now reads DeepSeek settings directly.
         const val ENDPOINT =
             "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
