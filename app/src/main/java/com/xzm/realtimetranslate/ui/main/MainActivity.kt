@@ -92,10 +92,10 @@ class MainActivity : ComponentActivity() {
     private val staticLaunch = mutableStateOf<StaticModeTarget?>(null)
 
     /**
-     * 别的 App 递过来的视频。跟 [staticLaunch] 分开存，因为它们是两件事：
-     * 悬浮球只要求“打开哪个页”，而这里还多一个要导入的文件。
+     * 别的 App 递过来的视频或音频文件。
      */
     private val pendingVideoUri = mutableStateOf<Uri?>(null)
+    private val pendingVideoAutoStart = mutableStateOf(false)
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -122,9 +122,12 @@ class MainActivity : ComponentActivity() {
         if (!isVideoShare(intent.action, intent.type)) return
         val uri: Uri? = intent.parcelableExtra(Intent.EXTRA_STREAM)
         if (uri == null) return
+        val autoStart = intent.getBooleanExtra("EXTRA_AUTO_START", false)
         // 不清掉的话，旋转屏幕触发重建会把同一个文件再导一次
         intent.removeExtra(Intent.EXTRA_STREAM)
+        intent.removeExtra("EXTRA_AUTO_START")
         pendingVideoUri.value = uri
+        pendingVideoAutoStart.value = autoStart
         staticLaunch.value = StaticModeTarget.VIDEO
     }
 
@@ -566,9 +569,11 @@ class MainActivity : ComponentActivity() {
                                 onToggleHub = { toggleHub(it) },
                                 staticLaunch = staticLaunch.value,
                                 pendingVideoUri = pendingVideoUri.value,
+                                pendingVideoAutoStart = pendingVideoAutoStart.value,
                                 onStaticLaunchConsumed = {
                                     staticLaunch.value = null
                                     pendingVideoUri.value = null
+                                    pendingVideoAutoStart.value = false
                                 },
                             )
                             1 -> SettingsScreen(
@@ -658,5 +663,5 @@ class MainActivity : ComponentActivity() {
  */
 internal fun isVideoShare(action: String?, mimeType: String?): Boolean {
     if (action != Intent.ACTION_SEND) return false
-    return mimeType?.startsWith("video/") == true
+    return mimeType?.startsWith("video/") == true || mimeType?.startsWith("audio/") == true
 }

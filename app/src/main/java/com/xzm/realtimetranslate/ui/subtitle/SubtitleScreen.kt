@@ -129,6 +129,7 @@ fun SubtitleScreen(
     onToggleHub: (Boolean) -> Unit = {},
     staticLaunch: StaticModeTarget? = null,
     pendingVideoUri: Uri? = null,
+    pendingVideoAutoStart: Boolean = false,
     onStaticLaunchConsumed: () -> Unit = {},
 ) {
     var activeTool by rememberSaveable { mutableStateOf<StaticModeTarget?>(null) }
@@ -206,6 +207,7 @@ fun SubtitleScreen(
                     onOpenSettings()
                 },
                 initialVideoUri = pendingVideoUri,
+                autoStartVideo = pendingVideoAutoStart,
                 modifier = Modifier.fillMaxSize(),
             )
         } else {

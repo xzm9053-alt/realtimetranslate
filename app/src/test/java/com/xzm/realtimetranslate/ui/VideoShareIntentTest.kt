@@ -20,6 +20,14 @@ class VideoShareIntentTest {
     }
 
     @Test
+    fun `ACTION_SEND 带 audio 通配与具体类型也算`() {
+        assertTrue(isVideoShare(Intent.ACTION_SEND, "audio/*"))
+        assertTrue(isVideoShare(Intent.ACTION_SEND, "audio/mp3"))
+        assertTrue(isVideoShare(Intent.ACTION_SEND, "audio/wav"))
+        assertTrue(isVideoShare(Intent.ACTION_SEND, "audio/m4a"))
+    }
+
+    @Test
     fun `非 ACTION_SEND 不算`() {
         assertFalse(isVideoShare(Intent.ACTION_VIEW, "video/*"))
         assertFalse(isVideoShare(Intent.ACTION_SEND_MULTIPLE, "video/*"))

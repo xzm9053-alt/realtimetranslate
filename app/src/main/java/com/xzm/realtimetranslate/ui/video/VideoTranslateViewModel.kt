@@ -274,7 +274,7 @@ class VideoTranslateViewModel(
         }
     }
 
-    fun start() {
+    fun start(autoExportSrt: Boolean = false) {
         val snapshot = _state.value
         val uri = snapshot.uri?.let(Uri::parse) ?: return
         if (snapshot.isRunning) return
@@ -426,6 +426,11 @@ class VideoTranslateViewModel(
                         },
                     )
                 }
+                if (autoExportSrt && cues.isNotEmpty()) {
+                    exportSrt()
+                } else if (cues.isNotEmpty()) {
+                    notifySubtitleReady(mediaUri = snapshot.uri, status = "SUCCESS")
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
@@ -444,7 +449,38 @@ class VideoTranslateViewModel(
                         error = "$prefix：$userFriendlyMsg",
                     )
                 }
+                notifySubtitleReady(
+                    mediaUri = snapshot.uri,
+                    status = "FAILED",
+                    error = userFriendlyMsg,
+                )
             }
+        }
+    }
+
+    private fun notifySubtitleReady(
+        mediaUri: String?,
+        srtUri: String? = null,
+        status: String = "SUCCESS",
+        error: String? = null,
+    ) {
+        if (mediaUri.isNullOrBlank()) return
+        runCatching {
+            val intent = Intent("com.liverec.action.SUBTITLE_READY").apply {
+                setPackage("com.liverec")
+                putExtra("EXTRA_MEDIA_URI", mediaUri)
+                putExtra("EXTRA_STATUS", status)
+                if (srtUri != null) {
+                    putExtra("EXTRA_SRT_URI", srtUri)
+                }
+                if (error != null) {
+                    putExtra("EXTRA_ERROR", error)
+                }
+            }
+            getApplication<Application>().sendBroadcast(intent)
+            Log.i(TAG, "Sent broadcast to LiveRec: SUBTITLE_READY status=$status media=$mediaUri srt=$srtUri")
+        }.onFailure { e ->
+            Log.w(TAG, "Failed to send SUBTITLE_READY broadcast", e)
         }
     }
 
@@ -472,8 +508,13 @@ class VideoTranslateViewModel(
             _state.update {
                 it.copy(
                     message = result.fold(
-                        onSuccess = { path ->
-                            getApplication<Application>().getString(R.string.video_export_ok, path)
+                        onSuccess = { uri ->
+                            notifySubtitleReady(
+                                mediaUri = _state.value.uri,
+                                srtUri = uri.toString(),
+                                status = "SUCCESS",
+                            )
+                            getApplication<Application>().getString(R.string.video_export_ok, uri)
                         },
                         onFailure = { e ->
                             getApplication<Application>().getString(
